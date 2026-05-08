@@ -22,6 +22,7 @@
     "db:import-organized": "ts-node --transpile-only scripts/import-organized-dump.ts",
     "db:migrate": "prisma migrate deploy",
     "db:railway-sync": "prisma migrate deploy",
+    "db:tcp-check": "node scripts/db-tcp-check.cjs",
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
