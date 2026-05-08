@@ -257,7 +257,9 @@ export class InventoryService {
 
   private async queryFindAll(params: PaginationParams) {
     const page = Math.max(1, Math.trunc(params.page));
-    const limit = Math.min(100, Math.max(1, Math.trunc(params.limit)));
+    const hasLotFilter = !!params.lot?.trim().length;
+    const maxLimit = hasLotFilter ? 1000 : 100;
+    const limit = Math.min(maxLimit, Math.max(1, Math.trunc(params.limit)));
     const skip = (page - 1) * limit;
 
     const where: Prisma.InventoryWhereInput = {

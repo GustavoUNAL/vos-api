@@ -38,6 +38,8 @@
     "db:backfill-purchase-lot-lines": "ts-node --transpile-only scripts/backfill-purchase-lot-lines-from-inventory.ts",
     "db:export-inventory-lots-tsv": "ts-node --transpile-only scripts/register-purchase-lots.ts --export-tsv prisma/data/inventory-purchase-lots.tsv",
     "db:verify-data": "ts-node --transpile-only scripts/verify-data-consistency.ts",
+    "db:audit-purchase-lot-totals": "ts-node --transpile-only scripts/audit-purchase-lot-line-totals.ts",
+    "db:pg-copy-database": "bash scripts/pg-copy-database.sh",
     "db:export-inventory-csv": "ts-node --transpile-only scripts/export-inventory-csv.ts",
     "db:import-inventory-csv": "ts-node --transpile-only scripts/import-inventory-csv.ts",
     "db:migrate-recipe-costs-to-costos": "ts-node --transpile-only scripts/migrate-recipe-costs-to-costos.ts",

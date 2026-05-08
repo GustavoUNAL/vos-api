@@ -1,11 +1,9 @@
 import {
   Body,
   Controller,
-  DefaultValuePipe,
   Delete,
   Get,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -25,19 +23,26 @@ export class InventoryController {
 
   @Get()
   findAll(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @Query('page') pageRaw?: string,
+    @Query('limit') limitRaw?: string,
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
     @Query('lot') lot?: string,
     @Query('includeStats') includeStatsRaw?: string,
   ) {
+    const page = Number.parseInt(pageRaw ?? '', 10);
+    const parsedPage = Number.isFinite(page) && page > 0 ? page : 1;
+    const limitParsed = Number.parseInt(limitRaw ?? '', 10);
+    const hasLimit = Number.isFinite(limitParsed) && limitParsed > 0;
+    // Para vistas de lote, siempre devolver el lote completo (ignora `limit` del cliente).
+    const parsedLimit = lot?.trim() ? 1000 : hasLimit ? limitParsed : 20;
+
     const includeStats = ['1', 'true', 'yes'].includes(
       includeStatsRaw?.trim().toLowerCase() ?? '',
     );
     return this.inventoryService.findAll({
-      page,
-      limit,
+      page: parsedPage,
+      limit: parsedLimit,
       search,
       categoryId,
       lot,

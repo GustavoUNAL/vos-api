@@ -8,6 +8,7 @@ import {
   categoryDisplayName,
   mapCategoryRelation,
 } from '../common/category-display-name';
+import { isCapitalAssetCategoryName } from '../common/inventory-capital-asset';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -59,8 +60,12 @@ function ingredientStockStatus(
   quantity: Prisma.Decimal,
   minStock: Prisma.Decimal | null,
   deletedAt: Date | null,
+  inventoryCategoryName?: string | null,
 ): IngredientStockStatus {
   if (deletedAt) return 'ARCHIVED';
+  if (isCapitalAssetCategoryName(inventoryCategoryName)) {
+    return 'AVAILABLE';
+  }
   if (quantity.lte(0)) return 'DEPLETED';
   if (minStock != null && quantity.lte(minStock)) return 'LOW';
   return 'AVAILABLE';
@@ -373,6 +378,7 @@ export class ProductsService {
         inv.quantity,
         inv.minStock,
         inv.deletedAt,
+        inv.category?.name,
       );
       return {
         id: ing.id,
