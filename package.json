@@ -21,6 +21,7 @@
     "db:organize-dump": "ts-node --transpile-only scripts/organize-migration-dump.ts",
     "db:import-organized": "ts-node --transpile-only scripts/import-organized-dump.ts",
     "db:migrate": "prisma migrate deploy",
+    "db:railway-sync": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
