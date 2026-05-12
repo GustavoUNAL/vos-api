@@ -8,6 +8,7 @@ import {
   categoryDisplayName,
   mapCategoryRelation,
 } from '../common/category-display-name';
+import { mapPurchaseLotNestedForApi } from '../common/purchase-lot-display-name';
 import { isCapitalAssetCategoryName } from '../common/inventory-capital-asset';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -24,11 +25,7 @@ type PaginationParams = {
   sort?: 'name' | 'price_asc' | 'price_desc';
 };
 
-type IngredientStockStatus =
-  | 'AVAILABLE'
-  | 'LOW'
-  | 'DEPLETED'
-  | 'ARCHIVED';
+type IngredientStockStatus = 'AVAILABLE' | 'LOW' | 'DEPLETED' | 'ARCHIVED';
 
 type CacheEntry<T> = {
   value: T;
@@ -37,11 +34,7 @@ type CacheEntry<T> = {
 };
 
 function normalizeCostName(s: string): string {
-  return (s ?? '')
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .trim()
-    .toLowerCase();
+  return (s ?? '').normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
 }
 
 function isAdminCostLine(name: string): boolean {
@@ -84,7 +77,10 @@ function parseRecipeSheetSupplier(s: string | null | undefined): {
   if (i === -1) {
     return { sheetUnitCost: s.trim(), sheetQuantity: null };
   }
-  const head = s.slice(0, i).replace(/^Costo unitario \(hoja\):\s*/i, '').trim();
+  const head = s
+    .slice(0, i)
+    .replace(/^Costo unitario \(hoja\):\s*/i, '')
+    .trim();
   const qty = s.slice(i + sep.length).trim();
   return { sheetUnitCost: head || null, sheetQuantity: qty || null };
 }
@@ -126,7 +122,11 @@ export class ProductsService {
     return hit.value as T;
   }
 
-  private setCached<T>(map: Map<string, CacheEntry<unknown>>, key: string, value: T) {
+  private setCached<T>(
+    map: Map<string, CacheEntry<unknown>>,
+    key: string,
+    value: T,
+  ) {
     const now = Date.now();
     map.set(key, {
       value,
@@ -180,6 +180,13 @@ export class ProductsService {
         size: dto.size ?? null,
         imageUrl: dto.imageUrl ?? null,
         active: dto.active ?? true,
+        ...(dto.traceModifiedAt !== undefined
+          ? {
+              traceModifiedAt: dto.traceModifiedAt
+                ? new Date(dto.traceModifiedAt)
+                : null,
+            }
+          : {}),
       },
       include: { category: true },
     });
@@ -199,13 +206,23 @@ export class ProductsService {
     });
     const cachedFresh = this.getCachedFresh<{
       data: unknown[];
-      meta: { page: number; limit: number; total: number; hasNextPage: boolean };
+      meta: {
+        page: number;
+        limit: number;
+        total: number;
+        hasNextPage: boolean;
+      };
     }>(this.listCache, cacheKey);
     if (cachedFresh) return cachedFresh;
 
     const cachedStale = this.getCachedStale<{
       data: unknown[];
-      meta: { page: number; limit: number; total: number; hasNextPage: boolean };
+      meta: {
+        page: number;
+        limit: number;
+        total: number;
+        hasNextPage: boolean;
+      };
     }>(this.listCache, cacheKey);
     if (cachedStale) {
       this.refreshListInBackground(cacheKey, async () => {
@@ -220,7 +237,12 @@ export class ProductsService {
     if (inFlight) {
       return (await inFlight) as {
         data: unknown[];
-        meta: { page: number; limit: number; total: number; hasNextPage: boolean };
+        meta: {
+          page: number;
+          limit: number;
+          total: number;
+          hasNextPage: boolean;
+        };
       };
     }
 
@@ -233,7 +255,12 @@ export class ProductsService {
     this.listInFlight.set(cacheKey, task);
     return (await task) as {
       data: unknown[];
-      meta: { page: number; limit: number; total: number; hasNextPage: boolean };
+      meta: {
+        page: number;
+        limit: number;
+        total: number;
+        hasNextPage: boolean;
+      };
     };
   }
 
@@ -359,12 +386,16 @@ export class ProductsService {
       lotCodes.length > 0
         ? await this.prisma.purchaseLot.findMany({
             where: { code: { in: lotCodes } },
-            select: { id: true, code: true, purchaseDate: true, supplier: true },
+            select: {
+              id: true,
+              code: true,
+              purchaseDate: true,
+              supplier: true,
+              traceModifiedAt: true,
+            },
           })
         : [];
-    const purchaseLotByCode = new Map(
-      purchaseLotRows.map((p) => [p.code, p]),
-    );
+    const purchaseLotByCode = new Map(purchaseLotRows.map((p) => [p.code, p]));
 
     const ingredients = recipe.ingredients.map((ing) => {
       const inv = ing.inventoryItem;
@@ -398,13 +429,13 @@ export class ProductsService {
           : null,
         lotCode,
         purchaseLot: pl
-          ? {
+          ? mapPurchaseLotNestedForApi({
               id: pl.id,
               code: pl.code,
-              purchaseDate: pl.purchaseDate.toISOString(),
-              supplier:
-                pl.supplier?.trim() || inv.supplier?.trim() || null,
-            }
+              supplier: pl.supplier?.trim() || inv.supplier?.trim() || null,
+              purchaseDate: pl.purchaseDate,
+              traceModifiedAt: pl.traceModifiedAt,
+            })
           : null,
         inventoryArchived: inv.deletedAt != null,
         stockStatus,
@@ -462,7 +493,8 @@ export class ProductsService {
     }
     let services = new Prisma.Decimal(0);
     for (const c of product.recipe.costs) {
-      if (isServiceOrIndirectCostLine(c.name)) services = services.add(c.lineTotalCOP);
+      if (isServiceOrIndirectCostLine(c.name))
+        services = services.add(c.lineTotalCOP);
     }
     const base = materials.add(services);
 
@@ -555,13 +587,26 @@ export class ProductsService {
       where: { id },
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.price !== undefined ? { price: new Prisma.Decimal(dto.price) } : {}),
+        ...(dto.price !== undefined
+          ? { price: new Prisma.Decimal(dto.price) }
+          : {}),
         ...(categoryId !== undefined ? { categoryId } : {}),
         ...(dto.type !== undefined ? { type: dto.type } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
         ...(dto.size !== undefined ? { size: dto.size || null } : {}),
-        ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl ?? null } : {}),
+        ...(dto.imageUrl !== undefined
+          ? { imageUrl: dto.imageUrl ?? null }
+          : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
+        ...(dto.traceModifiedAt !== undefined
+          ? {
+              traceModifiedAt: dto.traceModifiedAt
+                ? new Date(dto.traceModifiedAt)
+                : null,
+            }
+          : {}),
       },
       include: { category: true },
     });
@@ -627,9 +672,7 @@ export class ProductsService {
 
     // Admin rate: editable por receta (default 0.30 para receta nueva).
     const adminRateDec =
-      dto.adminRate !== undefined
-        ? new Prisma.Decimal(dto.adminRate)
-        : null;
+      dto.adminRate !== undefined ? new Prisma.Decimal(dto.adminRate) : null;
 
     // Base: (costo insumos de inventario) + (servicios/indirectos)
     let baseTotal = new Prisma.Decimal(0);
@@ -651,21 +694,20 @@ export class ProductsService {
       adminRateDec ?? existingRecipe?.adminRate ?? new Prisma.Decimal(0.3);
 
     const adminLineTotal = baseTotal.mul(effectiveRate).toDecimalPlaces(0);
-    const adminCostLine =
-      adminLineTotal.gt(0)
-        ? {
-            kind: 'FIJO' as const,
-            name: 'Administración (30%)',
-            quantity: undefined,
-            unit: 'porción',
-            lineTotalCOP: Number(adminLineTotal.toString()),
-            sheetUnitCost: undefined,
-            sortOrder:
-              costs.length > 0
-                ? Math.max(...costs.map((x) => x.sortOrder ?? 0)) + 1
-                : 0,
-          }
-        : null;
+    const adminCostLine = adminLineTotal.gt(0)
+      ? {
+          kind: 'FIJO' as const,
+          name: 'Administración (30%)',
+          quantity: undefined,
+          unit: 'porción',
+          lineTotalCOP: Number(adminLineTotal.toString()),
+          sheetUnitCost: undefined,
+          sortOrder:
+            costs.length > 0
+              ? Math.max(...costs.map((x) => x.sortOrder ?? 0)) + 1
+              : 0,
+        }
+      : null;
 
     const yieldDec = new Prisma.Decimal(dto.recipeYield);
 
@@ -695,7 +737,7 @@ export class ProductsService {
       if (ingredients.length > 0) {
         await tx.recipeIngredient.createMany({
           data: ingredients.map((ing, i) => ({
-            recipeId: recipe!.id,
+            recipeId: recipe.id,
             inventoryItemId: ing.inventoryItemId,
             quantity: new Prisma.Decimal(ing.quantity),
             unit: ing.unit,
@@ -706,7 +748,7 @@ export class ProductsService {
       if (costs.length > 0) {
         await tx.recipeCost.createMany({
           data: costs.map((c, i) => ({
-            recipeId: recipe!.id,
+            recipeId: recipe.id,
             kind:
               c.kind === 'VARIABLE'
                 ? RecipeCostKind.VARIABLE
@@ -726,7 +768,7 @@ export class ProductsService {
       if (adminCostLine) {
         await tx.recipeCost.create({
           data: {
-            recipeId: recipe!.id,
+            recipeId: recipe.id,
             kind: RecipeCostKind.FIJO,
             name: adminCostLine.name,
             quantity: null,

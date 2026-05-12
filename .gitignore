@@ -56,3 +56,8 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# Respaldos pg_dump (npm run db:backup); conservar solo fuera del repo
+/backups/*.dump
+/backups/*.sql
+/backups/*.sql.gz

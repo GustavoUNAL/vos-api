@@ -31,6 +31,12 @@ export class PurchaseLotLineInputDto {
   @Min(0)
   purchaseUnitCostCOP!: number;
 
+  /** Si se envía (>0), sustituye a cantidad×costo unitario (redondeo COP según agregación de comprobante). */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lineTotalCOP?: number;
+
   @IsOptional()
   @IsNumber()
   sortOrder?: number;

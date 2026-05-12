@@ -9,6 +9,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { Pool } from 'pg';
+import { ensureProductCategoryId } from '../scripts/lib/menu-categories';
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -35,11 +36,17 @@ async function main() {
       },
     });
 
-    const catProduct = await prisma.category.upsert({
-      where: { name: 'Menú — Bebidas' },
-      create: { name: 'Menú — Bebidas', type: CategoryType.PRODUCT },
-      update: {},
-    });
+    const menuCatCache = new Map<string, string>();
+    const catCafeteriaId = await ensureProductCategoryId(
+      prisma,
+      menuCatCache,
+      'cafeteria',
+    );
+    const catComidaId = await ensureProductCategoryId(
+      prisma,
+      menuCatCache,
+      'comida',
+    );
 
     const catInventory = await prisma.category.upsert({
       where: { name: 'Insumos (demo)' },
@@ -92,8 +99,9 @@ async function main() {
         name: 'Cappuccino',
         description: 'Espresso con leche espumada',
         price: new Prisma.Decimal('4.50'),
-        categoryId: catProduct.id,
-        type: 'bebida',
+        categoryId: catCafeteriaId,
+        type: 'cafeteria',
+        size: 'Regular',
         active: true,
       },
     });
@@ -103,8 +111,9 @@ async function main() {
         name: 'Sandwich club',
         description: 'Pollo, pan brioche, vegetales',
         price: new Prisma.Decimal('8.90'),
-        categoryId: catProduct.id,
+        categoryId: catComidaId,
         type: 'comida',
+        size: '1 unidad',
         active: true,
       },
     });
@@ -183,7 +192,7 @@ async function main() {
 
     console.log('Seed OK:', {
       adminId: admin.id,
-      categories: [catProduct.id, catInventory.id, catExpense.id],
+      categories: [catCafeteriaId, catComidaId, catInventory.id, catExpense.id],
       inventory: [invCoffee.id, invMilk.id, invBread.id],
       products: [prodDrink.id, prodFood.id],
       recipes: [recipeDrink.id, recipeFood.id],

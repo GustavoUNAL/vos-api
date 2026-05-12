@@ -11,6 +11,7 @@ module.exports = defineConfig({
   schema: path.join(root, 'prisma', 'schema.prisma'),
   migrations: {
     path: path.join(root, 'prisma', 'migrations'),
+    seed: 'npx ts-node prisma/seed.ts',
   },
   datasource: {
     url: process.env.DATABASE_URL,

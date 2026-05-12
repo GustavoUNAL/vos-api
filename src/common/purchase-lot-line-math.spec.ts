@@ -1,67 +1,117 @@
 import { Prisma } from '@prisma/client';
 import {
-  deriveBackfillQuantityPurchased,
-  lineQuantityConsumed,
-  lineTotalFromQtyAndUnitCost,
-  purchaseTotalsWithinTolerance,
+  assertPatchTotalValueCoherentWithLines,
+  lineTotalForPurchaseAggregationCOP,
+  lineTotalFromPurchaseParts,
+  PurchaseLotTotalCoherenceError,
+  roundMoneyCOP,
+  sumLineTotalsCOP,
 } from './purchase-lot-line-math';
 
 describe('purchase-lot-line-math', () => {
-  it('deriveBackfillQuantityPurchased usa sum(IN) cuando hay entradas', () => {
-    const q = deriveBackfillQuantityPurchased(
-      new Prisma.Decimal(3),
-      new Prisma.Decimal(20),
-      new Prisma.Decimal(100),
-    );
-    expect(q.toString()).toBe('20');
+  describe('roundMoneyCOP', () => {
+    it('redondea half-up a entero COP', () => {
+      expect(roundMoneyCOP('10.4').toFixed(0)).toBe('10');
+      expect(roundMoneyCOP('10.5').toFixed(0)).toBe('11');
+      expect(roundMoneyCOP(new Prisma.Decimal('10.5')).toFixed(0)).toBe('11');
+    });
+
+    it('no devuelve negativos', () => {
+      expect(roundMoneyCOP('-3').toFixed(0)).toBe('0');
+    });
   });
 
-  it('deriveBackfillQuantityPurchased usa stock + salidas si no hay IN', () => {
-    const q = deriveBackfillQuantityPurchased(
-      new Prisma.Decimal(4),
-      new Prisma.Decimal(0),
-      new Prisma.Decimal(6),
-    );
-    expect(q.toString()).toBe('10');
+  describe('lineTotalFromPurchaseParts', () => {
+    it('prefiere line_total explícito positivo (redondeado)', () => {
+      const t = lineTotalFromPurchaseParts({
+        quantityPurchased: 3,
+        purchaseUnitCostCOP: 100,
+        lineTotalCOP: '299.7',
+      });
+      expect(t.toFixed(0)).toBe('300');
+    });
+
+    it('si no hay total explícito, usa qty × unit redondeado', () => {
+      const t = lineTotalFromPurchaseParts({
+        quantityPurchased: 2,
+        purchaseUnitCostCOP: '49.55',
+        lineTotalCOP: 0,
+      });
+      expect(t.toFixed(0)).toBe('99');
+    });
   });
 
-  it('lineQuantityConsumed no baja de cero', () => {
-    expect(
-      lineQuantityConsumed(new Prisma.Decimal(5), new Prisma.Decimal(10)).toString(),
-    ).toBe('0');
-    expect(
-      lineQuantityConsumed(new Prisma.Decimal(10), new Prisma.Decimal(3)).toString(),
-    ).toBe('7');
+  describe('sumLineTotalsCOP', () => {
+    it('suma líneas según la misma convención', () => {
+      const s = sumLineTotalsCOP([
+        {
+          quantityPurchased: 1,
+          purchaseUnitCostCOP: 100,
+          lineTotalCOP: 0,
+        },
+        {
+          quantityPurchased: 1,
+          purchaseUnitCostCOP: 200,
+          lineTotalCOP: 0,
+        },
+      ]);
+      expect(s.toFixed(0)).toBe('300');
+    });
+
+    it('usa costo inventario cuando comprobante y unit van en cero', () => {
+      const one = lineTotalForPurchaseAggregationCOP({
+        quantityPurchased: 2,
+        purchaseUnitCostCOP: 0,
+        lineTotalCOP: 0,
+        inventoryUnitCostCOP: 50,
+      });
+      expect(one.toFixed(0)).toBe('100');
+      const s = sumLineTotalsCOP([
+        {
+          quantityPurchased: 2,
+          purchaseUnitCostCOP: 0,
+          lineTotalCOP: 0,
+          inventoryUnitCostCOP: 50,
+        },
+      ]);
+      expect(s.toFixed(0)).toBe('100');
+    });
   });
 
-  it('lineTotalFromQtyAndUnitCost es estable ante descuentos de stock (solo referencia de cálculo)', () => {
-    const purchased = new Prisma.Decimal(100);
-    const unit = new Prisma.Decimal('2500.5');
-    const total = lineTotalFromQtyAndUnitCost(purchased, unit);
-    expect(total.toFixed(2)).toBe('250050.00');
-    const remaining = new Prisma.Decimal(30);
-    expect(
-      lineTotalFromQtyAndUnitCost(remaining, unit).toFixed(2),
-    ).not.toBe(total.toFixed(2));
-    expect(total.sub(lineTotalFromQtyAndUnitCost(remaining, unit)).toFixed(2)).toBe(
-      lineTotalFromQtyAndUnitCost(purchased.sub(remaining), unit).toFixed(2),
-    );
-  });
+  describe('assertPatchTotalValueCoherentWithLines', () => {
+    it('no lanza sin líneas', () => {
+      expect(() =>
+        assertPatchTotalValueCoherentWithLines(999, []),
+      ).not.toThrow();
+    });
 
-  it('purchaseTotalsWithinTolerance acepta diferencias menores al umbral', () => {
-    expect(
-      purchaseTotalsWithinTolerance(
-        new Prisma.Decimal('100.4'),
-        new Prisma.Decimal('100'),
-        new Prisma.Decimal('1'),
-      ),
-    ).toBe(true);
-    expect(
-      purchaseTotalsWithinTolerance(
-        new Prisma.Decimal('102'),
-        new Prisma.Decimal('100'),
-        new Prisma.Decimal('1'),
-      ),
-    ).toBe(false);
+    it('lanza si totalValue no cuadra', () => {
+      expect(() =>
+        assertPatchTotalValueCoherentWithLines(1, [
+          {
+            quantityPurchased: 1,
+            purchaseUnitCostCOP: 500,
+            lineTotalCOP: 500,
+          },
+        ]),
+      ).toThrow(PurchaseLotTotalCoherenceError);
+    });
+
+    it('acepta desvío dentro de 1 COP', () => {
+      expect(() =>
+        assertPatchTotalValueCoherentWithLines(301, [
+          {
+            quantityPurchased: 1,
+            purchaseUnitCostCOP: 100,
+            lineTotalCOP: 0,
+          },
+          {
+            quantityPurchased: 1,
+            purchaseUnitCostCOP: 200,
+            lineTotalCOP: 0,
+          },
+        ]),
+      ).not.toThrow();
+    });
   });
 });

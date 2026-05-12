@@ -2,18 +2,19 @@ import 'dotenv/config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { CategoryType, Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
+import {
+  ALLOWED_MENU_SLUGS,
+  deleteOrphanProductCategories,
+  ensureProductCategoryId,
+  normalizeMenuCategory,
+} from './lib/menu-categories';
+import { canonicalProductId } from './lib/product-canonical-id';
 
 /**
  * Importa productos desde el CSV (Nombre, Descripción, Precio, Tamaño, Categoría).
- * - Categorías de menú (7): Cafetería, Bar, Cócteles, Shots, Botellas, Comida, Combos.
- *   En `categories.name` se guarda el nombre en español; en `Product.type` el slug (cafeteria, bar, …).
- * - CSV columna Categoría: cafeteria | bar | cocteles | shots | botellas | comida | combos
- *   (se aceptan aliases viejos: cafe, coctel, cerveza, licores, shot, combo, etc.)
- *
- * Pasada extra: alinea por **id canónico** (slug del nombre) y **elimina duplicados** (UUID viejos)
- * para que en Prisma Studio no queden filas sin tamaño.
+ * Categorías canónicas: ver `scripts/lib/menu-categories.ts`.
  *
  * Uso:
  *   npx ts-node --transpile-only scripts/import-products-list.ts
@@ -93,63 +94,6 @@ function parsePrice(raw: string): number {
   return n;
 }
 
-/** Slug estable para `Product.id` y para emparejar duplicados. */
-function canonicalProductId(name: string): string {
-  const n = name
-    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return n
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
-/** Slug de categoría: conserva `snake_case` del CSV (solo normaliza espacios). */
-function slugCategory(raw: string): string {
-  return raw
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_]/g, '');
-}
-
-/** Slug → nombre único en `categories` (lo que ves en Prisma Studio). */
-const SLUG_TO_CATEGORY_NAME: Record<string, string> = {
-  cafeteria: 'Cafetería',
-  bar: 'Bar',
-  cocteles: 'Cócteles',
-  shots: 'Shots',
-  botellas: 'Botellas',
-  comida: 'Comida',
-  combos: 'Combos',
-};
-
-const ALLOWED_MENU_SLUGS = new Set(Object.keys(SLUG_TO_CATEGORY_NAME));
-
-/** Mapea CSV viejos u hoja Excel a los 7 slugs nuevos. */
-function normalizeMenuCategory(raw: string): string {
-  let s = slugCategory(raw);
-  const legacy: Record<string, string> = {
-    cafe: 'cafeteria',
-    bebida_caliente: 'cafeteria',
-    bebida_fria: 'cafeteria',
-    postre: 'cafeteria',
-    coctel: 'cocteles',
-    cerveza: 'bar',
-    licores: 'botellas',
-    licor: 'botellas',
-    shot: 'shots',
-    combo: 'combos',
-  };
-  if (legacy[s]) s = legacy[s];
-  return s;
-}
-
 function isHeaderRow(cols: string[]): boolean {
   const a = (cols[0] || '').toLowerCase();
   return a === 'nombre' || a.startsWith('nombre');
@@ -197,62 +141,6 @@ function rowsFromCsv(content: string) {
   return out;
 }
 
-async function ensureProductCategoryId(
-  prisma: PrismaClient,
-  cache: Map<string, string>,
-  categorySlug: string,
-): Promise<string> {
-  const slug = normalizeMenuCategory(categorySlug);
-  if (!ALLOWED_MENU_SLUGS.has(slug)) {
-    throw new Error(`Categoría no permitida al resolver FK: ${categorySlug}`);
-  }
-  const hit = cache.get(slug);
-  if (hit) return hit;
-  const name = SLUG_TO_CATEGORY_NAME[slug];
-  const row = await prisma.category.upsert({
-    where: { name },
-    create: { name, type: CategoryType.PRODUCT },
-    update: {},
-    select: { id: true },
-  });
-  cache.set(slug, row.id);
-  return row.id;
-}
-
-async function deleteOrphanProductCategories(
-  prisma: PrismaClient,
-  catCache: Map<string, string>,
-) {
-  const keep = new Set(Object.values(SLUG_TO_CATEGORY_NAME));
-  const rows = await prisma.category.findMany({
-    where: { type: CategoryType.PRODUCT },
-    select: { id: true, name: true },
-  });
-  const fallbackId = await ensureProductCategoryId(prisma, catCache, 'cafeteria');
-  for (const c of rows) {
-    if (keep.has(c.name)) continue;
-    const total = await prisma.product.count({ where: { categoryId: c.id } });
-    if (total === 0) {
-      await prisma.category.delete({ where: { id: c.id } });
-      console.log('Categoría antigua eliminada:', c.name);
-      continue;
-    }
-    const visible = await prisma.product.count({
-      where: { categoryId: c.id, deletedAt: null },
-    });
-    if (visible > 0) {
-      console.warn(`Categoría "${c.name}" no eliminada: ${visible} productos visibles`);
-      continue;
-    }
-    await prisma.product.updateMany({
-      where: { categoryId: c.id },
-      data: { categoryId: fallbackId, type: 'cafeteria' },
-    });
-    await prisma.category.delete({ where: { id: c.id } });
-    console.log('Categoría antigua eliminada (solo históricos):', c.name);
-  }
-}
-
 async function main() {
   const { file } = parseArgs();
   if (!fs.existsSync(file)) {
@@ -266,7 +154,9 @@ async function main() {
     const id = canonicalProductId(p.name);
     if (!id) throw new Error(`Id vacío para: ${p.name}`);
     if (byId.has(id)) {
-      throw new Error(`Colisión de id "${id}": "${byId.get(id)!.name}" vs "${p.name}"`);
+      throw new Error(
+        `Colisión de id "${id}": "${byId.get(id)!.name}" vs "${p.name}"`,
+      );
     }
     byId.set(id, p);
   }
@@ -284,7 +174,11 @@ async function main() {
     for (const p of PRODUCTS) {
       const id = canonicalProductId(p.name);
       const type = p.categorySlug;
-      const categoryId = await ensureProductCategoryId(prisma, catCache, p.categorySlug);
+      const categoryId = await ensureProductCategoryId(
+        prisma,
+        catCache,
+        p.categorySlug,
+      );
 
       await prisma.product.upsert({
         where: { id },
@@ -335,7 +229,11 @@ async function main() {
         continue;
       }
       const type = p.categorySlug;
-      const categoryId = await ensureProductCategoryId(prisma, catCache, p.categorySlug);
+      const categoryId = await ensureProductCategoryId(
+        prisma,
+        catCache,
+        p.categorySlug,
+      );
       await prisma.product.update({
         where: { id: row.id },
         data: {
@@ -363,10 +261,14 @@ async function main() {
       },
     });
     if (sinTam > 0) {
-      throw new Error(`Quedaron ${sinTam} productos visibles sin tamaño (revisa el CSV o duplicados).`);
+      throw new Error(
+        `Quedaron ${sinTam} productos visibles sin tamaño (revisa el CSV o duplicados).`,
+      );
     }
 
-    const totalVisible = await prisma.product.count({ where: { deletedAt: null } });
+    const totalVisible = await prisma.product.count({
+      where: { deletedAt: null },
+    });
 
     await deleteOrphanProductCategories(prisma, catCache);
 

@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CategoryType, Prisma, StockMovementType } from '@prisma/client';
 import { mapCategoryRelation } from '../common/category-display-name';
+import { generateInternalInventoryEan13 } from '../common/inventory-internal-barcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { PurchaseLotsService } from '../purchase-lots/purchase-lots.service';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
@@ -13,6 +18,10 @@ type PaginationParams = {
   categoryId?: string;
   /** Código de lote (`inventory.lot` = `purchase_lots.code`). */
   lot?: string;
+  /** Filtro exacto por `trace_product_code`. */
+  traceProductCode?: string;
+  /** Filtro exacto por `internal_barcode`. */
+  internalBarcode?: string;
   /** Si true, agrega `stats` por ítem desde `stock_movements` (estado físico vs historial). */
   includeStats?: boolean;
 };
@@ -140,8 +149,7 @@ export class InventoryService {
     const consumedTotal = sums.SALE.add(sums.OUT);
     const onHand = row.quantity;
     const min = row.minStock;
-    const belowMinimum =
-      min !== null && onHand.lt(min);
+    const belowMinimum = min !== null && onHand.lt(min);
 
     return {
       onHand: onHand.toString(),
@@ -180,6 +188,25 @@ export class InventoryService {
     return t && t.length > 0 ? t : null;
   }
 
+  private normalizeTraceProductCode(
+    raw: string | null | undefined,
+  ): string | null {
+    const t = raw?.trim();
+    return t && t.length > 0 ? t : null;
+  }
+
+  private async allocateUniqueInternalBarcode(): Promise<string> {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const code = generateInternalInventoryEan13();
+      const clash = await this.prisma.inventory.findUnique({
+        where: { internalBarcode: code },
+        select: { id: true },
+      });
+      if (!clash) return code;
+    }
+    throw new Error('No se pudo generar internalBarcode único');
+  }
+
   async create(dto: CreateInventoryDto) {
     const categoryId = await this.requireInventoryCategoryId(dto.categoryId);
     const lot = this.normalizeLotInput(dto.lot);
@@ -188,6 +215,8 @@ export class InventoryService {
         supplier: dto.supplier,
       });
     }
+    const internalBarcode = await this.allocateUniqueInternalBarcode();
+    const traceProductCode = this.normalizeTraceProductCode(dto.traceProductCode);
     const row = await this.prisma.inventory.create({
       data: {
         name: dto.name,
@@ -197,10 +226,10 @@ export class InventoryService {
         unitCost: new Prisma.Decimal(dto.unitCost),
         supplier: dto.supplier ?? null,
         lot,
+        internalBarcode,
+        traceProductCode,
         minStock:
-          dto.minStock !== undefined
-            ? new Prisma.Decimal(dto.minStock)
-            : null,
+          dto.minStock !== undefined ? new Prisma.Decimal(dto.minStock) : null,
       },
       include: { category: true },
     });
@@ -229,6 +258,8 @@ export class InventoryService {
       search: params.search?.trim() ?? '',
       categoryId: params.categoryId?.trim() ?? '',
       lot: params.lot?.trim() ?? '',
+      traceProductCode: params.traceProductCode?.trim() ?? '',
+      internalBarcode: params.internalBarcode?.trim() ?? '',
       includeStats: !!params.includeStats,
     });
     const fresh = this.getFresh<unknown>(cacheKey);
@@ -264,11 +295,31 @@ export class InventoryService {
 
     const where: Prisma.InventoryWhereInput = {
       deletedAt: null,
-      ...(params.lot?.trim().length
-        ? { lot: params.lot.trim() }
+      ...(params.lot?.trim().length ? { lot: params.lot.trim() } : {}),
+      ...(params.traceProductCode?.trim().length
+        ? { traceProductCode: params.traceProductCode.trim() }
+        : {}),
+      ...(params.internalBarcode?.trim().length
+        ? { internalBarcode: params.internalBarcode.trim() }
         : {}),
       ...(params.search?.trim().length
-        ? { name: { contains: params.search.trim(), mode: 'insensitive' } }
+        ? {
+            OR: [
+              { name: { contains: params.search.trim(), mode: 'insensitive' } },
+              {
+                internalBarcode: {
+                  contains: params.search.trim(),
+                  mode: 'insensitive',
+                },
+              },
+              {
+                traceProductCode: {
+                  contains: params.search.trim(),
+                  mode: 'insensitive',
+                },
+              },
+            ],
+          }
         : {}),
       ...(params.categoryId?.trim().length
         ? { categoryId: params.categoryId.trim() }
@@ -291,9 +342,7 @@ export class InventoryService {
       limit,
       total,
       hasNextPage: skip + data.length < total,
-      ...(params.lot?.trim().length
-        ? { lotFilter: params.lot.trim() }
-        : {}),
+      ...(params.lot?.trim().length ? { lotFilter: params.lot.trim() } : {}),
     };
 
     if (!params.includeStats) {
@@ -306,7 +355,9 @@ export class InventoryService {
       };
     }
 
-    const sumsMap = await this.movementSumsByInventoryIds(data.map((d) => d.id));
+    const sumsMap = await this.movementSumsByInventoryIds(
+      data.map((d) => d.id),
+    );
     const dataWithStats = data.map((row) => {
       const sums = sumsMap.get(row.id) ?? {
         IN: zero(),
@@ -395,28 +446,49 @@ export class InventoryService {
         ...(dto.unitCost !== undefined
           ? { unitCost: new Prisma.Decimal(dto.unitCost) }
           : {}),
-        ...(dto.supplier !== undefined ? { supplier: dto.supplier || null } : {}),
+        ...(dto.supplier !== undefined
+          ? { supplier: dto.supplier || null }
+          : {}),
         ...(dto.lot !== undefined ? { lot: lotPatch ?? null } : {}),
         ...(dto.minStock !== undefined
           ? { minStock: new Prisma.Decimal(dto.minStock) }
+          : {}),
+        ...(dto.traceProductCode !== undefined
+          ? {
+              traceProductCode: this.normalizeTraceProductCode(
+                dto.traceProductCode,
+              ),
+            }
           : {}),
       },
       include: { category: true },
     });
     const out = { ...updated, category: mapCategoryRelation(updated.category) };
     const newLot = updated.lot?.trim() || '';
-    await this.purchaseLotsService.reconcilePurchaseLotLineAfterInventoryChange({
-      inventoryId: id,
-      inventoryAfter: {
-        id: updated.id,
-        lot: updated.lot,
-        name: updated.name,
-        categoryId: updated.categoryId,
-        quantity: updated.quantity,
-        unit: updated.unit,
-        unitCost: updated.unitCost,
+    if (
+      newLot &&
+      dto.supplier !== undefined &&
+      dto.lot === undefined &&
+      lotPatch === undefined
+    ) {
+      await this.purchaseLotsService.ensurePurchaseLotRowForCode(newLot, {
+        supplier: updated.supplier,
+      });
+    }
+    await this.purchaseLotsService.reconcilePurchaseLotLineAfterInventoryChange(
+      {
+        inventoryId: id,
+        inventoryAfter: {
+          id: updated.id,
+          lot: updated.lot,
+          name: updated.name,
+          categoryId: updated.categoryId,
+          quantity: updated.quantity,
+          unit: updated.unit,
+          unitCost: updated.unitCost,
+        },
       },
-    });
+    );
     const lotsToSync = new Set<string>();
     if (previousLot) lotsToSync.add(previousLot);
     if (newLot) lotsToSync.add(newLot);
@@ -445,5 +517,69 @@ export class InventoryService {
     );
     this.invalidateListCache();
     return archived;
+  }
+
+  async findByInternalBarcode(barcode: string) {
+    const b = barcode.replace(/\s+/g, '').trim();
+    if (!b.length) {
+      throw new BadRequestException('internalBarcode vacío');
+    }
+    const row = await this.prisma.inventory.findFirst({
+      where: { internalBarcode: b, deletedAt: null },
+      include: { category: true },
+    });
+    if (!row) {
+      throw new NotFoundException('Ítem de inventario no encontrado para ese código');
+    }
+    return {
+      ...row,
+      category: mapCategoryRelation(row.category),
+    };
+  }
+
+  async getPurchaseTraceSummary(traceProductCode: string) {
+    const code = traceProductCode.trim();
+    if (!code.length) {
+      throw new BadRequestException('traceProductCode vacío');
+    }
+    const rows = await this.prisma.inventory.findMany({
+      where: { traceProductCode: code, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        lot: true,
+        internalBarcode: true,
+        traceProductCode: true,
+        quantity: true,
+        unit: true,
+        unitCost: true,
+        supplier: true,
+        createdAt: true,
+      },
+      orderBy: [{ lot: 'asc' }, { name: 'asc' }],
+    });
+    const distinctLots = [
+      ...new Set(
+        rows.map((r) => r.lot?.trim()).filter((l): l is string => !!l?.length),
+      ),
+    ];
+    return {
+      traceProductCode: code,
+      distinctPurchaseLotsCount: distinctLots.length,
+      distinctPurchaseLotCodes: distinctLots,
+      activeInventoryItemsCount: rows.length,
+      items: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        lot: r.lot,
+        internalBarcode: r.internalBarcode,
+        traceProductCode: r.traceProductCode,
+        quantity: r.quantity.toString(),
+        unit: r.unit,
+        unitCost: r.unitCost.toFixed(2),
+        supplier: r.supplier,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    };
   }
 }

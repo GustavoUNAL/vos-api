@@ -1,6 +1,8 @@
 /**
- * Auditoría: para cada lote, la suma de `purchase_lot_lines.line_total_cop`
- * debe coincidir con `purchase_lots.total_value` (tolerancia 1 COP, igual que la API).
+ * Auditoría por lote:
+ * - Con líneas en `purchase_lot_lines`: `total_value` vs `sumLineTotalsCOP` (tolerancia 1 COP).
+ * - Sin líneas (import / legacy): `total_value` vs Σ inventario activo (`quantity × unit_cost`)
+ *   con el mismo `lot` que el código del lote (tolerancia 1 COP); si no hay ítems, el total no es contrastable → OK con nota.
  *
  *   npx ts-node --transpile-only scripts/audit-purchase-lot-line-totals.ts
  *   npx ts-node --transpile-only scripts/audit-purchase-lot-line-totals.ts --json
@@ -10,7 +12,10 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
-import { purchaseTotalsWithinTolerance } from '../src/common/purchase-lot-line-math';
+import {
+  purchaseTotalsWithinTolerance,
+  sumLineTotalsCOP,
+} from '../src/common/purchase-lot-line-math';
 import { isMissingPurchaseLotLinesTableError } from '../src/common/prisma-purchase-lot-line-table';
 
 const tolerance = new Prisma.Decimal('1');
@@ -19,7 +24,8 @@ type Row = {
   code: string;
   lineCount: number;
   lotTotalCOP: string | null;
-  linesSumCOP: string;
+  /** Suma comprobante, o Σ inventario si no hay líneas (referencia para el chequeo). */
+  referenceSumCOP: string;
   deltaCOP: string;
   ok: boolean;
   note: string | null;
@@ -45,33 +51,109 @@ async function main() {
   const rows: Row[] = [];
 
   try {
-    for (const lot of lots) {
-      let linesSum = new Prisma.Decimal(0);
-      let lineCount = 0;
-      try {
-        const agg = await prisma.purchaseLotLine.aggregate({
-          where: { purchaseLotCode: lot.code },
-          _sum: { lineTotalCOP: true },
-          _count: { _all: true },
-        });
-        linesSum = agg._sum.lineTotalCOP ?? new Prisma.Decimal(0);
-        lineCount = agg._count._all;
-      } catch (e) {
-        if (isMissingPurchaseLotLinesTableError(e)) {
-          linesTableMissing = true;
-          rows.push({
-            code: lot.code,
-            lineCount: 0,
-            lotTotalCOP: lot.totalValue?.toFixed(2) ?? null,
-            linesSumCOP: '0',
-            deltaCOP: '0',
-            ok: false,
-            note: 'Tabla purchase_lot_lines no existe en esta base.',
-          });
-          continue;
-        }
+    let allLines: Array<{
+      purchaseLotCode: string;
+      inventoryItemId: string | null;
+      quantityPurchased: Prisma.Decimal;
+      purchaseUnitCostCOP: Prisma.Decimal;
+      lineTotalCOP: Prisma.Decimal;
+    }> = [];
+
+    try {
+      allLines = await prisma.purchaseLotLine.findMany({
+        select: {
+          purchaseLotCode: true,
+          inventoryItemId: true,
+          quantityPurchased: true,
+          purchaseUnitCostCOP: true,
+          lineTotalCOP: true,
+        },
+      });
+    } catch (e) {
+      if (isMissingPurchaseLotLinesTableError(e)) {
+        linesTableMissing = true;
+      } else {
         throw e;
       }
+    }
+
+    const linkedIds = [
+      ...new Set(
+        allLines
+          .map((l) => l.inventoryItemId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const invRows =
+      linkedIds.length > 0
+        ? await prisma.inventory.findMany({
+            where: { id: { in: linkedIds } },
+            select: { id: true, unitCost: true, deletedAt: true },
+          })
+        : [];
+    const invUnitById = new Map(
+      invRows
+        .filter((r) => r.deletedAt === null)
+        .map((r) => [r.id, r.unitCost] as const),
+    );
+
+    const byCode = new Map<
+      string,
+      Array<{
+        quantityPurchased: Prisma.Decimal;
+        purchaseUnitCostCOP: Prisma.Decimal;
+        lineTotalCOP: Prisma.Decimal;
+        inventoryUnitCostCOP?: Prisma.Decimal;
+      }>
+    >();
+    for (const ln of allLines) {
+      const c = ln.purchaseLotCode.trim();
+      const arr = byCode.get(c) ?? [];
+      arr.push({
+        quantityPurchased: ln.quantityPurchased,
+        purchaseUnitCostCOP: ln.purchaseUnitCostCOP,
+        lineTotalCOP: ln.lineTotalCOP,
+        inventoryUnitCostCOP: ln.inventoryItemId
+          ? invUnitById.get(ln.inventoryItemId)
+          : undefined,
+      });
+      byCode.set(c, arr);
+    }
+
+    const invSumByLot = new Map<string, Prisma.Decimal>();
+    const invForLots = await prisma.inventory.findMany({
+      where: { deletedAt: null, lot: { not: null } },
+      select: { lot: true, quantity: true, unitCost: true },
+    });
+    for (const inv of invForLots) {
+      const lc = inv.lot?.trim();
+      if (!lc) continue;
+      const add = inv.quantity.mul(inv.unitCost);
+      invSumByLot.set(lc, (invSumByLot.get(lc) ?? new Prisma.Decimal(0)).add(add));
+    }
+
+    for (const lot of lots) {
+      let lineCount = 0;
+
+      if (linesTableMissing) {
+        rows.push({
+          code: lot.code,
+          lineCount: 0,
+          lotTotalCOP: lot.totalValue?.toFixed(2) ?? null,
+          referenceSumCOP: '0',
+          deltaCOP: '0',
+          ok: false,
+          note: 'Tabla purchase_lot_lines no existe en esta base.',
+        });
+        continue;
+      }
+
+      const parts = byCode.get(lot.code.trim()) ?? [];
+      lineCount = parts.length;
+      const linesSum = sumLineTotalsCOP(parts);
+      const invSum = invSumByLot.get(lot.code.trim()) ?? new Prisma.Decimal(0);
+      const referenceSum =
+        lineCount > 0 ? linesSum : invSum;
 
       const lotTotal =
         lot.totalValue !== null ? new Prisma.Decimal(lot.totalValue) : null;
@@ -84,23 +166,37 @@ async function main() {
           ok = false;
           note = 'Lote sin total_value pero hay líneas con monto > 0.';
         }
-      } else if (lineCount === 0) {
-        if (!lotTotal.eq(0)) {
+      } else if (lineCount > 0) {
+        if (!purchaseTotalsWithinTolerance(lotTotal, linesSum, tolerance)) {
           ok = false;
-          note = 'Lote con total_value pero sin líneas de comprobante.';
+          note = 'Suma de líneas de comprobante ≠ total_value del lote.';
         }
-      } else if (!purchaseTotalsWithinTolerance(lotTotal, linesSum, tolerance)) {
-        ok = false;
-        note = 'Suma de líneas ≠ total_value del lote.';
+      } else {
+        if (lotTotal.eq(0)) {
+          /* ok */
+        } else if (invSum.gt(0)) {
+          if (!purchaseTotalsWithinTolerance(lotTotal, invSum, tolerance)) {
+            ok = false;
+            note =
+              'Sin comprobante: Σ inventario activo (cantidad×costo) ≠ total_value del lote.';
+          } else {
+            note =
+              'Sin líneas de comprobante; total_value alineado con Σ inventario del lote.';
+          }
+        } else {
+          note =
+            'Sin comprobante ni inventario activo enlazado a este lote; total_value no contrastable con stock.';
+        }
       }
 
-      const delta = lotTotal !== null ? lotTotal.sub(linesSum) : linesSum.neg();
+      const delta =
+        lotTotal !== null ? lotTotal.sub(referenceSum) : referenceSum.neg();
 
       rows.push({
         code: lot.code,
         lineCount,
         lotTotalCOP: lotTotal?.toFixed(2) ?? null,
-        linesSumCOP: linesSum.toFixed(2),
+        referenceSumCOP: referenceSum.toFixed(2),
         deltaCOP: delta.toFixed(2),
         ok,
         note,
@@ -131,7 +227,7 @@ async function main() {
     );
   } else {
     console.log(
-      `Auditoría lote total vs suma líneas comprobante (tolerancia ${tolerance.toFixed()} COP)\n`,
+      `Auditoría lote: comprobante o inventario vs total_value (tolerancia ${tolerance.toFixed()} COP)\n`,
     );
     if (linesTableMissing) {
       console.warn(
@@ -144,7 +240,7 @@ async function main() {
         'Código lote'.padEnd(36),
         'Líneas',
         'total_value lote',
-        'Σ line_total',
+        'Σ ref.',
         'Δ',
       ].join('  '),
     );
@@ -157,7 +253,7 @@ async function main() {
           r.code.padEnd(36),
           String(r.lineCount).padStart(4),
           (r.lotTotalCOP ?? '—').padStart(16),
-          r.linesSumCOP.padStart(14),
+          r.referenceSumCOP.padStart(14),
           r.deltaCOP.padStart(12),
         ].join('  ') + (r.note ? `  (${r.note})` : ''),
       );

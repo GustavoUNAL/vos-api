@@ -5,11 +5,28 @@ import { Pool } from 'pg';
 import { RecipeSpec, seedRecipeSpecs } from './lib/sheet-recipe-seed';
 
 /**
- * Recetas Bar, Cócteles y Shots (misma estructura que la hoja de costos).
- * Nombres de `productName` = columna Nombre del CSV (`lista-productos.csv`).
+ * Recetario Bar — Cerveza michelada, cócteles, shots (hoja de costos).
+ * `productName` debe coincidir con la columna **Nombre** de `prisma/data/lista-productos.csv`.
+ * La fila "Administración (30%)" se recalcula en `seedRecipeSpecs` (ver nota en doc).
+ *
+ * Si el array `RECIPES` incluye el mismo `productName` dos veces (p. ej. al pegar bloques),
+ * solo se usa la **primera** definición (`dedupeRecipesByProductFirst`).
+ *
+ * Referencia: `docs/recetario-bar.md`
  *
  * Uso: npm run db:seed-bar-cocteles-shots-recipes
  */
+
+/** Conserva la primera receta por nombre de producto (evita doble seed al pegar el recetario). */
+function dedupeRecipesByProductFirst(specs: RecipeSpec[]): RecipeSpec[] {
+  const byName = new Map<string, RecipeSpec>();
+  for (const spec of specs) {
+    if (!byName.has(spec.productName)) {
+      byName.set(spec.productName, spec);
+    }
+  }
+  return Array.from(byName.values());
+}
 
 const RECIPES: RecipeSpec[] = [
   {
@@ -88,7 +105,7 @@ const RECIPES: RecipeSpec[] = [
         qty: null,
         unit: 'porción',
         sheetUnitCost: '—',
-        lineTotalCOP: 3200,
+        lineTotalCOP: 3186,
       },
     ],
   },
@@ -229,7 +246,7 @@ const RECIPES: RecipeSpec[] = [
         qty: null,
         unit: 'porción',
         sheetUnitCost: '—',
-        lineTotalCOP: 2460,
+        lineTotalCOP: 2520,
       },
     ],
   },
@@ -519,8 +536,14 @@ async function main() {
   const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
   try {
-    const n = await seedRecipeSpecs(prisma, RECIPES, 'Bar/Cócteles/Shots');
-    console.log('Listo. Recetas aplicadas:', n, '/', RECIPES.length);
+    const unique = dedupeRecipesByProductFirst(RECIPES);
+    if (unique.length < RECIPES.length) {
+      console.warn(
+        `[Bar/Cócteles/Shots] Omitidas ${RECIPES.length - unique.length} entradas duplicadas por productName.`,
+      );
+    }
+    const n = await seedRecipeSpecs(prisma, unique, 'Bar/Cócteles/Shots');
+    console.log('Listo. Recetas aplicadas:', n, '/', unique.length);
   } finally {
     await prisma.$disconnect();
     await pool.end();

@@ -6,8 +6,9 @@ type LotSyncDb = Pick<PrismaClient, 'purchaseLot' | 'inventory'>;
  * Actualiza `purchase_lots.item_count` según filas activas de `inventory` con
  * `inventory.lot` = `purchase_lots.code`.
  *
- * No modifica `total_value`: ese campo refleja el monto pagado en la compra
- * (factura / registro financiero), no la valorización Σ(qty×unitCost) del stock.
+ * No modifica `total_value`: con líneas de comprobante se mantiene vía
+ * `syncPurchaseLotTotalValueFromLines` en `PurchaseLotsService`; sin líneas,
+ * sigue siendo el monto registrado del lote (no Σ valorización de stock).
  */
 export async function syncPurchaseLotItemCountFromInventory(
   prisma: LotSyncDb,

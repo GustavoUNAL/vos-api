@@ -28,6 +28,8 @@ export class InventoryController {
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
     @Query('lot') lot?: string,
+    @Query('traceProductCode') traceProductCode?: string,
+    @Query('internalBarcode') internalBarcode?: string,
     @Query('includeStats') includeStatsRaw?: string,
   ) {
     const page = Number.parseInt(pageRaw ?? '', 10);
@@ -46,8 +48,24 @@ export class InventoryController {
       search,
       categoryId,
       lot,
+      traceProductCode,
+      internalBarcode,
       includeStats,
     });
+  }
+
+  /** Lectura por pistola / escáner: código interno EAN-13 del ítem. */
+  @Get('by-internal-barcode/:barcode')
+  findByInternalBarcode(@Param('barcode') barcode: string) {
+    return this.inventoryService.findByInternalBarcode(barcode);
+  }
+
+  /** Cuántos lotes de compra distintos tienen ítems con este `traceProductCode`. */
+  @Get('meta/purchase-trace')
+  purchaseTrace(@Query('traceProductCode') traceProductCode?: string) {
+    return this.inventoryService.getPurchaseTraceSummary(
+      traceProductCode ?? '',
+    );
   }
 
   @Get(':id')

@@ -3,6 +3,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -44,4 +45,12 @@ export class UpdateInventoryDto {
   @IsOptional()
   @Min(0)
   minStock?: number;
+
+  /**
+   * Código de producto para trazabilidad entre lotes. Enviar cadena vacía para borrar.
+   */
+  @IsString()
+  @IsOptional()
+  @MaxLength(64)
+  traceProductCode?: string;
 }

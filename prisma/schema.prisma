@@ -165,6 +165,8 @@ model Product {
   size        String?
   active      Boolean   @default(true)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  /// Fecha de última modificación/revisión declarada (trazabilidad; editable; distinta de `updated_at`).
+  traceModifiedAt DateTime? @map("trace_modified_at") @db.Timestamptz(6)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -177,6 +179,7 @@ model Product {
   @@index([deletedAt], map: "idx_products_deleted_at")
   @@index([active], map: "idx_products_active")
   @@index([type], map: "idx_products_type")
+  @@index([traceModifiedAt], map: "idx_products_trace_modified_at")
   @@map("products")
 }
 
@@ -197,6 +200,10 @@ model Inventory {
   /// Código de lote = `purchase_lots.code` (obligatorio que exista la fila de compra si no es null).
   lot       String?
   purchaseLot PurchaseLot? @relation(fields: [lot], references: [code], onDelete: Restrict, onUpdate: Cascade)
+  /// Código numérico escaneable (EAN-13 interno); único por fila de inventario.
+  internalBarcode String? @unique @map("internal_barcode")
+  /// Mismo código en varias compras/lotes para agrupar trazabilidad del “mismo producto”.
+  traceProductCode String? @map("trace_product_code")
   minStock  Decimal?  @map("min_stock") @db.Decimal(12, 4)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
@@ -211,6 +218,7 @@ model Inventory {
   @@index([categoryId], map: "idx_inventory_category")
   @@index([deletedAt], map: "idx_inventory_deleted_at")
   @@index([lot], map: "idx_inventory_lot")
+  @@index([traceProductCode], map: "idx_inventory_trace_product_code")
   @@map("inventory")
 }
 
@@ -219,7 +227,8 @@ model Inventory {
 ///
 /// Relación con inventario: `code` = `inventory.lot` (mismo string). `item_count` se mantiene
 /// alineado con el número de ítems activos enlazados vía la API/sincronización.
-/// `total_value` es el monto pagado registrado en la compra (no se recalcula desde stock).
+/// Con `purchase_lot_lines`, `total_value` se persiste como `sumLineTotalsCOP` de esas líneas.
+/// Sin líneas, `total_value` es registro manual o agregados importados (no Σ valorización de stock).
 model PurchaseLot {
   id           String   @id @default(cuid())
   /// Clave de enlace con `inventory.lot` (única).
@@ -232,8 +241,10 @@ model PurchaseLot {
 
   /// Ítems de inventario activos con `inventory.lot` = `code` (sincronizado desde API).
   itemCount  Int      @default(0) @map("item_count")
-  /// Monto pagado / factura (COP), no Σ existencias × costo.
+  /// Monto comprobante (COP). Con filas en `purchase_lot_lines`, debe igualar `sumLineTotalsCOP` (ver `src/common/purchase-lot-line-math.ts`).
   totalValue Decimal? @map("total_value") @db.Decimal(12, 2)
+  /// Fecha de última modificación/revisión declarada (trazabilidad; editable; distinta de `updated_at`).
+  traceModifiedAt DateTime? @map("trace_modified_at") @db.Timestamptz(6)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -242,6 +253,7 @@ model PurchaseLot {
   purchaseLotLines PurchaseLotLine[]
 
   @@index([purchaseDate], map: "idx_purchase_lots_purchase_date")
+  @@index([traceModifiedAt], map: "idx_purchase_lots_trace_modified_at")
   @@map("purchase_lots")
 }
 
@@ -261,6 +273,7 @@ model PurchaseLotLine {
   quantityPurchased     Decimal @map("quantity_purchased") @db.Decimal(12, 4)
   unit                  String
   purchaseUnitCostCOP Decimal @map("purchase_unit_cost_cop") @db.Decimal(12, 2)
+  /// Total línea COP (enteros al persistir; convención `lineTotalForPurchaseAggregationCOP`).
   lineTotalCOP          Decimal @map("line_total_cop") @db.Decimal(12, 2)
 
   sortOrder Int @default(0) @map("sort_order")

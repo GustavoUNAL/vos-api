@@ -1,0 +1,33 @@
+# Dependencias y artefactos locales
+node_modules
+dist
+coverage
+.turbo
+.temp
+.tmp
+
+# Entorno y secretos (inyectar en runtime en la nube)
+.env
+.env.*
+!.env.example
+
+# Git y IDE
+.git
+.gitignore
+.cursor
+.idea
+.vscode
+
+# Respaldos y dumps locales (la imagen incluye prisma/migrations + schema)
+backups/*.dump
+backups/*.sql
+
+# JSON/CSV de importación en repo (no hacen falta en runtime del API; montá volumen si los usás en contenedor)
+prisma/data
+
+# Tests y docs no necesarios en runtime
+test
+*.spec.ts
+.eslintrc*
+eslint.config.*
+.prettierrc*

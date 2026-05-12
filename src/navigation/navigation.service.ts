@@ -24,7 +24,8 @@ export class NavigationService {
           ],
           tables: ['purchase_lots'],
           mapsTo: {
-            displayName: 'purchase_lots.name (opcional; code sigue siendo la clave)',
+            displayName:
+              'GET purchase-lots: `displayName` = título corto (proveedor + ddmmaa + sufijo de `code`); `name` en BD es opcional; `code` es la clave técnica',
             supplier: 'purchase_lots.supplier',
             amountPaidCOP: 'purchase_lots.total_value',
             purchasedAt: 'purchase_lots.purchase_date',
@@ -128,8 +129,7 @@ export class NavigationService {
                   id: 'stock-alerts',
                   label: 'Pronto',
                   status: 'soon',
-                  note:
-                    'Alertas dedicadas (pendiente); hoy usa stats.belowMinimum en GET /inventory?includeStats=true',
+                  note: 'Alertas dedicadas (pendiente); hoy usa stats.belowMinimum en GET /inventory?includeStats=true',
                 },
                 {
                   id: 'stock-movements',
@@ -212,8 +212,7 @@ export class NavigationService {
                       'GET /inventory?lot=<code>&limit=100 (mismo code que el lote)',
                   },
                   tables: ['purchase_lots'],
-                  note:
-                    'FK: inventory.lot → purchase_lots.code (RESTRICT al borrar compra con ítems); name, proveedor, purchaseDate; totalValue = monto compra; item_count sincronizado; linkedActiveItemCount en vivo',
+                  note: 'FK: inventory.lot → purchase_lots.code (RESTRICT al borrar compra con ítems); name, proveedor, purchaseDate; totalValue = monto compra; item_count sincronizado; linkedActiveItemCount en vivo',
                 },
                 {
                   id: 'purchases-soon',

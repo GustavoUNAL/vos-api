@@ -1,10 +1,12 @@
 import {
   IsBoolean,
+  IsDateString,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateProductDto {
@@ -21,7 +23,7 @@ export class CreateProductDto {
   @IsNotEmpty()
   categoryId!: string;
 
-  /** bebida | comida | combo */
+  /** Slug de sección de menú: bar | cafeteria | cocteles | comida | shots */
   @IsString()
   @IsNotEmpty()
   type!: string;
@@ -41,4 +43,10 @@ export class CreateProductDto {
   @IsBoolean()
   @IsOptional()
   active?: boolean;
+
+  /** ISO 8601. Trazabilidad: última modificación/revisión declarada (distinta de `updatedAt` automático). */
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsDateString()
+  traceModifiedAt?: string | null;
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, StockMovementType } from '@prisma/client';
 import { mapCategoryRelation } from '../common/category-display-name';
+import { mapPurchaseLotNestedForApi } from '../common/purchase-lot-display-name';
 import { PrismaService } from '../prisma/prisma.service';
 
 type ListParams = {
@@ -72,6 +73,7 @@ export class StockMovementsService {
                   name: true,
                   purchaseDate: true,
                   supplier: true,
+                  traceModifiedAt: true,
                 },
               },
             },
@@ -105,6 +107,14 @@ export class StockMovementsService {
       inventoryItem: {
         ...r.inventoryItem,
         category: mapCategoryRelation(r.inventoryItem.category),
+        purchaseLot: r.inventoryItem.purchaseLot
+          ? mapPurchaseLotNestedForApi({
+              ...r.inventoryItem.purchaseLot,
+              supplier:
+                r.inventoryItem.purchaseLot.supplier?.trim() ||
+                null,
+            })
+          : null,
       },
       sale: r.sale
         ? {

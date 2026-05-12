@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
+import { formatPurchaseLotShortName } from '../src/common/purchase-lot-display-name';
 import { syncPurchaseLotItemCountFromInventory } from '../src/common/sync-purchase-lot-aggregates';
 
 /**
@@ -88,9 +89,7 @@ function exportInventoryJsonToTsv(outPath: string, rows: InvJsonRow[]) {
   ];
   const lines = [header.join('\t')];
   for (const row of rows) {
-    const pd = row.purchaseDate
-      ? String(row.purchaseDate).slice(0, 10)
-      : '';
+    const pd = row.purchaseDate ? String(row.purchaseDate).slice(0, 10) : '';
     lines.push(
       [
         escapeTsvField(String(row.lot ?? '')),
@@ -198,13 +197,13 @@ function pickLotMeta(agg: LotAgg): {
   supplier: string | null;
   notes: string | null;
 } {
-  const purchaseDate = new Date(
-    Math.min(...agg.dates.map((d) => d.getTime())),
-  );
+  const purchaseDate = new Date(Math.min(...agg.dates.map((d) => d.getTime())));
   const supplier =
     agg.suppliers.find((s) => s != null && String(s).trim() !== '') ?? null;
   const notes =
-    agg.noteSamples.length > 0 ? agg.noteSamples.join(' | ').slice(0, 2000) : null;
+    agg.noteSamples.length > 0
+      ? agg.noteSamples.join(' | ').slice(0, 2000)
+      : null;
 
   const dateStrs = new Set(agg.dates.map((d) => d.toISOString().slice(0, 10)));
   if (dateStrs.size > 1) {
@@ -213,7 +212,9 @@ function pickLotMeta(agg: LotAgg): {
     );
   }
   const sups = new Set(
-    agg.suppliers.filter((s) => s != null && String(s).trim() !== '') as string[],
+    agg.suppliers.filter(
+      (s) => s != null && String(s).trim() !== '',
+    ) as string[],
   );
   if (sups.size > 1) {
     console.warn(
@@ -228,7 +229,9 @@ async function main() {
   const { file, source, dryRun, exportTsv } = parseArgs();
   const url = process.env.DATABASE_URL;
   if (!url && !dryRun && !exportTsv)
-    throw new Error('DATABASE_URL no está definida (o use --dry-run / --export-tsv)');
+    throw new Error(
+      'DATABASE_URL no está definida (o use --dry-run / --export-tsv)',
+    );
 
   let invRows: InvJsonRow[] = [];
   if (source === 'json') {
@@ -239,7 +242,9 @@ async function main() {
 
   if (exportTsv) {
     if (source !== 'json') {
-      throw new Error('--export-tsv solo con --source json (inventario completo)');
+      throw new Error(
+        '--export-tsv solo con --source json (inventario completo)',
+      );
     }
     exportInventoryJsonToTsv(exportTsv, invRows);
     return;
@@ -274,12 +279,16 @@ async function main() {
     let n = 0;
     for (const agg of aggs.values()) {
       const { purchaseDate, supplier, notes } = pickLotMeta(agg);
+      const name = formatPurchaseLotShortName(supplier, purchaseDate, {
+        lotCode: agg.code,
+      });
       await prisma.purchaseLot.upsert({
         where: { code: agg.code },
         create: {
           code: agg.code,
           purchaseDate,
           supplier,
+          name,
           notes,
           itemCount: agg.itemCount,
           totalValue: new Prisma.Decimal(agg.totalValue),
@@ -287,6 +296,7 @@ async function main() {
         update: {
           purchaseDate,
           supplier,
+          name,
           notes,
           itemCount: agg.itemCount,
           totalValue: new Prisma.Decimal(agg.totalValue),
@@ -298,7 +308,9 @@ async function main() {
     for (const agg of aggs.values()) {
       await syncPurchaseLotItemCountFromInventory(prisma, agg.code);
     }
-    console.log(`item_count sincronizado desde inventario activo (${n} lotes).`);
+    console.log(
+      `item_count sincronizado desde inventario activo (${n} lotes).`,
+    );
   } finally {
     await prisma.$disconnect();
     await pool.end();

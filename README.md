@@ -2,11 +2,87 @@
 
 API en [NestJS](https://nestjs.com/) con **Prisma** y **PostgreSQL**: menú, inventario, lotes de compra, aportes de socios, ventas y datos auxiliares.
 
+## Despliegue en la nube
+
+Guía paso a paso para servidor cloud / PaaS / Docker en VPS: **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**.
+
+Resumen rápido:
+
+1. Postgres gestionado + variable **`DATABASE_URL`** (con SSL si el proveedor lo pide).
+2. **`npx prisma migrate deploy`** (o `npm run db:migrate`) contra esa URL **antes** de tráfico real.
+3. Variables **`JWT_SECRET`**, **`NODE_ENV=production`**, **`CORS_ORIGIN`** (dominio del front).
+4. Imagen: **`Dockerfile`** en la raíz; ejemplo Compose producción: **`docker-compose.prod.yml`**.
+5. Comprobar **`GET /health`** (`database: up`).
+
+Desarrollo local, Docker de Postgres en `5433`, respaldos y scripts de datos siguen en las secciones siguientes.
+
 ## Requisitos
 
 - Node.js (LTS recomendado)
-- PostgreSQL
+- PostgreSQL (local o remoto)
 - Variables en `.env` (al menos `DATABASE_URL`)
+
+### Postgres local con Docker
+
+El compose publica Postgres en **`127.0.0.1:5433`** en tu máquina, así no choca con otro Postgres que ya use el puerto **5432** (p. ej. Homebrew). Si cambias el mapeo de puertos en `docker-compose.yml`, actualiza `DATABASE_URL`.
+
+```bash
+cp .env.example .env
+docker compose up -d
+npm install
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+```
+
+Parada del contenedor: `docker compose down`. Los datos **siguen** en el volumen nombrado `arandano_pg_data`.
+
+**Importante:** `docker compose down -v` **borra el volumen** y con él **toda la base**. Antes, haz respaldo:
+
+```bash
+npm run db:backup
+```
+
+Copia el archivo `backups/arandano-*.dump` a un lugar seguro (nube, otro disco). Para volver a cargar esa copia en una base vacía: `npm run db:restore-backup -- backups/arandano-....dump` (requiere `pg_restore`; sin confirmación interactiva: `SKIP_RESTORE_CONFIRM=1`). Detalle en `backups/README.md`.
+
+Scripts npm:
+
+- `npm run db:local:up` / `npm run db:local:down` — mismo proceso donde ejecutas el comando.
+- **`npm run db:local:up:terminal`** (solo macOS útil) — abre **Terminal.app** en una ventana nueva y ahí ejecuta `docker compose up -d`, para dejar Postgres en segundo plano mientras en Cursor sigues con migraciones y `start:dev`.
+
+Si aparece **Cannot connect to the Docker daemon**, abre **Docker Desktop** en macOS y espera a que esté “running”; luego `npm run db:local:up` o `db:local:up:terminal` de nuevo.
+
+Sin Docker, Postgres con Homebrew:
+
+```bash
+brew install postgresql@16
+brew services start postgresql@16
+createdb arandano
+```
+
+En `.env`, por ejemplo: `DATABASE_URL="postgresql://TU_USUARIO@localhost:5432/arandano"` (en local Homebrew muchas veces no hay contraseña).
+
+**Error `Cannot connect to the Docker daemon`:** abre la app **Docker Desktop** en macOS y espera a que diga que está en ejecución; luego vuelve a ejecutar `npm run db:local:up`. Si no quieres usar Docker, usa Postgres con Homebrew:
+
+```bash
+brew install postgresql@16
+brew services start postgresql@16
+createdb arandano
+```
+
+En `.env`: `DATABASE_URL="postgresql://TU_USUARIO@localhost:5432/arandano"` (Homebrew suele usar tu usuario del sistema sin contraseña en local).
+
+### Persistencia y despliegue (no perder información)
+
+| Objetivo | Qué usar |
+| -------- | -------- |
+| Datos locales sobreviven reinicios de Docker | Volumen `arandano_pg_data` en `docker-compose.yml` (ya configurado). |
+| Copia de seguridad antes de cambiar de PC o borrar volumen | `npm run db:backup` → archivo `.dump` en `backups/` (no va a git). |
+| Nueva máquina / Postgres vacío | `docker compose up -d` → `npm run db:migrate` → `npm run db:restore-backup -- …` **o** `npm run db:restore-from-repo-data` desde JSON/CSV del repo. |
+| Producción (Railway u otro Postgres gestionado) | El proveedor suele **persistir** la BD; despliega la API con la misma `DATABASE_URL`. Tras cada deploy: `npm run db:migrate` (o `prisma migrate deploy` en CI). |
+| Igualar local y remoto | En `.env`: `DATABASE_URL` (local) + `REMOTE_DATABASE_URL` (remoto). `PG_COPY_DIRECTION=pull npm run db:pg-copy-database` trae remoto → local; `push` envía local → remoto (**peligroso** si sobrescribes prod sin backup). |
+
+Cliente PostgreSQL en tu Mac: los scripts `db:backup`, `db:restore-backup` y `db:pg-copy-database` necesitan `pg_dump` / `pg_restore` (paquete `postgresql` / `libpq` con Homebrew).
 
 ## Instalación
 
@@ -38,6 +114,9 @@ Por defecto **no hay prefijo global** (`/api`), así que las rutas cuelgan direc
 ### Salud
 
 - `GET /` — respuesta simple (health/hello).
+- `GET /health` — comprueba que Postgres responde (`SELECT 1`). Útil para el front o monitoreo.
+
+Errores HTTP devuelven JSON `{ "statusCode", "message", "path", "code"?, "hint"? }`. El campo `hint` orienta al usuario (p. ej. migraciones o `DATABASE_URL`). CORS en local permite por defecto orígenes típicos de Vite (`localhost:5173`, etc.); en producción define `CORS_ORIGIN` con el dominio del front.
 
 ### Auth (`/auth`)
 
@@ -337,10 +416,16 @@ Los ítems viven en `prisma/data/tables/inventory.json` (ids estables `inv-…`)
 | `npm run db:register-purchase-lots` | Upsert de `purchase_lots` (agregados por código de lote) |
 | `npm run db:backfill-purchase-lot-dates-from-code` | Ajusta `purchase_lots.purchase_date` infiriéndola del código de lote. Si la tabla está vacía, usa `--from-inventory` para crear/actualizar lotes desde `inventory.lot`. `--dry-run` solo lista cambios |
 
-Orden sugerido en una base nueva (tras migraciones y categorías necesarias):
+Orden sugerido en una base nueva (tras migraciones):
 
-1. `npm run db:import-inventory-partners`
-2. `npm run db:register-purchase-lots`
+1. **`npm run db:register-purchase-lots`** — crea filas en `purchase_lots` desde `inventory.json` / TSV (necesario antes del inventario por la FK `inventory.lot` → `purchase_lots.code`).
+2. **`npm run db:import-inventory-partners`** — upsert de `inventory` + aportes.
+
+Atajo (mismo orden + productos CSV + conteos de ítems por lote):
+
+```bash
+npm run db:restore-from-repo-data
+```
 
 Opciones útiles: `--dry-run` en ambos scripts; el de socios acepta `--skip-delete-contributions` para no borrar aportes marcados con el prefijo de importación.
 
@@ -348,12 +433,17 @@ Opciones útiles: `--dry-run` en ambos scripts; el de socios acepta `--skip-dele
 
 | Comando | Descripción |
 | --------|-------------|
+| `npm run db:backup` | Volcado completo de `DATABASE_URL` → `backups/arandano-*.dump` (`pg_dump`; no se sube a git) |
+| `npm run db:restore-backup -- archivo.dump` | Restaura volcado sobre `DATABASE_URL` (`pg_restore --clean`) |
 | `npm run db:import-organized` | Import desde `prisma/data/organized-dump.json` (asigna ids nuevos; no preserva `inv-…` del JSON de inventario) |
 | `npm run db:sync-products` | Productos desde `prisma/data/lista-productos.csv` |
 | `npm run db:import-sales-json` | Ventas desde JSON |
 | `npm run db:backfill-sale-lines` | Rellena costos en líneas de venta |
 | `npm run db:purge-soft-deleted` | Elimina físicamente productos soft-deleted |
 | `npm run db:seed-menu-recipes` | Siembra recetas de menú (cafetería, bar, comida) |
+| `npm run db:seed-cafeteria-recipes` | Solo cafetería; tablas en [docs/recetario-cafeteria.md](./docs/recetario-cafeteria.md) |
+| `npm run db:seed-bar-cocteles-shots-recipes` | Michelada, cócteles y shots; tablas en [docs/recetario-bar.md](./docs/recetario-bar.md) |
+| `npm run db:seed-comida-recipes` | Tostadas, hot dog, combo; tablas en [docs/recetario-comida.md](./docs/recetario-comida.md) |
 
 Exploración: `npm run db:studio`.
 

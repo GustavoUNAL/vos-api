@@ -3,6 +3,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -40,4 +41,13 @@ export class CreateInventoryDto {
   @IsOptional()
   @Min(0)
   minStock?: number;
+
+  /**
+   * Código de producto para trazabilidad: reutilizar el mismo valor en cada compra/lote
+   * del “mismo” insumo para contar cuántas veces se compró.
+   */
+  @IsString()
+  @IsOptional()
+  @MaxLength(64)
+  traceProductCode?: string;
 }

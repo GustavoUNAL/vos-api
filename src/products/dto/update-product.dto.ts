@@ -1,10 +1,12 @@
 import {
   IsBoolean,
+  IsDateString,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateProductDto {
@@ -43,4 +45,10 @@ export class UpdateProductDto {
   @IsBoolean()
   @IsOptional()
   active?: boolean;
+
+  /** ISO 8601, o `null` para borrar. Trazabilidad (distinta de `updatedAt` automático). */
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsDateString()
+  traceModifiedAt?: string | null;
 }

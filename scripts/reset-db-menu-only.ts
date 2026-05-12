@@ -2,9 +2,13 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { CategoryType, PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
+import {
+  MENU_CATEGORY_SLUGS_IN_ORDER,
+  SLUG_TO_CATEGORY_NAME,
+} from './lib/menu-categories';
 
 /**
- * Vacía todas las tablas de la aplicación y deja solo las 7 categorías PRODUCT de menú
+ * Vacía todas las tablas de la aplicación y deja solo las 5 categorías PRODUCT de menú
  * (nombres en español, como en Prisma Studio).
  *
  * No borra `_prisma_migrations`.
@@ -14,15 +18,9 @@ import { Pool } from 'pg';
  * Uso: npx ts-node --transpile-only scripts/reset-db-menu-only.ts
  */
 
-const MENU_CATEGORY_NAMES = [
-  'Cafetería',
-  'Bar',
-  'Cócteles',
-  'Shots',
-  'Botellas',
-  'Comida',
-  'Combos',
-] as const;
+const MENU_CATEGORY_NAMES = MENU_CATEGORY_SLUGS_IN_ORDER.map(
+  (slug) => SLUG_TO_CATEGORY_NAME[slug],
+);
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -63,7 +61,10 @@ async function main() {
       });
     }
 
-    console.log('Base vaciada. Categorías PRODUCT:', MENU_CATEGORY_NAMES.join(', '));
+    console.log(
+      'Base vaciada. Categorías PRODUCT:',
+      MENU_CATEGORY_NAMES.join(', '),
+    );
     console.log('Siguiente paso: npm run db:sync-products');
   } finally {
     await prisma.$disconnect();

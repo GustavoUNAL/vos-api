@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: arandano-postgres
+    restart: unless-stopped
+    # Host 5433 evita choque con Postgres local (Homebrew) que suele usar 5432.
+    ports:
+      - '5433:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: arandano
+    volumes:
+      - arandano_pg_data:/var/lib/postgresql/data
+
+volumes:
+  arandano_pg_data:

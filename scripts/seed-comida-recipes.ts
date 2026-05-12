@@ -5,9 +5,9 @@ import { Pool } from 'pg';
 import { RecipeSpec, seedRecipeSpecs } from './lib/sheet-recipe-seed';
 
 /**
- * Recetas categoría Comida (misma estructura que la hoja de costos).
- * Requiere productos en DB (`npm run db:sync-products`); incluye **Hot Dog en combo**
- * definido en `prisma/data/lista-productos.csv`.
+ * Recetario Comida — tostadas, hot dog, combo (hoja de costos).
+ * `productName` = columna Nombre en `prisma/data/lista-productos.csv`.
+ * Administración (30%) se recalcula en `seedRecipeSpecs`; ver `docs/recetario-comida.md`.
  *
  * Uso: npm run db:seed-comida-recipes
  */

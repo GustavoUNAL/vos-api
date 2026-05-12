@@ -49,15 +49,15 @@ Shot Whisky,1 oz whisky solo o con limón,12000,1 oz,shots
 Shot Ginebra,1 oz ginebra con aceituna o limón,7000,1 oz,shots
 Shot Ron,1 oz ron con limón o cereza,5000,1 oz,shots
 ,,,,
-🍾 BOTELLAS,,,,
+🍾 BAR (licores / botellas),,,,
 ,,,,
 Nombre, Descripción, Precio, Tamaño,Categoría
-Aguardiente Nariño o Amarillo,750 ml aguardiente tradicional,65000,750 ml,botellas
-Ginebra Gordon’s,750 ml ginebra clásica,95000,750 ml,botellas
-Tequila Olmeca,750 ml tequila joven,110000,750 ml,botellas
-Whisky Old Parr,750 ml whisky escocés,170000,750 ml,botellas
-Vino tinto,750 ml vino tinto,65000,750 ml,botellas
-Vodka Smirnoff Tamarindo,750 ml vodka sabor tamarindo,70000,750 ml,botellas
+Aguardiente Nariño o Amarillo,750 ml aguardiente tradicional,65000,750 ml,bar
+Ginebra Gordon’s,750 ml ginebra clásica,95000,750 ml,bar
+Tequila Olmeca,750 ml tequila joven,110000,750 ml,bar
+Whisky Old Parr,750 ml whisky escocés,170000,750 ml,bar
+Vino tinto,750 ml vino tinto,65000,750 ml,bar
+Vodka Smirnoff Tamarindo,750 ml vodka sabor tamarindo,70000,750 ml,bar
 ,,,,
 🍴 COMIDA,,,,
 ,,,,
@@ -68,13 +68,13 @@ Tostadas,1 tostada integral con mantequilla o mermelada,2000,1 unit,comida
 Hot Dog,"Pan suave con salchicha premium, queso, papa triturada, salsas y jalapeños.",11000,1 unit,comida
 Hot Dog en combo,1 Hot Dog con vaso de gaseosa y papas chips,15000,1 unit,comida
 ,,,,
-🎯 COMBOS,,,,
+🎯 COMIDA (combos),,,,
 ,,,,
 Nombre, Descripción, Precio, Tamaño,Categoría
-Combo Lunes Micheladas,"2 cervezas micheladas (limón, sal o picante)",13000,1 unit,combos
-Combo Martes Café,Café negro + 2 tostadas con mantequilla o mermelada,6500,1 unit,combos
-Combo Miércoles Jarra,Jarra de hervido (1 litro de cóctel caliente con licor),20000,1 unit,combos
-Combo Jueves Hervidos,2 hervidos (cóctel caliente de frutas con licor),12000,1 unit,combos
-Combo Viernes Shots,"3 shots (aguardiente, ron o brandy)",13000,1 unit,combos
-Combo Viernes Moscow Mule,2 cócteles Moscow Mule (vodka + ginger beer),25000,1 unit,combos
-Combo Sábado Frappé,Café frappé + 1 galleta artesanal,9500,1 unit,combos
+Combo Lunes Micheladas,"2 cervezas micheladas (limón, sal o picante)",13000,1 unit,comida
+Combo Martes Café,Café negro + 2 tostadas con mantequilla o mermelada,6500,1 unit,comida
+Combo Miércoles Jarra,Jarra de hervido (1 litro de cóctel caliente con licor),20000,1 unit,comida
+Combo Jueves Hervidos,2 hervidos (cóctel caliente de frutas con licor),12000,1 unit,comida
+Combo Viernes Shots,"3 shots (aguardiente, ron o brandy)",13000,1 unit,comida
+Combo Viernes Moscow Mule,2 cócteles Moscow Mule (vodka + ginger beer),25000,1 unit,comida
+Combo Sábado Frappé,Café frappé + 1 galleta artesanal,9500,1 unit,comida

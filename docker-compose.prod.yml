@@ -1,0 +1,43 @@
+# Ejemplo: API en producción contra Postgres gestionado (Railway, RDS, etc.).
+# DATABASE_URL apunta al Postgres real (variable de entorno en el host).
+#
+# Uso:
+#   export DATABASE_URL="postgresql://..."
+#   export JWT_SECRET="..."
+#   export CORS_ORIGIN="https://tu-front.com"
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Migraciones: por defecto NO corren al arrancar. Opciones:
+#   - Una vez: docker compose -f docker-compose.prod.yml run --rm api npx prisma migrate deploy
+#   - O en el servicio: RUN_MIGRATIONS_ON_START=true (solo si hay una réplica)
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: arandano-api:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL:?Definí DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET:?Definí JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      # true solo con una instancia o primera subida
+      RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-false}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-qO-",
+          "http://127.0.0.1:3000/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s

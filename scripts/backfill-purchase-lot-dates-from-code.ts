@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
+import { formatPurchaseLotShortName } from '../src/common/purchase-lot-display-name';
 
 /**
  * Ajusta `purchase_lots.purchase_date` infiriéndola del código de lote (`code`),
@@ -157,16 +158,14 @@ async function syncFromInventory(
   for (const code of codes) {
     const agg = byCode.get(code)!;
     const inferred = inferPurchaseDateFromLotCode(code);
-    const supplier =
-      agg.suppliers.find((x) => x.length > 0) ?? null;
+    const supplier = agg.suppliers.find((x) => x.length > 0) ?? null;
 
     const existing = await prisma.purchaseLot.findUnique({
       where: { code },
       select: { id: true, purchaseDate: true },
     });
 
-    const purchaseDate =
-      inferred ?? existing?.purchaseDate ?? null;
+    const purchaseDate = inferred ?? existing?.purchaseDate ?? null;
 
     if (!purchaseDate) {
       skippedNoDate++;
@@ -175,10 +174,6 @@ async function syncFromInventory(
       );
       continue;
     }
-
-    const wouldChangeDate =
-      !existing ||
-      (inferred != null && !sameCalendarDay(inferred, existing.purchaseDate));
 
     if (!existing) {
       console.log(
@@ -190,11 +185,12 @@ async function syncFromInventory(
             code,
             purchaseDate,
             supplier,
+            name: formatPurchaseLotShortName(supplier, purchaseDate, {
+              lotCode: code,
+            }),
             itemCount: agg.itemCount,
             totalValue: agg.totalValue,
-            notes: inferred
-              ? 'Fecha inferida desde código de lote'
-              : null,
+            notes: inferred ? 'Fecha inferida desde código de lote' : null,
           },
         });
       }
@@ -219,6 +215,7 @@ async function syncFromInventory(
         data: {
           purchaseDate: newPd,
           supplier,
+          name: formatPurchaseLotShortName(supplier, newPd, { lotCode: code }),
           itemCount: agg.itemCount,
           totalValue: agg.totalValue,
         },
@@ -237,7 +234,7 @@ async function updateExistingLotsOnly(
   dryRun: boolean,
 ): Promise<void> {
   const lots = await prisma.purchaseLot.findMany({
-    select: { id: true, code: true, purchaseDate: true },
+    select: { id: true, code: true, purchaseDate: true, supplier: true },
     orderBy: { code: 'asc' },
   });
 
@@ -269,7 +266,12 @@ async function updateExistingLotsOnly(
     if (!dryRun) {
       await prisma.purchaseLot.update({
         where: { id: row.id },
-        data: { purchaseDate: inferred },
+        data: {
+          purchaseDate: inferred,
+          name: formatPurchaseLotShortName(row.supplier, inferred, {
+            lotCode: row.code,
+          }),
+        },
       });
     }
     updated++;

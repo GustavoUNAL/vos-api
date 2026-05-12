@@ -5,7 +5,9 @@ import { Pool } from 'pg';
 import { RecipeSpec, seedRecipeSpecs } from './lib/sheet-recipe-seed';
 
 /**
- * Recetas cafetería (misma estructura que la hoja de costos).
+ * Recetario cafetería — alineado con `docs/recetario-cafeteria.md` (hoja de costos).
+ * La línea "Administración (30%)" en el array se omite al volcar: se recalcula en `seedRecipeSpecs`.
+ *
  * Uso: npm run db:seed-cafeteria-recipes
  */
 
@@ -425,7 +427,7 @@ const RECIPES: RecipeSpec[] = [
         qty: null,
         unit: 'porción',
         sheetUnitCost: '—',
-        lineTotalCOP: 520,
+        lineTotalCOP: 420,
       },
     ],
   },
@@ -466,6 +468,60 @@ const RECIPES: RecipeSpec[] = [
         unit: 'porción',
         sheetUnitCost: '—',
         lineTotalCOP: 1560,
+      },
+    ],
+  },
+  {
+    productName: 'Soda italiana',
+    lines: [
+      {
+        ingredient: 'Soda',
+        qty: 300,
+        unit: 'ml',
+        sheetUnitCost: '$5/ml',
+        lineTotalCOP: 1500,
+      },
+      {
+        ingredient: 'Sirope',
+        qty: 30,
+        unit: 'ml',
+        sheetUnitCost: '$50/ml',
+        lineTotalCOP: 1500,
+      },
+      {
+        ingredient: 'Limón',
+        qty: null,
+        unit: 'porción',
+        sheetUnitCost: '—',
+        lineTotalCOP: 300,
+      },
+      {
+        ingredient: 'Hielo',
+        qty: null,
+        unit: 'porción',
+        sheetUnitCost: '—',
+        lineTotalCOP: 200,
+      },
+      {
+        ingredient: 'Sal/picante',
+        qty: null,
+        unit: 'porción',
+        sheetUnitCost: '—',
+        lineTotalCOP: 100,
+      },
+      {
+        ingredient: 'Energía (Indirecto)',
+        qty: null,
+        unit: 'porción',
+        sheetUnitCost: '—',
+        lineTotalCOP: 100,
+      },
+      {
+        ingredient: 'Administración (30%)',
+        qty: null,
+        unit: 'porción',
+        sheetUnitCost: '—',
+        lineTotalCOP: 1110,
       },
     ],
   },
