@@ -16,15 +16,17 @@ Resumen rápido:
 
 Desarrollo local, Docker de Postgres en `5433`, respaldos y scripts de datos siguen en las secciones siguientes.
 
+**CI/CD (GitHub):** en cada push a `main` corre build y tests (`.github/workflows/ci.yml`). Para aplicar migraciones o cargar datos en un Postgres en la nube sin tocar tu PC, usá el workflow manual **Cloud database** y los secretos descritos en [docs/DEPLOYMENT.md — GitHub Actions](./docs/DEPLOYMENT.md#github-actions-ci-y-base-en-la-nube).
+
 ## Requisitos
 
 - Node.js (LTS recomendado)
 - PostgreSQL (local o remoto)
 - Variables en `.env` (al menos `DATABASE_URL`)
 
-### Postgres local con Docker
+### Postgres local con Docker (solo base de datos)
 
-El compose publica Postgres en **`127.0.0.1:5433`** en tu máquina, así no choca con otro Postgres que ya use el puerto **5432** (p. ej. Homebrew). Si cambias el mapeo de puertos en `docker-compose.yml`, actualiza `DATABASE_URL`.
+Por defecto **`docker compose up -d`** levanta **solo Postgres** en **`127.0.0.1:5433`**, para seguir desarrollando el API con `npm run start:dev` en el host.
 
 ```bash
 cp .env.example .env
@@ -35,7 +37,26 @@ npm run db:migrate
 npm run db:seed
 ```
 
-Parada del contenedor: `docker compose down`. Los datos **siguen** en el volumen nombrado `arandano_pg_data`.
+### Stack completo en Docker (Postgres + API + front)
+
+Un solo `docker-compose.yml`: el perfil **`full`** agrega **API** y **contenedor front** (Nginx sirviendo el build estático de Vite).
+
+```bash
+# 1) Copiá docker/front-build/Dockerfile a la raíz de tu repo Vite como "Dockerfile"
+#    (o dejá el placeholder si solo querés probar el stack).
+# 2) En .env (o export):
+#    FRONTEND_BUILD_CONTEXT=../tu-app-vite
+#    VITE_API_URL=http://localhost:3000
+npm run docker:stack
+```
+
+Opcional (datos demo): `docker compose exec api npx prisma db seed`
+
+- **Front:** `http://localhost:8080` (puerto `FRONT_STACK_PORT`).
+- **API:** `http://localhost:3000` (`API_STACK_PORT`).
+- **Postgres (host):** sigue en `5433` para herramientas locales; dentro de Docker el API usa `postgres:5432`.
+
+`npm run docker:stack:down` detiene y elimina contenedores **solo** de `api` y `frontend` (no apaga Postgres). Para apagar también Postgres: `docker compose down`. Los datos siguen en el volumen `arandano_pg_data` salvo que uses `docker compose down -v`.
 
 **Importante:** `docker compose down -v` **borra el volumen** y con él **toda la base**. Antes, haz respaldo:
 
@@ -47,7 +68,7 @@ Copia el archivo `backups/arandano-*.dump` a un lugar seguro (nube, otro disco).
 
 Scripts npm:
 
-- `npm run db:local:up` / `npm run db:local:down` — mismo proceso donde ejecutas el comando.
+- `npm run docker:stack` / `docker:stack:down` / `docker:stack:logs` — API + front + Postgres (perfil `full` en `docker-compose.yml`).
 - **`npm run db:local:up:terminal`** (solo macOS útil) — abre **Terminal.app** en una ventana nueva y ahí ejecuta `docker compose up -d`, para dejar Postgres en segundo plano mientras en Cursor sigues con migraciones y `start:dev`.
 
 Si aparece **Cannot connect to the Docker daemon**, abre **Docker Desktop** en macOS y espera a que esté “running”; luego `npm run db:local:up` o `db:local:up:terminal` de nuevo.

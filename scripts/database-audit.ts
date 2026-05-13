@@ -1,7 +1,8 @@
 /**
- * Auditoría integral de base de datos: migraciones, lotes/comprobantes, inventario y ventas.
+ * Auditoría integral: esquema Prisma, base de datos (SQL), migraciones y scripts de lotes.
  *
  *   npm run db:audit
+ *   npm run audit:full   # generate + validate + build + db:audit (API + BD)
  *   npx ts-node --transpile-only scripts/database-audit.ts
  *
  * Requiere DATABASE_URL. Sale con código 1 si algo falla.
@@ -71,12 +72,16 @@ El aviso de Node sobre sslmode y “verify-full” viene del driver \`pg\`; pued
 }
 
 async function main() {
+  console.log('Auditoría de base de datos — arandano-api\n');
+
+  if (!runStep('Validación de esquema (prisma validate)', 'npx', ['prisma', 'validate'])) {
+    process.exit(1);
+  }
+
   if (!process.env.DATABASE_URL) {
     console.error('DATABASE_URL no está definida.');
     process.exit(1);
   }
-
-  console.log('Auditoría de base de datos — arandano-api\n');
 
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -113,6 +118,15 @@ async function main() {
       q2,
       q3,
       q5,
+      activeProductsMissingCategory,
+      activeInventoryMissingCategory,
+      expensesMissingCategory,
+      lotLineVsInventoryLotMismatch,
+      purchaseLotItemCountMismatch,
+      duplicateActiveInternalBarcodes,
+      purchaseLotLinesInvalidCategory,
+      saleLinesArchivedProduct,
+      cartItemsArchivedProduct,
     ] = await Promise.all([
       prisma.$queryRaw<N[]>`
         select count(*)::bigint as c
@@ -176,6 +190,80 @@ async function main() {
         where l.inventory_item_id is not null
           and (i.id is null or i.deleted_at is not null)
       `,
+      prisma.$queryRaw<N[]>`
+        select count(*)::bigint as c
+        from products p
+        left join categories c on c.id = p.category_id
+        where p.deleted_at is null
+          and c.id is null
+      `,
+      prisma.$queryRaw<N[]>`
+        select count(*)::bigint as c
+        from inventory i
+        left join categories c on c.id = i.category_id
+        where i.deleted_at is null
+          and c.id is null
+      `,
+      prisma.$queryRaw<N[]>`
+        select count(*)::bigint as c
+        from expenses e
+        left join categories c on c.id = e.category_id
+        where c.id is null
+      `,
+      prisma.$queryRaw<N[]>`
+        select count(*)::bigint as c
+        from purchase_lot_lines l
+        join inventory i on i.id = l.inventory_item_id and i.deleted_at is null
+        where l.inventory_item_id is not null
+          and (
+            i.lot is null
+            or btrim(i.lot) = ''
+            or btrim(l.purchase_lot_code) is distinct from btrim(i.lot)
+          )
+      `,
+      prisma.$queryRaw<N[]>`
+        select count(*)::bigint as c
+        from purchase_lots pl
+        where (
+          select count(*)::int
+          from inventory i
+          where i.deleted_at is null
+            and i.lot is not null
+            and btrim(i.lot) <> ''
+            and btrim(i.lot) = btrim(pl.code)
+        ) is distinct from pl.item_count
+      `,
+      prisma.$queryRaw<N[]>`
+        select count(*)::bigint as c
+        from (
+          select 1
+          from inventory
+          where deleted_at is null
+            and internal_barcode is not null
+          group by internal_barcode
+          having count(*) > 1
+        ) dupes
+      `,
+      prisma.$queryRaw<N[]>`
+        select count(*)::bigint as c
+        from purchase_lot_lines l
+        left join categories c on c.id = l.category_id
+        where l.category_id is not null
+          and c.id is null
+      `,
+      prisma.$queryRaw<N[]>`
+        select count(*)::bigint as c
+        from sale_lines sl
+        join products p on p.id = sl.product_id
+        where sl.product_id is not null
+          and p.deleted_at is not null
+      `,
+      prisma.$queryRaw<N[]>`
+        select count(*)::bigint as c
+        from cart_items ci
+        join products p on p.id = ci.product_id
+        where p.deleted_at is not null
+      `,
     ]);
 
     const critical = {
@@ -188,11 +276,32 @@ async function main() {
       activeInventoryLotMissingPurchaseLotRow: Number(q2[0]?.c ?? 0),
       activeReferencedLotsWithoutPositiveTotalValue: Number(q3[0]?.c ?? 0),
       purchaseLotLinesLinkedToMissingOrArchivedInventory: Number(q5[0]?.c ?? 0),
+      activeProductsWithMissingCategoryRow: Number(
+        activeProductsMissingCategory[0]?.c ?? 0,
+      ),
+      activeInventoryWithMissingCategoryRow: Number(
+        activeInventoryMissingCategory[0]?.c ?? 0,
+      ),
+      expensesWithMissingCategoryRow: Number(expensesMissingCategory[0]?.c ?? 0),
+      purchaseLotLinesInventoryLotCodeMismatch: Number(
+        lotLineVsInventoryLotMismatch[0]?.c ?? 0,
+      ),
+      purchaseLotsItemCountVsActiveInventoryMismatch: Number(
+        purchaseLotItemCountMismatch[0]?.c ?? 0,
+      ),
+      duplicateInternalBarcodesAmongActiveInventory: Number(
+        duplicateActiveInternalBarcodes[0]?.c ?? 0,
+      ),
+      purchaseLotLinesWithInvalidCategoryId: Number(
+        purchaseLotLinesInvalidCategory[0]?.c ?? 0,
+      ),
     };
 
     const warnings = {
       /** `lot` puede ser null por diseño; solo aviso de calidad de datos. */
       activeInventoryWithoutLot: Number(q1[0]?.c ?? 0),
+      saleLinesPointingToArchivedProduct: Number(saleLinesArchivedProduct[0]?.c ?? 0),
+      cartItemsPointingToArchivedProduct: Number(cartItemsArchivedProduct[0]?.c ?? 0),
     };
 
     console.log(JSON.stringify({ critical, warnings }, null, 2));

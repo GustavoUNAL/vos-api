@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Arándano — front no configurado</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        line-height: 1.5;
+      }
+      code {
+        background: #f4f4f4;
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Stack Docker activo</h1>
+    <p>
+      Este contenedor es un <strong>marcador de posición</strong>. Para ver tu app
+      Vite/React, configurá en la raíz del API un archivo <code>.env</code> (o
+      variables de entorno) con la ruta a tu front:
+    </p>
+    <ul>
+      <li><code>FRONTEND_BUILD_CONTEXT</code> — carpeta del proyecto front (ej. <code>../arandano-web</code>)</li>
+      <li><code>FRONTEND_DOCKERFILE</code> — por defecto <code>docker/front-build/Dockerfile</code></li>
+      <li><code>VITE_API_URL</code> — URL del API <strong>desde el navegador</strong> (ej. <code>http://localhost:3000</code>)</li>
+    </ul>
+    <p>Luego: <code>docker compose --profile full up -d --build</code></p>
+    <p>API health: <a href="http://localhost:3000/health">/health</a> (puerto por defecto del stack).</p>
+  </body>
+</html>

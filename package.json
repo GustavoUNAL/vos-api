@@ -9,8 +9,12 @@
     "node": ">=20"
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "build": "nest build",
     "docker:build": "docker build -t arandano-api:latest .",
+    "docker:stack": "docker compose --profile full up -d --build",
+    "docker:stack:down": "bash -lc 'docker compose stop api frontend 2>/dev/null || true; docker compose rm -f api frontend 2>/dev/null || true'",
+    "docker:stack:logs": "docker compose --profile full logs -f",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -55,6 +59,7 @@
     "db:export-inventory-lots-tsv": "ts-node --transpile-only scripts/register-purchase-lots.ts --export-tsv prisma/data/inventory-purchase-lots.tsv",
     "db:verify-data": "ts-node --transpile-only scripts/verify-data-consistency.ts",
     "db:audit": "ts-node --transpile-only scripts/database-audit.ts",
+    "audit:full": "npm run db:generate && npx prisma validate && npm run build && npm run db:audit",
     "db:check-lot-consistency": "ts-node --transpile-only scripts/check-lot-consistency.ts",
     "db:audit-purchase-lot-totals": "ts-node --transpile-only scripts/audit-purchase-lot-line-totals.ts",
     "db:backfill-purchase-lot-totals-from-lines": "ts-node --transpile-only scripts/backfill-purchase-lot-totals-from-lines.ts",

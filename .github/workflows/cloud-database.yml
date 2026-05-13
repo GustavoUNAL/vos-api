@@ -1,0 +1,95 @@
+# Actualiza la base PostgreSQL en la nube de forma manual (Actions → Run workflow).
+#
+# Secretos en el repo (Settings → Secrets → Actions):
+#   CLOUD_DATABASE_URL   — URL postgresql://… de tu Postgres en la nube (obligatorio).
+#   BACKUP_DOWNLOAD_URL — Solo si usás el modo restore_dump: URL temporal (p. ej. presigned)
+#                         a un archivo .dump generado con `npm run db:backup` en local.
+#
+# Modos:
+#   migrate — Solo prisma migrate deploy (esquema al día).
+#   migrate_seed — Migrate + prisma db seed.
+#   migrate_seed_repo_sync — Migrate + seed + importación desde prisma/data (CSV/JSON del repo).
+#   restore_dump — pg_restore completo desde BACKUP_DOWNLOAD_URL (ideal BD vacía; equivale a clonar tu local).
+name: Cloud database
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Ver comentarios al inicio del workflow para cada modo.
+        type: choice
+        required: true
+        default: migrate
+        options:
+          - migrate
+          - migrate_seed
+          - migrate_seed_repo_sync
+          - restore_dump
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-database-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cloud-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DATABASE_URL: ${{ secrets.CLOUD_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar CLOUD_DATABASE_URL
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "Definí el secret CLOUD_DATABASE_URL en el repositorio (postgresql://usuario:…@host:5432/base?sslmode=require)."
+            exit 1
+          fi
+
+      - name: Instalar cliente PostgreSQL (restore)
+        if: github.event.inputs.mode == 'restore_dump'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client curl
+
+      - uses: actions/setup-node@v4
+        if: github.event.inputs.mode != 'restore_dump'
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: npm ci
+        if: github.event.inputs.mode != 'restore_dump'
+        run: npm ci
+
+      - name: Prisma generate
+        if: github.event.inputs.mode != 'restore_dump'
+        run: npm run db:generate
+
+      - name: prisma migrate deploy
+        if: github.event.inputs.mode != 'restore_dump'
+        run: npm run db:migrate
+
+      - name: prisma db seed
+        if: github.event.inputs.mode == 'migrate_seed' || github.event.inputs.mode == 'migrate_seed_repo_sync'
+        run: npm run db:seed
+
+      - name: Importar datos versionados del repo (db:update-and-sync)
+        if: github.event.inputs.mode == 'migrate_seed_repo_sync'
+        run: npm run db:update-and-sync
+
+      - name: Restaurar volcado local (.dump) desde URL privada
+        if: github.event.inputs.mode == 'restore_dump'
+        env:
+          BACKUP_DOWNLOAD_URL: ${{ secrets.BACKUP_DOWNLOAD_URL }}
+        run: |
+          if [ -z "${BACKUP_DOWNLOAD_URL}" ]; then
+            echo "Definí el secret BACKUP_DOWNLOAD_URL con una URL que descargue el .dump (presigned S3, etc.)."
+            exit 1
+          fi
+          curl -fSL -o /tmp/arandano-backup.dump "$BACKUP_DOWNLOAD_URL"
+          pg_restore --dbname="$DATABASE_URL" --clean --if-exists --no-owner --no-acl /tmp/arandano-backup.dump
+          rm -f /tmp/arandano-backup.dump

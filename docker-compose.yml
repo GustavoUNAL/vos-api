@@ -1,9 +1,20 @@
+# Postgres: siempre al levantar el proyecto (`docker compose up -d`).
+# API + front: perfil `full` → `docker compose --profile full up -d --build`
+#   o `npm run docker:stack`
+#
+# Variables útiles (archivo `.env` en la raíz del API o export):
+#   FRONTEND_BUILD_CONTEXT  — carpeta del front (default: docker/placeholder-front)
+#   FRONTEND_DOCKERFILE     — relativo al context del build (default: Dockerfile)
+#   VITE_API_URL            — base URL del API vista desde el navegador (default http://localhost:3000)
+#   JWT_SECRET              — obligatorio en serio; en local el compose trae un valor por defecto
+#   API_STACK_PORT          — puerto publicado del API (default 3000)
+#   FRONT_STACK_PORT        — puerto publicado del front (default 8080)
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: arandano-postgres
     restart: unless-stopped
-    # Host 5433 evita choque con Postgres local (Homebrew) que suele usar 5432.
     ports:
       - '5433:5432'
     environment:
@@ -12,6 +23,56 @@ services:
       POSTGRES_DB: arandano
     volumes:
       - arandano_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d arandano']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  api:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: arandano-api:latest
+    container_name: arandano-api
+    restart: unless-stopped
+    ports:
+      - '${API_STACK_PORT:-3000}:3000'
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      LISTEN_HOST: '0.0.0.0'
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/arandano
+      JWT_SECRET: ${JWT_SECRET:-docker-stack-change-me}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_STACK:-http://localhost:${FRONT_STACK_PORT:-8080},http://127.0.0.1:${FRONT_STACK_PORT:-8080},http://localhost:5173,http://127.0.0.1:5173}
+      RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/health']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  frontend:
+    profiles: ['full']
+    build:
+      context: ${FRONTEND_BUILD_CONTEXT:-./docker/placeholder-front}
+      dockerfile: ${FRONTEND_DOCKERFILE:-Dockerfile}
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:${API_STACK_PORT:-3000}}
+    image: arandano-frontend:latest
+    container_name: arandano-frontend
+    restart: unless-stopped
+    ports:
+      - '${FRONT_STACK_PORT:-8080}:80'
+    depends_on:
+      - api
 
 volumes:
   arandano_pg_data:

@@ -123,6 +123,23 @@ Pasos genéricos (los nombres de menú cambian según el proveedor):
 - Limitá `CORS_ORIGIN` a dominios conocidos.
 - Revisá que la URL de Postgres no quede expuesta en logs públicos.
 
+## GitHub Actions (CI y base en la nube)
+
+### CI automático (`.github/workflows/ci.yml`)
+
+En cada **push** o **pull request** a `main` / `master` se ejecutan `npm ci`, validación del esquema Prisma, `prisma generate`, `npm run build` y `npm test`. No se incluye `eslint` hasta que el proyecto pase `npm run lint` sin errores de formato.
+
+### Base en la nube manual (`.github/workflows/cloud-database.yml`)
+
+1. En GitHub: **Settings → Secrets and variables → Actions**, creá **`CLOUD_DATABASE_URL`** con la URL de tu Postgres en la nube (la misma que usarías en `.env` local para apuntar al remoto).
+2. **Actions → Cloud database → Run workflow** y elegí el modo:
+   - **`migrate`**: solo `prisma migrate deploy` (deja el esquema al día).
+   - **`migrate_seed`**: migraciones + `prisma db seed`.
+   - **`migrate_seed_repo_sync`**: migraciones + seed + `npm run db:update-and-sync` (importa CSV/JSON y scripts que viven en el repo; útil si tu “verdad” está versionada en git, no solo en tu máquina).
+   - **`restore_dump`**: copia **exacta** de una base local. En tu PC: `npm run db:backup`, subí el `.dump` a almacenamiento privado con **URL temporal de descarga** (p. ej. enlace firmado de S3, R2, etc.), guardá esa URL en el secret **`BACKUP_DOWNLOAD_URL`**, ejecutá el workflow en modo `restore_dump`. Usá una **base vacía** recién creada en el proveedor; `--clean` borra objetos existentes antes de importar.
+
+Después de migrar o restaurar, tu API (local o en servidor) puede usar la misma `DATABASE_URL` apuntando a esa instancia.
+
 ## Resolución de problemas
 
 | Síntoma | Acción |
@@ -130,6 +147,7 @@ Pasos genéricos (los nombres de menú cambian según el proveedor):
 | `P1001` / 503 “No se pudo conectar a la base” | Verificar `DATABASE_URL`, firewall del proveedor, SSL (`sslmode`), que el Postgres esté “running”. |
 | Errores de FK al importar inventario | Primero `register-purchase-lots`, luego `import-inventory-partners` (ver `npm run db:restore-from-repo-data`). |
 | API arranca pero el front ve CORS | Definir `CORS_ORIGIN` exactamente con el origen del navegador (esquema + host + puerto si aplica). |
+| **502 Bad Gateway** (nginx/Caddy/Cloudflare → API) | El proxy no llega al proceso Node: comprobar que el contenedor/servicio esté **running** (`docker compose ps`, logs), `DATABASE_URL` válida (sin DB la app puede caerse al arrancar), y que `proxy_pass` apunte al **puerto publicado** (p. ej. `http://127.0.0.1:3000` si mapeás `3000:3000`). La API escucha en **`0.0.0.0`** por defecto (`LISTEN_HOST` en `.env` si querés limitar). |
 | Build Docker falla | Revisar que existan `package-lock.json`, `prisma/` y `prisma.config.cjs` en el contexto de build. |
 
 ## Archivos relevantes en el repo
@@ -141,6 +159,8 @@ Pasos genéricos (los nombres de menú cambian según el proveedor):
 | `.dockerignore` | Reduce contexto de build; excluye `prisma/data`. |
 | `scripts/docker-entrypoint.sh` | Migraciones opcionales + `node dist/src/main.js`. |
 | `README.md` | Desarrollo local, scripts `db:*`, respaldos. |
+| `.github/workflows/ci.yml` | CI: build + tests en push/PR. |
+| `.github/workflows/cloud-database.yml` | Migraciones / seed / datos del repo / restore desde `.dump` vía URL secreta. |
 
 ## Checklist antes de dar por cerrado el deploy
 

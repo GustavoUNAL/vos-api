@@ -275,6 +275,8 @@ model PurchaseLotLine {
   purchaseUnitCostCOP Decimal @map("purchase_unit_cost_cop") @db.Decimal(12, 2)
   /// Total línea COP (enteros al persistir; convención `lineTotalForPurchaseAggregationCOP`).
   lineTotalCOP          Decimal @map("line_total_cop") @db.Decimal(12, 2)
+  /// Notas por producto en este lote (visible en detalle de comprobante).
+  lineComment String? @map("line_comment")
 
   sortOrder Int @default(0) @map("sort_order")
 

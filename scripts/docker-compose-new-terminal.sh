@@ -16,7 +16,7 @@ Darwin)
     tell application "Terminal"
       activate
       set dir to quoted form of item 1 of argv
-      do script "cd " & dir & " && docker compose up -d && echo \"\" && echo \"Postgres listo (Docker en 127.0.0.1:5433). Migrar: npm run db:migrate && npm run db:seed\""
+      do script "cd " & dir & " && docker compose up -d && echo \"\" && echo \"Postgres listo (127.0.0.1:5433). Stack API+front: npm run docker:stack. Migrar: npm run db:migrate && npm run db:seed\""
     end tell
   end run' "$ROOT"
   echo "Se abrió una ventana de Terminal con Docker Compose."

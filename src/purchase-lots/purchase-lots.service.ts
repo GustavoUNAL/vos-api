@@ -160,6 +160,13 @@ export class PurchaseLotsService {
       .trim();
   }
 
+  private trimLineComment(raw: string | null | undefined): string | null {
+    if (raw == null) return null;
+    const t = raw.trim();
+    if (!t) return null;
+    return t.length > 4000 ? t.slice(0, 4000) : t;
+  }
+
   /**
    * Costo de compra por línea (histórico): ver `purchaseLineHistoricalAmounts`.
    */
@@ -356,8 +363,9 @@ export class PurchaseLotsService {
   }
 
   /**
-   * Persiste `line_total_cop` y `purchase_lots.total_value` según costo histórico por línea
-   * (comprobante + costo unitario inventario si el comprobante va en cero).
+   * Alinea líneas enlazadas a inventario: `quantity_purchased`, `unit` y `line_total_cop`
+   * con movimientos + existencias (`historicalPurchaseQtyAndLineTotal` + agregación COP).
+   * Actualiza `purchase_lots.total_value` como suma de totales de línea.
    */
   private async syncPurchaseLotTotalValueFromLines(
     purchaseLotCode: string,
@@ -374,6 +382,7 @@ export class PurchaseLotsService {
             quantityPurchased: true,
             purchaseUnitCostCOP: true,
             lineTotalCOP: true,
+            unit: true,
           },
         });
         const linkedIds = [
@@ -385,28 +394,72 @@ export class PurchaseLotsService {
           linkedIds.length > 0
             ? await tx.inventory.findMany({
                 where: { id: { in: linkedIds } },
-                select: { id: true, unitCost: true, deletedAt: true },
+                select: {
+                  id: true,
+                  quantity: true,
+                  unit: true,
+                  unitCost: true,
+                  deletedAt: true,
+                },
               })
             : [];
-        const invUnitById = new Map(
+        const invById = new Map(
           invRows
             .filter((r) => r.deletedAt === null)
-            .map((r) => [r.id, r.unitCost] as const),
+            .map((r) => [r.id, r] as const),
         );
 
         let sum = zeroDecimal();
         for (const ln of lines) {
+          let qtyP = ln.quantityPurchased;
+          let lineTot = ln.lineTotalCOP;
+          let unitStr = ln.unit;
+
+          const inv = ln.inventoryItemId
+            ? invById.get(ln.inventoryItemId)
+            : undefined;
+          if (inv) {
+            const { qtyPurchased, lineTotal } =
+              await this.historicalPurchaseQtyAndLineTotal(
+                ln.inventoryItemId!,
+                inv.quantity,
+                inv.unitCost,
+              );
+            qtyP = qtyPurchased;
+            unitStr = inv.unit;
+            lineTot = lineTotalForPurchaseAggregationCOP({
+              quantityPurchased: qtyPurchased,
+              purchaseUnitCostCOP: ln.purchaseUnitCostCOP,
+              lineTotalCOP: lineTotal,
+              inventoryUnitCostCOP: inv.unitCost,
+            });
+            if (
+              !ln.quantityPurchased.equals(qtyP) ||
+              !ln.lineTotalCOP.equals(lineTot) ||
+              ln.unit !== unitStr
+            ) {
+              await tx.purchaseLotLine.update({
+                where: { id: ln.id },
+                data: {
+                  quantityPurchased: qtyP,
+                  unit: unitStr,
+                  lineTotalCOP: lineTot,
+                },
+              });
+            }
+          }
+
           const invUC = ln.inventoryItemId
-            ? invUnitById.get(ln.inventoryItemId)
+            ? invById.get(ln.inventoryItemId)?.unitCost
             : undefined;
           const agg = lineTotalForPurchaseAggregationCOP({
-            quantityPurchased: ln.quantityPurchased,
+            quantityPurchased: qtyP,
             purchaseUnitCostCOP: ln.purchaseUnitCostCOP,
-            lineTotalCOP: ln.lineTotalCOP,
+            lineTotalCOP: lineTot,
             inventoryUnitCostCOP: invUC,
           });
           sum = sum.add(agg);
-          if (!agg.equals(ln.lineTotalCOP)) {
+          if (!inv && !agg.equals(ln.lineTotalCOP)) {
             await tx.purchaseLotLine.update({
               where: { id: ln.id },
               data: { lineTotalCOP: agg },
@@ -483,7 +536,8 @@ export class PurchaseLotsService {
   }
 
   /**
-   * Tras crear inventario con lote: línea de comprobante con costo/cantidad comprada congelados.
+   * Tras crear o refrescar inventario con lote: línea de comprobante con cantidad/total
+   * coherentes con historial de movimientos; conserva costo unitario de factura si ya existía línea.
    */
   async ensurePurchaseLotLineFromInventorySnapshot(inv: {
     id: string;
@@ -496,6 +550,11 @@ export class PurchaseLotsService {
   }): Promise<void> {
     const lot = inv.lot?.trim();
     if (!lot) return;
+    const existingLine = await this.prisma.purchaseLotLine.findUnique({
+      where: { inventoryItemId: inv.id },
+      select: { purchaseUnitCostCOP: true },
+    });
+    const ucLine = existingLine?.purchaseUnitCostCOP ?? inv.unitCost;
     const { qtyPurchased, lineTotal } =
       await this.historicalPurchaseQtyAndLineTotal(
         inv.id,
@@ -504,7 +563,7 @@ export class PurchaseLotsService {
       );
     const canonicalLineTotal = lineTotalForPurchaseAggregationCOP({
       quantityPurchased: qtyPurchased,
-      purchaseUnitCostCOP: inv.unitCost,
+      purchaseUnitCostCOP: ucLine,
       lineTotalCOP: lineTotal,
       inventoryUnitCostCOP: inv.unitCost,
     });
@@ -526,6 +585,10 @@ export class PurchaseLotsService {
           purchaseLotCode: lot,
           lineName: inv.name,
           categoryId: inv.categoryId,
+          quantityPurchased: qtyPurchased,
+          unit: inv.unit,
+          purchaseUnitCostCOP: ucLine,
+          lineTotalCOP: canonicalLineTotal,
         },
       });
       await this.syncPurchaseLotTotalValueFromLines(lot);
@@ -536,8 +599,8 @@ export class PurchaseLotsService {
   }
 
   /**
-   * Tras actualizar inventario: metadatos y lote de la línea; nunca recalcula costo/cantidad comprada
-   * salvo que no exista línea y el ítem quede enlazado a un lote (primera asociación).
+   * Tras actualizar inventario: metadatos, lote, unidad, cantidad comprada histórica y total de línea
+   * coherentes con movimientos + existencias (ver `historicalPurchaseQtyAndLineTotal`).
    */
   async reconcilePurchaseLotLineAfterInventoryChange(params: {
     inventoryId: string;
@@ -557,7 +620,7 @@ export class PurchaseLotsService {
     try {
       const existingMeta = await this.prisma.purchaseLotLine.findUnique({
         where: { inventoryItemId: inventoryId },
-        select: { id: true, purchaseLotCode: true },
+        select: { id: true, purchaseLotCode: true, purchaseUnitCostCOP: true },
       });
       const oldLotCode = existingMeta?.purchaseLotCode?.trim() ?? null;
 
@@ -601,12 +664,27 @@ export class PurchaseLotsService {
         return;
       }
 
+      const { qtyPurchased, lineTotal } =
+        await this.historicalPurchaseQtyAndLineTotal(
+          inventoryId,
+          inventoryAfter.quantity,
+          inventoryAfter.unitCost,
+        );
+      const canonicalLineTotal = lineTotalForPurchaseAggregationCOP({
+        quantityPurchased: qtyPurchased,
+        purchaseUnitCostCOP: existingMeta.purchaseUnitCostCOP,
+        lineTotalCOP: lineTotal,
+        inventoryUnitCostCOP: inventoryAfter.unitCost,
+      });
       await this.prisma.purchaseLotLine.update({
         where: { inventoryItemId: inventoryId },
         data: {
           purchaseLotCode: lotAfter,
           lineName: inventoryAfter.name,
           categoryId: inventoryAfter.categoryId,
+          quantityPurchased: qtyPurchased,
+          unit: inventoryAfter.unit,
+          lineTotalCOP: canonicalLineTotal,
         },
       });
       const newCode = lotAfter.trim();
@@ -955,6 +1033,10 @@ export class PurchaseLotsService {
     };
   }
 
+  /**
+   * Detalle de lote: antes de armar la respuesta, alinea en BD las líneas enlazadas a inventario
+   * (`quantity_purchased`, `unit`, `line_total_cop`) con movimientos + existencias, y `total_value` del lote.
+   */
   async findOne(idOrCode: string) {
     const lotRef = await this.resolveLotByIdOrCode(idOrCode);
     if (!lotRef) {
@@ -967,13 +1049,21 @@ export class PurchaseLotsService {
     if (!row) {
       throw new NotFoundException('Purchase lot not found');
     }
-    const fallback = await this.supplierFromInventoryByCode([row.code]);
-    const base = this.withResolvedSupplier(row, fallback);
+    await this.syncPurchaseLotTotalValueFromLines(row.code);
+    const rowFresh = await this.prisma.purchaseLot.findUnique({
+      where: { id: lotRef.id },
+      select: purchaseLotSafeSelect,
+    });
+    if (!rowFresh) {
+      throw new NotFoundException('Purchase lot not found');
+    }
+    const fallback = await this.supplierFromInventoryByCode([rowFresh.code]);
+    const base = this.withResolvedSupplier(rowFresh, fallback);
     const { activeItemCount, stockValueCOP } =
-      await inventoryStockValueForLotCode(this.prisma, row.code);
+      await inventoryStockValueForLotCode(this.prisma, rowFresh.code);
 
     const lotItems = await this.prisma.inventory.findMany({
-      where: { deletedAt: null, lot: row.code },
+      where: { deletedAt: null, lot: rowFresh.code },
       orderBy: { name: 'asc' },
       select: {
         id: true,
@@ -1012,7 +1102,7 @@ export class PurchaseLotsService {
     let purchaseLotLinesMigrationPending = false;
     try {
       linesRaw = await this.prisma.purchaseLotLine.findMany({
-        where: { purchaseLotCode: row.code },
+        where: { purchaseLotCode: rowFresh.code },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         include: {
           category: { select: { id: true, name: true } },
@@ -1078,14 +1168,14 @@ export class PurchaseLotsService {
     });
 
     const inventoryMetrics = this.buildLotInventoryMetrics(
-      row.purchaseDate,
+      rowFresh.purchaseDate,
       lotItems.map((it) => ({
         quantity: it.quantity,
         unitCost: it.unitCost,
         categoryName: it.category.name,
       })),
       lineMetrics.length ? lineMetrics : null,
-      row.totalValue,
+      rowFresh.totalValue,
     );
 
     const lineLinkedIds = new Set(
@@ -1123,6 +1213,8 @@ export class PurchaseLotsService {
       quantityRemaining: string;
       quantityConsumed: string;
       sortOrder: number;
+      /** Comentario libre por producto en esta línea del lote. */
+      lineComment: string | null;
     }> = [];
 
     for (const ln of linesRaw) {
@@ -1180,6 +1272,7 @@ export class PurchaseLotsService {
         quantityRemaining: remaining.toString(),
         quantityConsumed: consumed.toString(),
         sortOrder: ln.sortOrder,
+        lineComment: ln.lineComment ?? null,
       });
     }
 
@@ -1200,9 +1293,9 @@ export class PurchaseLotsService {
         : new Prisma.Decimal(0);
 
     const mismatch =
-      row.totalValue !== null && linesRaw.length > 0
+      rowFresh.totalValue !== null && linesRaw.length > 0
         ? !purchaseTotalsWithinTolerance(
-            new Prisma.Decimal(row.totalValue),
+            new Prisma.Decimal(rowFresh.totalValue),
             linesCanonicalSum,
           )
         : false;
@@ -1237,7 +1330,7 @@ export class PurchaseLotsService {
 
     return {
       ...base,
-      comment: row.notes ?? null,
+      comment: rowFresh.notes ?? null,
       purchaseLotLinesMigrationPending,
       inventoryMetrics,
       purchaseLines,
@@ -1252,8 +1345,8 @@ export class PurchaseLotsService {
         fromLotInventoryItemsSubtotalCOP:
           inventoryItemsPurchaseSum.toFixed(2),
         lotTotalValueCOP:
-          row.totalValue !== null
-            ? new Prisma.Decimal(row.totalValue).toFixed(2)
+          rowFresh.totalValue !== null
+            ? new Prisma.Decimal(rowFresh.totalValue).toFixed(2)
             : null,
         totalValueVsLinesPurchaseMismatch:
           linesRaw.length > 0 ? mismatch : null,
@@ -1278,7 +1371,7 @@ export class PurchaseLotsService {
       })),
       inventoryWithoutPurchaseLine,
       inventoryLink: {
-        lotCode: row.code,
+        lotCode: rowFresh.code,
         activeItemCount,
         stockValueCOP: stockValueCOP.toFixed(0),
         note:
@@ -1493,15 +1586,37 @@ export class PurchaseLotsService {
     }
 
     const inventoryUnitCostById = new Map<string, Prisma.Decimal>();
+    const invByIdForLinked = new Map<
+      string,
+      { id: string; quantity: Prisma.Decimal; unitCost: Prisma.Decimal; unit: string }
+    >();
     if (seenInv.size > 0) {
-      const invCosts = await this.prisma.inventory.findMany({
+      const invRows = await this.prisma.inventory.findMany({
         where: { id: { in: [...seenInv] }, deletedAt: null },
-        select: { id: true, unitCost: true },
+        select: { id: true, unitCost: true, quantity: true, unit: true },
       });
-      for (const r of invCosts) {
+      for (const r of invRows) {
         inventoryUnitCostById.set(r.id, r.unitCost);
+        invByIdForLinked.set(r.id, r);
       }
     }
+
+    const histByInventoryId = new Map<
+      string,
+      { qtyPurchased: Prisma.Decimal; lineTotal: Prisma.Decimal }
+    >();
+    await Promise.all(
+      [...seenInv].map(async (id) => {
+        const inv = invByIdForLinked.get(id);
+        if (!inv) return;
+        const h = await this.historicalPurchaseQtyAndLineTotal(
+          id,
+          inv.quantity,
+          inv.unitCost,
+        );
+        histByInventoryId.set(id, h);
+      }),
+    );
 
     const linePartsForSum: Array<{
       quantityPurchased: Prisma.Decimal;
@@ -1512,15 +1627,45 @@ export class PurchaseLotsService {
     const rows: Prisma.PurchaseLotLineCreateManyInput[] = [];
     let sortIdx = 0;
     for (const ln of resolvedLines) {
-      const qty = new Prisma.Decimal(ln.quantityPurchased);
-      const uc = new Prisma.Decimal(ln.purchaseUnitCostCOP);
-      const explicit =
-        ln.lineTotalCOP != null && ln.lineTotalCOP !== undefined
-          ? new Prisma.Decimal(ln.lineTotalCOP)
-          : new Prisma.Decimal(0);
       const invUC = ln.inventoryItemId
         ? inventoryUnitCostById.get(ln.inventoryItemId)
         : undefined;
+
+      let qty: Prisma.Decimal;
+      let uc: Prisma.Decimal;
+      let unit: string;
+      let explicit: Prisma.Decimal;
+
+      if (ln.inventoryItemId) {
+        const inv = invByIdForLinked.get(ln.inventoryItemId);
+        if (!inv) {
+          throw new BadRequestException(
+            `Ítem de inventario no encontrado: ${ln.inventoryItemId}`,
+          );
+        }
+        const hist = histByInventoryId.get(ln.inventoryItemId);
+        if (!hist) {
+          throw new BadRequestException(
+            `No se pudo calcular cantidad histórica para ${ln.inventoryItemId}.`,
+          );
+        }
+        qty = hist.qtyPurchased;
+        uc = new Prisma.Decimal(ln.purchaseUnitCostCOP);
+        unit = inv.unit.trim();
+        explicit =
+          ln.lineTotalCOP != null && ln.lineTotalCOP !== undefined
+            ? new Prisma.Decimal(ln.lineTotalCOP)
+            : new Prisma.Decimal(0);
+      } else {
+        qty = new Prisma.Decimal(ln.quantityPurchased);
+        uc = new Prisma.Decimal(ln.purchaseUnitCostCOP);
+        unit = ln.unit.trim();
+        explicit =
+          ln.lineTotalCOP != null && ln.lineTotalCOP !== undefined
+            ? new Prisma.Decimal(ln.lineTotalCOP)
+            : new Prisma.Decimal(0);
+      }
+
       const part = {
         quantityPurchased: qty,
         purchaseUnitCostCOP: uc,
@@ -1537,9 +1682,10 @@ export class PurchaseLotsService {
           : ln.lineName.trim(),
         categoryId: ln.categoryId?.trim() || null,
         quantityPurchased: qty,
-        unit: ln.unit.trim(),
+        unit,
         purchaseUnitCostCOP: uc,
         lineTotalCOP: lt,
+        lineComment: this.trimLineComment(ln.lineComment),
         sortOrder: ln.sortOrder ?? sortIdx,
       });
       sortIdx += 1;

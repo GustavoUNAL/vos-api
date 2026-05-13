@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -40,6 +41,12 @@ export class PurchaseLotLineInputDto {
   @IsOptional()
   @IsNumber()
   sortOrder?: number;
+
+  /** Comentario libre por producto en esta línea del lote. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  lineComment?: string | null;
 }
 
 export class ReplacePurchaseLotLinesDto {

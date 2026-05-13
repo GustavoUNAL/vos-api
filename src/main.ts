@@ -1,6 +1,6 @@
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { JsonSerializeInterceptor } from './common/json-serialize.interceptor';
 
@@ -57,6 +57,10 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
-  await app.listen(process.env.PORT ?? 3000);
+  const port = Number(process.env.PORT) || 3000;
+  /** En Docker / detrás de nginx, 127.0.0.1-only puede dar 502 al proxy; 0.0.0.0 escucha en todas las interfaces. */
+  const host = process.env.LISTEN_HOST?.trim() || '0.0.0.0';
+  await app.listen(port, host);
+  Logger.log(`HTTP ${host}:${port}`, 'Bootstrap');
 }
 bootstrap();
