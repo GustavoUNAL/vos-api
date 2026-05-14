@@ -157,7 +157,7 @@ Después de migrar o restaurar, tu API (local o en servidor) puede usar la misma
 | `Dockerfile` | Imagen de producción multi-stage. |
 | `docker-compose.prod.yml` | Ejemplo de servicio API + variables. |
 | `.dockerignore` | Reduce contexto de build; excluye `prisma/data`. |
-| `scripts/docker-entrypoint.sh` | Migraciones opcionales + `node dist/src/main.js`. |
+| `scripts/docker-entrypoint.sh` | Migraciones opcionales + `node dist/main.js`. |
 | `README.md` | Desarrollo local, scripts `db:*`, respaldos. |
 | `.github/workflows/ci.yml` | CI: build + tests en push/PR. |
 | `.github/workflows/cloud-database.yml` | Migraciones / seed / datos del repo / restore desde `.dump` vía URL secreta. |
