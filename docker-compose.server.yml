@@ -75,7 +75,9 @@ services:
       context: ${FRONTEND_BUILD_CONTEXT:-../arandano-front}
       dockerfile: ${FRONTEND_DOCKERFILE:-../arandano-api/docker/front-build/Dockerfile}
       args:
-        VITE_API_URL: ${VITE_API_URL:?Definí VITE_API_URL en .env (URL pública del API)}
+        # Default solo para que `docker compose up -d` (sin perfil full) no falle al parsear.
+        # Con perfil full definí VITE_API_URL en .env (URL que usa el navegador para el API).
+        VITE_API_URL: ${VITE_API_URL:-http://127.0.0.1:3000}
     image: arandano-frontend-server:latest
     container_name: arandano-frontend-server
     restart: unless-stopped
