@@ -1,0 +1,88 @@
+# Stack para VPS: PostgreSQL persistente + API + front (perfil `full`).
+#
+# Requisitos en el servidor: Docker Engine + plugin Compose.
+# Archivo `.env` en la raíz de arandano-api con al menos:
+#   POSTGRES_PASSWORD=...
+#   JWT_SECRET=...
+#   CORS_ORIGIN=https://tu-dominio-o-ip    (o http://IP:PUERTO_FRONT en pruebas)
+#   VITE_API_URL=http://IP_DEL_SERVIDOR:3000   (URL que ve el navegador para llamar al API)
+#
+# Solo base de datos:
+#   docker compose -f docker-compose.server.yml up -d
+#
+# BD + API + front (ajusta FRONTEND_* si tus carpetas no son hermanas bajo ~/projects/arandano_app):
+#   docker compose -f docker-compose.server.yml --profile full up -d --build
+#
+# La contraseña de Postgres debe ser simple en la URL (letras, números; evitá @ : / en POSTGRES_PASSWORD).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: arandano-postgres-server
+    restart: unless-stopped
+    ports:
+      # Solo localhost: útil si corrés migraciones/node en el host; no expone la BD a internet.
+      - '127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432'
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-arandano}
+    volumes:
+      - arandano_server_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-arandano}',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  api:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: arandano-api:latest
+    container_name: arandano-api-server
+    restart: unless-stopped
+    ports:
+      - '${API_SERVER_PORT:-3000}:3000'
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      LISTEN_HOST: '0.0.0.0'
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-arandano}
+      JWT_SECRET: ${JWT_SECRET:?Definí JWT_SECRET en .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/health']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  frontend:
+    profiles: ['full']
+    build:
+      context: ${FRONTEND_BUILD_CONTEXT:-../arandano-front}
+      dockerfile: ${FRONTEND_DOCKERFILE:-../arandano-api/docker/front-build/Dockerfile}
+      args:
+        VITE_API_URL: ${VITE_API_URL:?Definí VITE_API_URL en .env (URL pública del API)}
+    image: arandano-frontend-server:latest
+    container_name: arandano-frontend-server
+    restart: unless-stopped
+    ports:
+      - '${FRONT_SERVER_PORT:-8080}:80'
+    depends_on:
+      - api
+
+volumes:
+  arandano_server_pg_data:
