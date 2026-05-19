@@ -14,6 +14,8 @@ import { AdminExpensesModule } from './admin-expenses/admin-expenses.module';
 import { GastosModule } from './gastos/gastos.module';
 import { NavigationModule } from './navigation/navigation.module';
 import { StockMovementsModule } from './stock-movements/stock-movements.module';
+import { PosModule } from './pos/pos.module';
+import { ClientsModule } from './clients/clients.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { StockMovementsModule } from './stock-movements/stock-movements.module';
     SalesModule,
     PurchaseLotsModule,
     ExplorerModule,
+    PosModule,
+    ClientsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

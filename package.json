@@ -51,6 +51,8 @@
     "db:purge-soft-deleted": "ts-node --transpile-only scripts/purge-soft-deleted.ts",
     "db:backfill-sale-lines": "ts-node --transpile-only scripts/backfill-sale-lines-products-cost.ts",
     "db:import-sales-json": "ts-node --transpile-only scripts/import-sales-json.ts",
+    "db:import-legacy-sheet-sales": "ts-node --transpile-only scripts/import-legacy-sheet-sales.ts",
+    "db:import-legacy-sheet-sales:local": "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/arandano npm run db:migrate && DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/arandano ts-node --transpile-only scripts/import-legacy-sheet-sales.ts",
     "db:import-inventory-partners": "ts-node --transpile-only scripts/import-inventory-partner-contributions.ts",
     "db:register-purchase-lots": "ts-node --transpile-only scripts/register-purchase-lots.ts",
     "db:backfill-purchase-lot-dates-from-code": "ts-node --transpile-only scripts/backfill-purchase-lot-dates-from-code.ts",
@@ -93,6 +95,8 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-ws": "^11.1.21",
+    "@nestjs/websockets": "^11.1.21",
     "@prisma/adapter-pg": "^7.6.0",
     "@prisma/client": "^7.6.0",
     "bcryptjs": "^3.0.3",
@@ -104,7 +108,8 @@
     "pg": "^8.20.0",
     "prisma": "^7.6.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -117,6 +122,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
     "@types/supertest": "^7.0.0",
+    "@types/ws": "^8.18.1",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",

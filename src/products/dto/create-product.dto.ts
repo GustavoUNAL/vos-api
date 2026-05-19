@@ -40,6 +40,15 @@ export class CreateProductDto {
   @IsOptional()
   imageUrl?: string;
 
+  @IsString()
+  @IsOptional()
+  sku?: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  unitCost?: number;
+
   @IsBoolean()
   @IsOptional()
   active?: boolean;

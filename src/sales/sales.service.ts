@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PaymentStatus, Prisma, SaleSource } from '@prisma/client';
 import { mapCategoryRelation } from '../common/category-display-name';
+import { nextHumanCodeTx } from '../common/human-code';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { ReplaceSaleLinesDto } from './dto/replace-sale-lines.dto';
@@ -27,6 +28,9 @@ type PaginationParams = {
 };
 
 const saleListInclude = {
+  client: {
+    select: { id: true, code: true, name: true },
+  },
   user: {
     select: { id: true, name: true, email: true, role: true, active: true },
   },
@@ -57,6 +61,9 @@ const saleListInclude = {
 } satisfies Prisma.SaleInclude;
 
 const saleDetailInclude = {
+  client: {
+    select: { id: true, code: true, name: true, notes: true },
+  },
   user: {
     select: { id: true, name: true, email: true, role: true, active: true },
   },
@@ -131,6 +138,10 @@ export class SalesService {
     const displayPerson = sale.user?.name ?? sale.cart?.user?.name ?? null;
     return {
       id: sale.id,
+      code: sale.code ?? sale.id,
+      clientId: sale.clientId,
+      clientCode: sale.client?.code ?? null,
+      clientName: sale.client?.name ?? null,
       /** ISO 8601 (UTC). Misma semántica que antes con Prisma `Date` serializado a JSON. */
       saleDate: iso(sale.saleDate),
       /** Solo fecha `YYYY-MM-DD` (UTC) para columnas tipo “día de venta”. */
@@ -207,6 +218,7 @@ export class SalesService {
       const subtotal = ln.quantity.mul(ln.unitPrice);
       return {
         id: ln.id,
+        code: ln.code ?? null,
         productId: ln.productId,
         productName: ln.productName,
         quantity: ln.quantity.toString(),
@@ -253,6 +265,7 @@ export class SalesService {
 
     return {
       id: sale.id,
+      code: sale.code ?? sale.id,
       saleDate: iso(sale.saleDate),
       saleDateOnly: sale.saleDate.toISOString().slice(0, 10),
       createdAt: iso(sale.createdAt),
@@ -264,6 +277,17 @@ export class SalesService {
       mesa: sale.mesa,
       notes: sale.notes,
       userId: sale.userId,
+      clientId: sale.clientId,
+      client: sale.client
+        ? {
+            id: sale.client.id,
+            code: sale.client.code,
+            name: sale.client.name,
+            notes: sale.client.notes ?? null,
+          }
+        : null,
+      clientCode: sale.client?.code ?? null,
+      clientName: sale.client?.name ?? null,
       cartId: sale.cartId,
       user: sale.user
         ? {
@@ -404,8 +428,10 @@ export class SalesService {
     const total = this.computeTotal(dto.lines);
 
     return this.prisma.$transaction(async (tx) => {
+      const saleCode = await nextHumanCodeTx(tx, 'sale', 'V');
       const sale = await tx.sale.create({
         data: {
+          code: saleCode,
           saleDate: new Date(dto.saleDate),
           total,
           paymentMethod: dto.paymentMethod ?? null,
@@ -413,11 +439,14 @@ export class SalesService {
           mesa: dto.mesa ?? null,
           notes: dto.notes ?? null,
           userId: dto.userId ?? null,
+          clientId: dto.clientId ?? null,
         },
       });
       for (const line of dto.lines) {
+        const lineCode = await nextHumanCodeTx(tx, 'saleLine', 'D');
         await tx.saleLine.create({
           data: {
+            code: lineCode,
             saleId: sale.id,
             productId: line.productId ?? null,
             productName: line.productName,
@@ -449,9 +478,19 @@ export class SalesService {
     if (search?.length) {
       and.push({
         OR: [
+          { id: { contains: search, mode: 'insensitive' } },
+          { code: { contains: search, mode: 'insensitive' } },
           { paymentMethod: { contains: search, mode: 'insensitive' } },
           { mesa: { contains: search, mode: 'insensitive' } },
           { notes: { contains: search, mode: 'insensitive' } },
+          {
+            client: {
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { code: { contains: search, mode: 'insensitive' } },
+              ],
+            },
+          },
           {
             lines: {
               some: {

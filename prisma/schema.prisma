@@ -13,6 +13,22 @@ datasource db {
 enum UserRole {
   ADMIN
   EMPLEADO
+  MESERO
+  CAJERO
+}
+
+enum PosTableStatus {
+  FREE
+  OCCUPIED
+  RESERVED
+  CLOSING
+}
+
+enum PosOrderStatus {
+  OPEN
+  CLOSING
+  CLOSED
+  PAID
 }
 
 enum CategoryType {
@@ -127,6 +143,7 @@ model User {
   expenses       Expense[]
   stockMovements StockMovement[] @relation("StockMovementUser")
   tasks          Task[]          @relation("TaskAssignee")
+  posOrders      PosOrder[]      @relation("PosOrderUser")
 
   @@index([email], map: "idx_users_email")
   @@index([role], map: "idx_users_role")
@@ -164,6 +181,8 @@ model Product {
   imageUrl    String?   @map("image_url")
   size        String?
   active      Boolean   @default(true)
+  sku         String?   @unique
+  unitCost    Decimal?  @map("unit_cost") @db.Decimal(12, 2)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
   /// Fecha de última modificación/revisión declarada (trazabilidad; editable; distinta de `updated_at`).
   traceModifiedAt DateTime? @map("trace_modified_at") @db.Timestamptz(6)
@@ -172,10 +191,12 @@ model Product {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   recipe    Recipe?
-  saleLines SaleLine[]
-  cartItems CartItem[]
+  saleLines     SaleLine[]
+  cartItems     CartItem[]
+  posOrderLines PosOrderLine[]
 
   @@index([categoryId], map: "idx_products_category")
+  @@index([sku], map: "idx_products_sku")
   @@index([deletedAt], map: "idx_products_deleted_at")
   @@index([active], map: "idx_products_active")
   @@index([type], map: "idx_products_type")
@@ -377,8 +398,27 @@ model CartItem {
   @@map("cart_items")
 }
 
+/// Cliente habitual (código legible C001, C002, …).
+model Client {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sales Sale[]
+
+  @@index([name], map: "idx_clients_name")
+  @@index([active], map: "idx_clients_active")
+  @@map("clients")
+}
+
 model Sale {
   id            String     @id @default(cuid())
+  /// Código legible de venta (V001, V002, …). Coincide con `id` en histórico importado.
+  code          String?    @unique
   saleDate      DateTime   @map("sale_date") @db.Timestamptz(6)
   total         Decimal    @db.Decimal(12, 2)
   paymentMethod String?    @map("payment_method")
@@ -389,6 +429,9 @@ model Sale {
   cartId String? @map("cart_id")
   cart   Cart?   @relation(fields: [cartId], references: [id], onDelete: SetNull)
 
+  clientId String? @map("client_id")
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
   mesa  String?
   notes String?
 
@@ -398,16 +441,20 @@ model Sale {
   lines          SaleLine[]
   payments       Payment[]
   stockMovements StockMovement[]
+  posOrder       PosOrder?
 
   @@index([saleDate], map: "idx_sales_sale_date")
   @@index([userId], map: "idx_sales_user_id")
   @@index([cartId], map: "idx_sales_cart_id")
+  @@index([clientId], map: "idx_sales_client_id")
   @@index([source], map: "idx_sales_source")
   @@map("sales")
 }
 
 model SaleLine {
   id          String   @id @default(cuid())
+  /// Código legible de línea (D001, D002, …).
+  code        String?  @unique
   saleId      String   @map("sale_id")
   sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
   productId   String?  @map("product_id")
@@ -586,4 +633,95 @@ model Task {
   @@index([assignedToId], map: "idx_tasks_assigned_to")
   @@index([dueDate], map: "idx_tasks_due_date")
   @@map("tasks")
+}
+
+// ---------------------------------------------------------------------------
+// POS (contrato arandano-front)
+// ---------------------------------------------------------------------------
+
+model PosTable {
+  id         String         @id @default(cuid())
+  number     Int            @unique
+  name       String
+  section    String?
+  capacity   Int?
+  notes      String?
+  guestCount Int?           @map("guest_count")
+  status     PosTableStatus @default(FREE)
+  deletedAt  DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  orders PosOrder[]
+
+  @@index([status], map: "idx_pos_tables_status")
+  @@index([section], map: "idx_pos_tables_section")
+  @@index([deletedAt], map: "idx_pos_tables_deleted_at")
+  @@map("pos_tables")
+}
+
+model PosOrder {
+  id          String         @id @default(cuid())
+  tableId     String         @map("table_id")
+  table       PosTable       @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  userId      String?        @map("user_id")
+  user        User?          @relation("PosOrderUser", fields: [userId], references: [id], onDelete: SetNull)
+  status      PosOrderStatus @default(OPEN)
+  taxRate     Decimal        @default(0.08) @map("tax_rate") @db.Decimal(5, 4)
+  subtotalCOP Decimal        @default(0) @map("subtotal_cop") @db.Decimal(18, 0)
+  taxCOP      Decimal        @default(0) @map("tax_cop") @db.Decimal(18, 0)
+  totalCOP    Decimal        @default(0) @map("total_cop") @db.Decimal(18, 0)
+  openedAt    DateTime       @default(now()) @map("opened_at") @db.Timestamptz(6)
+  closedAt    DateTime?      @map("closed_at") @db.Timestamptz(6)
+  paidAt      DateTime?      @map("paid_at") @db.Timestamptz(6)
+  saleId      String?        @unique @map("sale_id")
+  sale        Sale?          @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  deletedAt   DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lines    PosOrderLine[]
+  payments PosPayment[]
+
+  @@index([tableId], map: "idx_pos_orders_table_id")
+  @@index([status], map: "idx_pos_orders_status")
+  @@index([userId], map: "idx_pos_orders_user_id")
+  @@index([openedAt], map: "idx_pos_orders_opened_at")
+  @@index([paidAt], map: "idx_pos_orders_paid_at")
+  @@index([deletedAt], map: "idx_pos_orders_deleted_at")
+  @@map("pos_orders")
+}
+
+model PosOrderLine {
+  id          String   @id @default(cuid())
+  orderId     String   @map("order_id")
+  order       PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String   @map("product_id")
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName String   @map("product_name")
+  quantity    Decimal  @db.Decimal(18, 4)
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(18, 0)
+  notes       String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([orderId], map: "idx_pos_order_lines_order_id")
+  @@index([productId], map: "idx_pos_order_lines_product_id")
+  @@map("pos_order_lines")
+}
+
+model PosPayment {
+  id        String   @id @default(cuid())
+  orderId   String   @map("order_id")
+  order     PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method    String
+  amountCOP Decimal  @map("amount_cop") @db.Decimal(18, 0)
+  tipCOP    Decimal  @default(0) @map("tip_cop") @db.Decimal(18, 0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([orderId], map: "idx_pos_payments_order_id")
+  @@index([method], map: "idx_pos_payments_method")
+  @@map("pos_payments")
 }

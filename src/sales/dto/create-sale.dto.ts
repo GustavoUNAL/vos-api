@@ -34,6 +34,10 @@ export class CreateSaleDto {
   @IsOptional()
   userId?: string;
 
+  @IsString()
+  @IsOptional()
+  clientId?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SaleLineInputDto)

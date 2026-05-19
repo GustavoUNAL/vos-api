@@ -42,6 +42,15 @@ export class UpdateProductDto {
   @IsOptional()
   imageUrl?: string;
 
+  @IsString()
+  @IsOptional()
+  sku?: string | null;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  unitCost?: number | null;
+
   @IsBoolean()
   @IsOptional()
   active?: boolean;

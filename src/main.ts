@@ -1,5 +1,6 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { JsonSerializeInterceptor } from './common/json-serialize.interceptor';
@@ -43,6 +44,7 @@ function corsOriginOption():
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new JsonSerializeInterceptor());
   app.enableCors({
@@ -63,4 +65,18 @@ async function bootstrap() {
   await app.listen(port, host);
   Logger.log(`HTTP ${host}:${port}`, 'Bootstrap');
 }
-bootstrap();
+
+bootstrap().catch((err: NodeJS.ErrnoException) => {
+  const port = process.env.PORT ?? 3000;
+  if (err.code === 'EADDRINUSE') {
+    // eslint-disable-next-line no-console
+    console.error(
+      `\nPuerto ${port} ya en uso. Probablemente el API ya está corriendo.\n` +
+        `  • Probar: curl http://localhost:${port}/navigation\n` +
+        `  • Ver proceso: lsof -i :${port}\n` +
+        `  • Reiniciar: kill $(lsof -t -i :${port}) && npm run start:dev\n`,
+    );
+    process.exit(1);
+  }
+  throw err;
+});

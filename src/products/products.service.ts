@@ -180,6 +180,10 @@ export class ProductsService {
         size: dto.size ?? null,
         imageUrl: dto.imageUrl ?? null,
         active: dto.active ?? true,
+        sku: dto.sku?.trim() || null,
+        ...(dto.unitCost !== undefined
+          ? { unitCost: new Prisma.Decimal(dto.unitCost) }
+          : {}),
         ...(dto.traceModifiedAt !== undefined
           ? {
               traceModifiedAt: dto.traceModifiedAt
@@ -600,6 +604,15 @@ export class ProductsService {
           ? { imageUrl: dto.imageUrl ?? null }
           : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
+        ...(dto.sku !== undefined ? { sku: dto.sku?.trim() || null } : {}),
+        ...(dto.unitCost !== undefined
+          ? {
+              unitCost:
+                dto.unitCost == null
+                  ? null
+                  : new Prisma.Decimal(dto.unitCost),
+            }
+          : {}),
         ...(dto.traceModifiedAt !== undefined
           ? {
               traceModifiedAt: dto.traceModifiedAt

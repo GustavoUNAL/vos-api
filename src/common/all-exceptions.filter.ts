@@ -158,9 +158,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const body = exception.getResponse();
       if (typeof body === 'string') {
         message = body;
-      } else if (typeof body === 'object' && body !== null && 'message' in body) {
-        const m = (body as { message: unknown }).message;
-        message = Array.isArray(m) ? m.join(', ') : String(m);
+      } else if (typeof body === 'object' && body !== null) {
+        if ('message' in body) {
+          const m = (body as { message: unknown }).message;
+          message = Array.isArray(m) ? m.join(', ') : String(m);
+        }
+        if ('hint' in body && (body as { hint?: unknown }).hint != null) {
+          hint = String((body as { hint: unknown }).hint);
+        }
       }
       if (status >= 500) {
         this.logger.error(
