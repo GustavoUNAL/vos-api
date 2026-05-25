@@ -8,11 +8,14 @@ import {
   Patch,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ReplacePurchaseLotLinesDto } from './dto/replace-purchase-lot-lines.dto';
 import { UpdatePurchaseLotDto } from './dto/update-purchase-lot.dto';
 import { PurchaseLotsService } from './purchase-lots.service';
 
+@UseGuards(JwtAuthGuard)
 @Controller('purchase-lots')
 export class PurchaseLotsController {
   constructor(private readonly purchaseLotsService: PurchaseLotsService) {}

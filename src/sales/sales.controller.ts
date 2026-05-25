@@ -9,13 +9,16 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { SaleSource } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { ReplaceSaleLinesDto } from './dto/replace-sale-lines.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { SalesService } from './sales.service';
 
+@UseGuards(JwtAuthGuard)
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}

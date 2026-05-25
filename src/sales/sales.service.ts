@@ -82,6 +82,7 @@ const saleDetailInclude = {
               imageUrl: true,
               active: true,
               size: true,
+              saleUnit: true,
               category: { select: { id: true, name: true } },
             },
           },
@@ -101,6 +102,7 @@ const saleDetailInclude = {
           imageUrl: true,
           active: true,
           size: true,
+          saleUnit: true,
           description: true,
           category: { select: { id: true, name: true } },
         },
@@ -221,6 +223,8 @@ export class SalesService {
         code: ln.code ?? null,
         productId: ln.productId,
         productName: ln.productName,
+        lineUnit: ln.lineUnit ?? null,
+        lineSize: ln.lineSize ?? null,
         quantity: ln.quantity.toString(),
         /** Compatibilidad con UIs que usan número. */
         unitPrice: Number(ln.unitPrice.toString()),
@@ -238,6 +242,7 @@ export class SalesService {
               imageUrl: ln.product.imageUrl,
               active: ln.product.active,
               size: ln.product.size,
+              saleUnit: ln.product.saleUnit,
               description: ln.product.description,
               category: ln.product.category
                 ? mapCategoryRelation(ln.product.category)
@@ -450,6 +455,8 @@ export class SalesService {
             saleId: sale.id,
             productId: line.productId ?? null,
             productName: line.productName,
+            lineUnit: line.lineUnit?.trim() || null,
+            lineSize: line.lineSize?.trim() || null,
             quantity: new Prisma.Decimal(line.quantity),
             unitPrice: new Prisma.Decimal(line.unitPrice),
             costAtSale:
@@ -602,6 +609,8 @@ export class SalesService {
             saleId: id,
             productId: line.productId ?? null,
             productName: line.productName,
+            lineUnit: line.lineUnit?.trim() || null,
+            lineSize: line.lineSize?.trim() || null,
             quantity: new Prisma.Decimal(line.quantity),
             unitPrice: new Prisma.Decimal(line.unitPrice),
             costAtSale:

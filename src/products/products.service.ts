@@ -178,6 +178,7 @@ export class ProductsService {
         type: dto.type,
         description: dto.description ?? '',
         size: dto.size ?? null,
+        saleUnit: dto.saleUnit?.trim() || null,
         imageUrl: dto.imageUrl ?? null,
         active: dto.active ?? true,
         sku: dto.sku?.trim() || null,
@@ -309,6 +310,228 @@ export class ProductsService {
         category: mapCategoryRelation(p.category),
       })),
       meta: { page, limit, total, hasNextPage: skip + data.length < total },
+    };
+  }
+
+  async getProductHistory(productId: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, deletedAt: null },
+      include: {
+        recipe: {
+          include: {
+            ingredients: {
+              include: {
+                inventoryItem: {
+                  include: {
+                    purchaseLot: true,
+                    purchaseLotLine: {
+                      include: { purchaseLot: true },
+                    },
+                  },
+                },
+              },
+              orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+            },
+          },
+        },
+      },
+    });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    type LotRow = {
+      id?: string;
+      code: string;
+      purchaseDate?: string | null;
+      supplier?: string | null;
+      lineTotalCOP?: string | null;
+      notes?: string | null;
+    };
+
+    const lotsByCode = new Map<string, LotRow>();
+    const ingredientCount = product.recipe?.ingredients.length ?? 0;
+
+    for (const ing of product.recipe?.ingredients ?? []) {
+      const inv = ing.inventoryItem;
+      const line = inv.purchaseLotLine;
+      const pl = line?.purchaseLot ?? inv.purchaseLot;
+      const code = (pl?.code ?? inv.lot?.trim()) || null;
+      if (!code) continue;
+
+      const prev = lotsByCode.get(code);
+      const lineTotal =
+        line?.lineTotalCOP?.toFixed(0) ??
+        pl?.totalValue?.toFixed(0) ??
+        prev?.lineTotalCOP ??
+        null;
+
+      lotsByCode.set(code, {
+        id: pl?.id ?? prev?.id,
+        code,
+        purchaseDate:
+          pl?.purchaseDate?.toISOString() ?? prev?.purchaseDate ?? null,
+        supplier: pl?.supplier?.trim() || prev?.supplier || null,
+        lineTotalCOP: lineTotal,
+        notes:
+          pl?.notes?.trim() ||
+          line?.lineComment?.trim() ||
+          prev?.notes ||
+          null,
+      });
+    }
+
+    const orphanLotCodes = [
+      ...new Set(
+        (product.recipe?.ingredients ?? [])
+          .map((ing) => ing.inventoryItem.lot?.trim())
+          .filter((c): c is string => !!c && !lotsByCode.has(c)),
+      ),
+    ];
+    if (orphanLotCodes.length > 0) {
+      const extraLots = await this.prisma.purchaseLot.findMany({
+        where: { code: { in: orphanLotCodes } },
+        select: {
+          id: true,
+          code: true,
+          purchaseDate: true,
+          supplier: true,
+          totalValue: true,
+          notes: true,
+        },
+      });
+      for (const pl of extraLots) {
+        lotsByCode.set(pl.code, {
+          id: pl.id,
+          code: pl.code,
+          purchaseDate: pl.purchaseDate.toISOString(),
+          supplier: pl.supplier?.trim() || null,
+          lineTotalCOP: pl.totalValue?.toFixed(0) ?? null,
+          notes: pl.notes?.trim() || null,
+        });
+      }
+    }
+
+    const lots = [...lotsByCode.values()].sort((a, b) => {
+      const ta = a.purchaseDate ? Date.parse(a.purchaseDate) : 0;
+      const tb = b.purchaseDate ? Date.parse(b.purchaseDate) : 0;
+      return tb - ta;
+    });
+
+    const saleLines = await this.prisma.saleLine.findMany({
+      where: { productId: product.id },
+      select: {
+        unitPrice: true,
+        sale: { select: { saleDate: true } },
+      },
+      orderBy: { sale: { saleDate: 'asc' } },
+    });
+
+    const salePriceHistory: Array<{
+      effectiveAt: string;
+      price: string;
+      kind?: string;
+      note?: string | null;
+    }> = [
+      {
+        effectiveAt: product.createdAt.toISOString(),
+        price: product.price.toFixed(0),
+        kind: 'catalogo',
+        note: 'Alta en catálogo',
+      },
+    ];
+
+    if (
+      product.updatedAt.getTime() - product.createdAt.getTime() > 60_000
+    ) {
+      salePriceHistory.push({
+        effectiveAt: product.updatedAt.toISOString(),
+        price: product.price.toFixed(0),
+        kind: 'catalogo',
+        note: 'Precio vigente en ficha',
+      });
+    }
+
+    const salePriceSeen = new Set<string>();
+    for (const sl of saleLines) {
+      const price = sl.unitPrice.toFixed(0);
+      const at = sl.sale.saleDate.toISOString();
+      const key = `${at}|${price}`;
+      if (salePriceSeen.has(key)) continue;
+      salePriceSeen.add(key);
+      salePriceHistory.push({
+        effectiveAt: at,
+        price,
+        kind: 'venta',
+        note: 'Precio en ticket',
+      });
+    }
+    salePriceHistory.sort(
+      (a, b) => Date.parse(a.effectiveAt) - Date.parse(b.effectiveAt),
+    );
+
+    const events: Array<{
+      at: string;
+      label: string;
+      detail?: string | null;
+    }> = [
+      {
+        at: product.createdAt.toISOString(),
+        label: 'Producto creado',
+        detail: product.name,
+      },
+    ];
+
+    if (product.traceModifiedAt) {
+      events.push({
+        at: product.traceModifiedAt.toISOString(),
+        label: 'Marca de revisión',
+        detail: 'Fecha declarada en la ficha',
+      });
+    }
+
+    if (product.recipe) {
+      events.push({
+        at: product.recipe.updatedAt.toISOString(),
+        label: 'Receta',
+        detail:
+          ingredientCount > 0
+            ? `${ingredientCount} insumo(s) en receta`
+            : 'Receta sin insumos',
+      });
+    }
+
+    if (product.updatedAt.getTime() - product.createdAt.getTime() > 60_000) {
+      events.push({
+        at: product.updatedAt.toISOString(),
+        label: 'Ficha actualizada',
+        detail: null,
+      });
+    }
+
+    events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+
+    let summary: string;
+    if (!product.recipe) {
+      summary = 'Sin receta: no hay lotes de compra enlazados por insumos.';
+    } else if (lots.length === 0) {
+      summary = `Receta con ${ingredientCount} insumo(s); sin lotes de compra vinculados.`;
+    } else {
+      const priceNote =
+        salePriceHistory.length > 1
+          ? ` · ${salePriceHistory.length} puntos de precio`
+          : '';
+      summary = `${lots.length} lote(s) de compra vía receta${priceNote}.`;
+    }
+
+    return {
+      productId: product.id,
+      productName: product.name,
+      lots,
+      lotsCount: lots.length,
+      salePriceHistory,
+      events,
+      summary,
     };
   }
 
@@ -600,6 +823,9 @@ export class ProductsService {
           ? { description: dto.description }
           : {}),
         ...(dto.size !== undefined ? { size: dto.size || null } : {}),
+        ...(dto.saleUnit !== undefined
+          ? { saleUnit: dto.saleUnit?.trim() || null }
+          : {}),
         ...(dto.imageUrl !== undefined
           ? { imageUrl: dto.imageUrl ?? null }
           : {}),

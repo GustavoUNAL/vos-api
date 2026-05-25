@@ -1,3 +1,5 @@
+/** Carga arandano-api/.env antes de cualquier validación que lea process.env. */
+import 'dotenv/config';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { WsAdapter } from '@nestjs/platform-ws';
@@ -19,7 +21,9 @@ function corsOriginOption():
       .filter(Boolean);
   }
   if (isProd) {
-    return true;
+    throw new Error(
+      'CORS_ORIGIN is required in production. Set it to a comma-separated list of allowed origins.',
+    );
   }
   const devDefaults = [
     'http://localhost:5173',
@@ -42,7 +46,24 @@ function corsOriginOption():
   };
 }
 
+function assertJwtSecret(): void {
+  const secret = process.env.JWT_SECRET?.trim() ?? '';
+  if (!secret) {
+    throw new Error('JWT_SECRET is required.');
+  }
+  if (isProd) {
+    if (secret.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters in production.');
+    }
+    const weak = ['dev-secret-change-me', 'change-me', 'secret', 'changeme'];
+    if (weak.some((w) => secret.toLowerCase().includes(w))) {
+      throw new Error('JWT_SECRET looks like a default/placeholder value. Set a strong random secret.');
+    }
+  }
+}
+
 async function bootstrap() {
+  assertJwtSecret();
   const app = await NestFactory.create(AppModule);
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalFilters(new AllExceptionsFilter());

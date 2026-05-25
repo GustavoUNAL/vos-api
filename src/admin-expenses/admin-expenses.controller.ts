@@ -1,8 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { AdminExpenseKind } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminExpensesService } from './admin-expenses.service';
 import { UpsertAdminExpenseDto } from './dto/upsert-admin-expense.dto';
 
+@UseGuards(JwtAuthGuard)
 @Controller('admin-expenses')
 export class AdminExpensesController {
   constructor(private readonly service: AdminExpensesService) {}

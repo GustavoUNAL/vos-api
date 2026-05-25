@@ -38,6 +38,10 @@ export class CreateProductDto {
 
   @IsString()
   @IsOptional()
+  saleUnit?: string;
+
+  @IsString()
+  @IsOptional()
   imageUrl?: string;
 
   @IsString()

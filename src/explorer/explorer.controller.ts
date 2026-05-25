@@ -5,9 +5,12 @@ import {
   Param,
   ParseIntPipe,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ExplorerService } from './explorer.service';
 
+@UseGuards(JwtAuthGuard)
 @Controller('explorer')
 export class ExplorerController {
   constructor(private readonly explorer: ExplorerService) {}

@@ -23,6 +23,14 @@ export class SaleLineInputDto {
   @Min(0)
   unitPrice!: number;
 
+  @IsString()
+  @IsOptional()
+  lineUnit?: string;
+
+  @IsString()
+  @IsOptional()
+  lineSize?: string;
+
   @IsNumber()
   @IsOptional()
   @Min(0)

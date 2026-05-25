@@ -40,6 +40,10 @@ export class UpdateProductDto {
 
   @IsString()
   @IsOptional()
+  saleUnit?: string;
+
+  @IsString()
+  @IsOptional()
   imageUrl?: string;
 
   @IsString()

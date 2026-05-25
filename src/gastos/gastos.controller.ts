@@ -1,8 +1,18 @@
-import { Body, Controller, Delete, Get, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { GastoKind, GastoType } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GastosService } from './gastos.service';
 import { UpsertGastoDto } from './dto/upsert-gasto.dto';
 
+@UseGuards(JwtAuthGuard)
 @Controller('gastos')
 export class GastosController {
   constructor(private readonly service: GastosService) {}

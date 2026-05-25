@@ -10,13 +10,16 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpsertRecipeDto } from './dto/upsert-recipe.dto';
 import { UpdateRecipeAdminDto } from './dto/update-recipe-admin.dto';
 import { ProductsService } from './products.service';
 
+@UseGuards(JwtAuthGuard)
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
@@ -66,6 +69,11 @@ export class ProductsController {
   @Put(':id/recipe/admin')
   updateRecipeAdmin(@Param('id') id: string, @Body() dto: UpdateRecipeAdminDto) {
     return this.productsService.updateRecipeAdminRate(id, dto.adminRate);
+  }
+
+  @Get(':id/history')
+  history(@Param('id') id: string) {
+    return this.productsService.getProductHistory(id);
   }
 
   @Get(':id')
