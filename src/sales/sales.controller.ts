@@ -34,6 +34,17 @@ export class SalesController {
     return this.salesService.listPaymentMethodsMeta();
   }
 
+  /** Agregado por día para la vista calendario. */
+  @Get('calendar')
+  calendar(
+    @Query('year', new DefaultValuePipe(new Date().getUTCFullYear()), ParseIntPipe)
+    year: number,
+    @Query('month', new DefaultValuePipe(new Date().getUTCMonth() + 1), ParseIntPipe)
+    month: number,
+  ) {
+    return this.salesService.getCalendar(year, month);
+  }
+
   @Get()
   findAll(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,

@@ -474,6 +474,65 @@ export class SalesService {
     });
   }
 
+  /**
+   * Agregado diario para la vista calendario. Devuelve, para el rango
+   * [year-month-01, fin-de-mes], `{ date, count, totalCOP }` por día con
+   * actividad. La agrupación usa la porción UTC de saleDate (consistente
+   * con cómo se serializa `saleDateOnly` en el listado).
+   */
+  async getCalendar(year: number, month: number) {
+    if (
+      !Number.isInteger(year) ||
+      year < 2000 ||
+      year > 2100 ||
+      !Number.isInteger(month) ||
+      month < 1 ||
+      month > 12
+    ) {
+      throw new BadRequestException('year/month fuera de rango.');
+    }
+    const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+    const end = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+
+    const rows = await this.prisma.sale.findMany({
+      where: { saleDate: { gte: start, lt: end } },
+      select: { saleDate: true, total: true },
+    });
+
+    const byDay = new Map<string, { count: number; total: Prisma.Decimal }>();
+    for (const r of rows) {
+      const day = r.saleDate.toISOString().slice(0, 10);
+      const prev = byDay.get(day);
+      const amount = r.total ?? new Prisma.Decimal(0);
+      if (prev) {
+        prev.count += 1;
+        prev.total = prev.total.add(amount);
+      } else {
+        byDay.set(day, { count: 1, total: new Prisma.Decimal(amount) });
+      }
+    }
+
+    const days = Array.from(byDay.entries())
+      .map(([date, agg]) => ({
+        date,
+        count: agg.count,
+        totalCOP: agg.total.toFixed(0),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      year,
+      month,
+      days,
+      totals: {
+        count: rows.length,
+        totalCOP: days
+          .reduce((acc, d) => acc.add(d.totalCOP), new Prisma.Decimal(0))
+          .toFixed(0),
+      },
+    };
+  }
+
   async findAll(params: PaginationParams) {
     const page = Math.max(1, Math.trunc(params.page));
     const limit = Math.min(100, Math.max(1, Math.trunc(params.limit)));
