@@ -1,21 +1,16 @@
 import {
-  BadRequestException,
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
-import { CategoryType, Prisma, RecipeCostKind } from '@prisma/client';
-import {
-  categoryDisplayName,
-  mapCategoryRelation,
-} from '../common/category-display-name';
-import { mapPurchaseLotNestedForApi } from '../common/purchase-lot-display-name';
-import { isCapitalAssetCategoryName } from '../common/inventory-capital-asset';
+import { Prisma, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { TenantContext } from '../tenant/tenant.types';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { UpsertRecipeDto } from './dto/upsert-recipe.dto';
+import { activeToStatus, mapProduct } from './product.mapper';
 
-type PaginationParams = {
+type ListOpts = {
   page: number;
   limit: number;
   search?: string;
@@ -25,1002 +20,168 @@ type PaginationParams = {
   sort?: 'name' | 'price_asc' | 'price_desc';
 };
 
-type IngredientStockStatus = 'AVAILABLE' | 'LOW' | 'DEPLETED' | 'ARCHIVED';
-
-type CacheEntry<T> = {
-  value: T;
-  freshUntil: number;
-  staleUntil: number;
-};
-
-function normalizeCostName(s: string): string {
-  return (s ?? '').normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
-}
-
-function isAdminCostLine(name: string): boolean {
-  return normalizeCostName(name).startsWith('administracion');
-}
-
-function isServiceOrIndirectCostLine(name: string): boolean {
-  const n = normalizeCostName(name);
-  if (n.includes('indirecto')) return true;
-  if (n.startsWith('agua')) return true;
-  if (n.startsWith('energia')) return true;
-  return false;
-}
-
-function ingredientStockStatus(
-  quantity: Prisma.Decimal,
-  minStock: Prisma.Decimal | null,
-  deletedAt: Date | null,
-  inventoryCategoryName?: string | null,
-): IngredientStockStatus {
-  if (deletedAt) return 'ARCHIVED';
-  if (isCapitalAssetCategoryName(inventoryCategoryName)) {
-    return 'AVAILABLE';
-  }
-  if (quantity.lte(0)) return 'DEPLETED';
-  if (minStock != null && quantity.lte(minStock)) return 'LOW';
-  return 'AVAILABLE';
-}
-
-/** Parsea `Inventory.supplier` generado por los scripts `seed-*-recipes.ts`. */
-function parseRecipeSheetSupplier(s: string | null | undefined): {
-  sheetUnitCost: string | null;
-  sheetQuantity: string | null;
-} {
-  if (!s?.trim()) {
-    return { sheetUnitCost: null, sheetQuantity: null };
-  }
-  const sep = ' | Cantidad (hoja): ';
-  const i = s.indexOf(sep);
-  if (i === -1) {
-    return { sheetUnitCost: s.trim(), sheetQuantity: null };
-  }
-  const head = s
-    .slice(0, i)
-    .replace(/^Costo unitario \(hoja\):\s*/i, '')
-    .trim();
-  const qty = s.slice(i + sep.length).trim();
-  return { sheetUnitCost: head || null, sheetQuantity: qty || null };
-}
-
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
-  private readonly freshTtlMs = 20_000;
-  private readonly staleTtlMs = 300_000;
-  private readonly listCache = new Map<string, CacheEntry<unknown>>();
-  private readonly detailCache = new Map<string, CacheEntry<unknown>>();
-  private readonly listInFlight = new Map<string, Promise<unknown>>();
-  private readonly detailInFlight = new Map<string, Promise<unknown>>();
 
-  private getCachedFresh<T>(
-    map: Map<string, CacheEntry<unknown>>,
-    key: string,
-  ): T | null {
-    const hit = map.get(key);
-    if (!hit) return null;
-    if (Date.now() > hit.staleUntil) {
-      map.delete(key);
-      return null;
-    }
-    if (Date.now() > hit.freshUntil) return null;
-    return hit.value as T;
-  }
+  private productInclude = {
+    category: true,
+  } as const;
 
-  private getCachedStale<T>(
-    map: Map<string, CacheEntry<unknown>>,
-    key: string,
-  ): T | null {
-    const hit = map.get(key);
-    if (!hit) return null;
-    if (Date.now() > hit.staleUntil) {
-      map.delete(key);
-      return null;
-    }
-    return hit.value as T;
-  }
-
-  private setCached<T>(
-    map: Map<string, CacheEntry<unknown>>,
-    key: string,
-    value: T,
-  ) {
-    const now = Date.now();
-    map.set(key, {
-      value,
-      freshUntil: now + this.freshTtlMs,
-      staleUntil: now + this.staleTtlMs,
+  private async ensureCategory(companyId: string, categoryId: string) {
+    const cat = await this.prisma.productCategory.findFirst({
+      where: { id: categoryId, companyId, active: true },
     });
-  }
-
-  private refreshListInBackground(key: string, run: () => Promise<unknown>) {
-    if (this.listInFlight.has(key)) return;
-    const task = run()
-      .catch(() => undefined)
-      .finally(() => this.listInFlight.delete(key));
-    this.listInFlight.set(key, task);
-  }
-
-  private refreshDetailInBackground(key: string, run: () => Promise<unknown>) {
-    if (this.detailInFlight.has(key)) return;
-    const task = run()
-      .catch(() => undefined)
-      .finally(() => this.detailInFlight.delete(key));
-    this.detailInFlight.set(key, task);
-  }
-
-  private invalidateProductsCache(productId?: string) {
-    this.listCache.clear();
-    if (productId) this.detailCache.delete(productId);
-    else this.detailCache.clear();
-  }
-
-  private async requireProductCategoryId(id: string) {
-    const c = await this.prisma.category.findFirst({
-      where: { id, type: CategoryType.PRODUCT },
-      select: { id: true },
-    });
-    if (!c) {
-      throw new NotFoundException('Product category not found');
+    if (!cat) {
+      throw new BadRequestException('Categoría inválida para esta empresa');
     }
-    return c.id;
+    return cat;
   }
 
-  async create(dto: CreateProductDto) {
-    const categoryId = await this.requireProductCategoryId(dto.categoryId);
-    const created = await this.prisma.product.create({
+  async create(tenant: TenantContext, dto: CreateProductDto) {
+    await this.ensureCategory(tenant.companyId, dto.categoryId);
+
+    const product = await this.prisma.product.create({
       data: {
-        name: dto.name,
-        price: new Prisma.Decimal(dto.price),
-        categoryId,
-        type: dto.type,
-        description: dto.description ?? '',
-        size: dto.size ?? null,
-        saleUnit: dto.saleUnit?.trim() || null,
-        imageUrl: dto.imageUrl ?? null,
-        active: dto.active ?? true,
+        companyId: tenant.companyId,
+        categoryId: dto.categoryId,
+        name: dto.name.trim(),
+        description: dto.description?.trim() ?? '',
+        salePrice: new Prisma.Decimal(dto.price),
+        cost: new Prisma.Decimal(dto.cost ?? 0),
         sku: dto.sku?.trim() || null,
-        ...(dto.unitCost !== undefined
-          ? { unitCost: new Prisma.Decimal(dto.unitCost) }
-          : {}),
-        ...(dto.traceModifiedAt !== undefined
-          ? {
-              traceModifiedAt: dto.traceModifiedAt
-                ? new Date(dto.traceModifiedAt)
-                : null,
-            }
-          : {}),
+        internalCode: dto.internalCode?.trim() || null,
+        primaryImageUrl: dto.imageUrl?.trim() || null,
+        status: activeToStatus(dto.active ?? true),
       },
-      include: { category: true },
+      include: this.productInclude,
     });
-    this.invalidateProductsCache();
-    return { ...created, category: mapCategoryRelation(created.category) };
+
+    return mapProduct(product);
   }
 
-  async findAll(params: PaginationParams) {
-    const cacheKey = JSON.stringify({
-      page: params.page,
-      limit: params.limit,
-      search: params.search?.trim() ?? '',
-      categoryId: params.categoryId?.trim() ?? '',
-      active: params.active ?? null,
-      type: params.type?.trim() ?? '',
-      sort: params.sort ?? 'name',
-    });
-    const cachedFresh = this.getCachedFresh<{
-      data: unknown[];
-      meta: {
-        page: number;
-        limit: number;
-        total: number;
-        hasNextPage: boolean;
-      };
-    }>(this.listCache, cacheKey);
-    if (cachedFresh) return cachedFresh;
-
-    const cachedStale = this.getCachedStale<{
-      data: unknown[];
-      meta: {
-        page: number;
-        limit: number;
-        total: number;
-        hasNextPage: boolean;
-      };
-    }>(this.listCache, cacheKey);
-    if (cachedStale) {
-      this.refreshListInBackground(cacheKey, async () => {
-        const fresh = await this.queryProductList(params);
-        this.setCached(this.listCache, cacheKey, fresh);
-        return fresh;
-      });
-      return cachedStale;
-    }
-
-    const inFlight = this.listInFlight.get(cacheKey);
-    if (inFlight) {
-      return (await inFlight) as {
-        data: unknown[];
-        meta: {
-          page: number;
-          limit: number;
-          total: number;
-          hasNextPage: boolean;
-        };
-      };
-    }
-
-    const task = this.queryProductList(params)
-      .then((response) => {
-        this.setCached(this.listCache, cacheKey, response);
-        return response;
-      })
-      .finally(() => this.listInFlight.delete(cacheKey));
-    this.listInFlight.set(cacheKey, task);
-    return (await task) as {
-      data: unknown[];
-      meta: {
-        page: number;
-        limit: number;
-        total: number;
-        hasNextPage: boolean;
-      };
-    };
-  }
-
-  private async queryProductList(params: PaginationParams) {
-    const page = Math.max(1, Math.trunc(params.page));
-    const limit = Math.min(100, Math.max(1, Math.trunc(params.limit)));
+  async findAll(tenant: TenantContext, opts: ListOpts) {
+    const page = Math.max(1, opts.page);
+    const limit = Math.min(Math.max(1, opts.limit), 100);
     const skip = (page - 1) * limit;
 
     const where: Prisma.ProductWhereInput = {
-      deletedAt: null,
-      ...(params.search?.trim().length
-        ? { name: { contains: params.search.trim(), mode: 'insensitive' } }
-        : {}),
-      ...(params.categoryId?.trim().length
-        ? { categoryId: params.categoryId.trim() }
-        : {}),
-      ...(params.active !== undefined ? { active: params.active } : {}),
-      ...(params.type?.trim().length ? { type: params.type.trim() } : {}),
+      companyId: tenant.companyId,
+      status: { not: 'ARCHIVED' },
     };
 
-    let orderBy: Prisma.ProductOrderByWithRelationInput = { name: 'asc' };
-    if (params.sort === 'price_asc') {
-      orderBy = { price: 'asc' };
-    } else if (params.sort === 'price_desc') {
-      orderBy = { price: 'desc' };
+    if (opts.search?.trim()) {
+      const q = opts.search.trim();
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { sku: { contains: q, mode: 'insensitive' } },
+        { internalCode: { contains: q, mode: 'insensitive' } },
+      ];
     }
 
-    const [total, data] = await this.prisma.$transaction([
+    if (opts.categoryId?.trim()) {
+      where.categoryId = opts.categoryId.trim();
+    }
+
+    if (opts.type?.trim()) {
+      where.category = { slug: opts.type.trim() };
+    }
+
+    if (opts.active === true) {
+      where.status = 'ACTIVE';
+    } else if (opts.active === false) {
+      where.status = { in: ['INACTIVE', 'DRAFT'] };
+    }
+
+    let orderBy: Prisma.ProductOrderByWithRelationInput = { name: 'asc' };
+    if (opts.sort === 'price_asc') orderBy = { salePrice: 'asc' };
+    if (opts.sort === 'price_desc') orderBy = { salePrice: 'desc' };
+
+    const [total, rows] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
+        orderBy,
         skip,
         take: limit,
-        orderBy,
-        include: { category: true },
+        include: this.productInclude,
       }),
     ]);
 
     return {
-      data: data.map((p) => ({
-        ...p,
-        category: mapCategoryRelation(p.category),
-      })),
-      meta: { page, limit, total, hasNextPage: skip + data.length < total },
+      data: rows.map(mapProduct),
+      meta: {
+        page,
+        limit,
+        total,
+        hasNextPage: skip + rows.length < total,
+      },
     };
   }
 
-  async getProductHistory(productId: string) {
+  async findOne(tenant: TenantContext, id: string) {
     const product = await this.prisma.product.findFirst({
-      where: { id: productId, deletedAt: null },
+      where: { id, companyId: tenant.companyId, status: { not: 'ARCHIVED' } },
       include: {
-        recipe: {
-          include: {
-            ingredients: {
-              include: {
-                inventoryItem: {
-                  include: {
-                    purchaseLot: true,
-                    purchaseLotLine: {
-                      include: { purchaseLot: true },
-                    },
-                  },
-                },
-              },
-              orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-            },
-          },
-        },
+        ...this.productInclude,
+        images: { orderBy: { sortOrder: 'asc' } },
       },
     });
-    if (!product) {
-      throw new NotFoundException('Product not found');
-    }
-
-    type LotRow = {
-      id?: string;
-      code: string;
-      purchaseDate?: string | null;
-      supplier?: string | null;
-      lineTotalCOP?: string | null;
-      notes?: string | null;
-    };
-
-    const lotsByCode = new Map<string, LotRow>();
-    const ingredientCount = product.recipe?.ingredients.length ?? 0;
-
-    for (const ing of product.recipe?.ingredients ?? []) {
-      const inv = ing.inventoryItem;
-      const line = inv.purchaseLotLine;
-      const pl = line?.purchaseLot ?? inv.purchaseLot;
-      const code = (pl?.code ?? inv.lot?.trim()) || null;
-      if (!code) continue;
-
-      const prev = lotsByCode.get(code);
-      const lineTotal =
-        line?.lineTotalCOP?.toFixed(0) ??
-        pl?.totalValue?.toFixed(0) ??
-        prev?.lineTotalCOP ??
-        null;
-
-      lotsByCode.set(code, {
-        id: pl?.id ?? prev?.id,
-        code,
-        purchaseDate:
-          pl?.purchaseDate?.toISOString() ?? prev?.purchaseDate ?? null,
-        supplier: pl?.supplier?.trim() || prev?.supplier || null,
-        lineTotalCOP: lineTotal,
-        notes:
-          pl?.notes?.trim() ||
-          line?.lineComment?.trim() ||
-          prev?.notes ||
-          null,
-      });
-    }
-
-    const orphanLotCodes = [
-      ...new Set(
-        (product.recipe?.ingredients ?? [])
-          .map((ing) => ing.inventoryItem.lot?.trim())
-          .filter((c): c is string => !!c && !lotsByCode.has(c)),
-      ),
-    ];
-    if (orphanLotCodes.length > 0) {
-      const extraLots = await this.prisma.purchaseLot.findMany({
-        where: { code: { in: orphanLotCodes } },
-        select: {
-          id: true,
-          code: true,
-          purchaseDate: true,
-          supplier: true,
-          totalValue: true,
-          notes: true,
-        },
-      });
-      for (const pl of extraLots) {
-        lotsByCode.set(pl.code, {
-          id: pl.id,
-          code: pl.code,
-          purchaseDate: pl.purchaseDate.toISOString(),
-          supplier: pl.supplier?.trim() || null,
-          lineTotalCOP: pl.totalValue?.toFixed(0) ?? null,
-          notes: pl.notes?.trim() || null,
-        });
-      }
-    }
-
-    const lots = [...lotsByCode.values()].sort((a, b) => {
-      const ta = a.purchaseDate ? Date.parse(a.purchaseDate) : 0;
-      const tb = b.purchaseDate ? Date.parse(b.purchaseDate) : 0;
-      return tb - ta;
-    });
-
-    const saleLines = await this.prisma.saleLine.findMany({
-      where: { productId: product.id },
-      select: {
-        unitPrice: true,
-        sale: { select: { saleDate: true } },
-      },
-      orderBy: { sale: { saleDate: 'asc' } },
-    });
-
-    const salePriceHistory: Array<{
-      effectiveAt: string;
-      price: string;
-      kind?: string;
-      note?: string | null;
-    }> = [
-      {
-        effectiveAt: product.createdAt.toISOString(),
-        price: product.price.toFixed(0),
-        kind: 'catalogo',
-        note: 'Alta en catálogo',
-      },
-    ];
-
-    if (
-      product.updatedAt.getTime() - product.createdAt.getTime() > 60_000
-    ) {
-      salePriceHistory.push({
-        effectiveAt: product.updatedAt.toISOString(),
-        price: product.price.toFixed(0),
-        kind: 'catalogo',
-        note: 'Precio vigente en ficha',
-      });
-    }
-
-    const salePriceSeen = new Set<string>();
-    for (const sl of saleLines) {
-      const price = sl.unitPrice.toFixed(0);
-      const at = sl.sale.saleDate.toISOString();
-      const key = `${at}|${price}`;
-      if (salePriceSeen.has(key)) continue;
-      salePriceSeen.add(key);
-      salePriceHistory.push({
-        effectiveAt: at,
-        price,
-        kind: 'venta',
-        note: 'Precio en ticket',
-      });
-    }
-    salePriceHistory.sort(
-      (a, b) => Date.parse(a.effectiveAt) - Date.parse(b.effectiveAt),
-    );
-
-    const events: Array<{
-      at: string;
-      label: string;
-      detail?: string | null;
-    }> = [
-      {
-        at: product.createdAt.toISOString(),
-        label: 'Producto creado',
-        detail: product.name,
-      },
-    ];
-
-    if (product.traceModifiedAt) {
-      events.push({
-        at: product.traceModifiedAt.toISOString(),
-        label: 'Marca de revisión',
-        detail: 'Fecha declarada en la ficha',
-      });
-    }
-
-    if (product.recipe) {
-      events.push({
-        at: product.recipe.updatedAt.toISOString(),
-        label: 'Receta',
-        detail:
-          ingredientCount > 0
-            ? `${ingredientCount} insumo(s) en receta`
-            : 'Receta sin insumos',
-      });
-    }
-
-    if (product.updatedAt.getTime() - product.createdAt.getTime() > 60_000) {
-      events.push({
-        at: product.updatedAt.toISOString(),
-        label: 'Ficha actualizada',
-        detail: null,
-      });
-    }
-
-    events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-
-    let summary: string;
-    if (!product.recipe) {
-      summary = 'Sin receta: no hay lotes de compra enlazados por insumos.';
-    } else if (lots.length === 0) {
-      summary = `Receta con ${ingredientCount} insumo(s); sin lotes de compra vinculados.`;
-    } else {
-      const priceNote =
-        salePriceHistory.length > 1
-          ? ` · ${salePriceHistory.length} puntos de precio`
-          : '';
-      summary = `${lots.length} lote(s) de compra vía receta${priceNote}.`;
-    }
-
+    if (!product) throw new NotFoundException('Producto no encontrado');
     return {
-      productId: product.id,
-      productName: product.name,
-      lots,
-      lotsCount: lots.length,
-      salePriceHistory,
-      events,
-      summary,
+      ...mapProduct(product),
+      images: product.images,
     };
   }
 
-  async findOne(id: string) {
-    const cachedFresh = this.getCachedFresh<unknown>(this.detailCache, id);
-    if (cachedFresh) return cachedFresh;
-
-    const cachedStale = this.getCachedStale<unknown>(this.detailCache, id);
-    if (cachedStale) {
-      this.refreshDetailInBackground(id, async () => {
-        const fresh = await this.queryProductDetail(id);
-        this.setCached(this.detailCache, id, fresh);
-        return fresh;
-      });
-      return cachedStale;
-    }
-
-    const inFlight = this.detailInFlight.get(id);
-    if (inFlight) return await inFlight;
-
-    const task = this.queryProductDetail(id)
-      .then((response) => {
-        this.setCached(this.detailCache, id, response);
-        return response;
-      })
-      .finally(() => this.detailInFlight.delete(id));
-    this.detailInFlight.set(id, task);
-    return await task;
-  }
-
-  private async queryProductDetail(id: string) {
-    const product = await this.prisma.product.findFirst({
-      where: { id, deletedAt: null },
-      include: {
-        category: true,
-        recipe: {
-          include: {
-            ingredients: {
-              include: {
-                inventoryItem: {
-                  include: { category: true, purchaseLot: true },
-                },
-              },
-              orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-            },
-            costs: { orderBy: { sortOrder: 'asc' } },
-          },
-        },
-      },
-    });
-    if (!product) {
-      throw new NotFoundException('Product not found');
-    }
-
-    const { recipe, ...rest } = product;
-    if (!recipe) {
-      return { ...rest, category: mapCategoryRelation(rest.category) };
-    }
-
-    const costs = recipe.costs.map((c) => ({
-      id: c.id,
-      kind: c.kind,
-      name: c.name,
-      quantity: c.quantity?.toString() ?? null,
-      unit: c.unit,
-      lineTotalCOP: c.lineTotalCOP.toFixed(0),
-      sheetUnitCost: c.sheetUnitCost,
-      sortOrder: c.sortOrder,
-    }));
-
-    const lotCodes = [
-      ...new Set(
-        recipe.ingredients
-          .map((i) => i.inventoryItem.lot)
-          .filter((c): c is string => !!c?.trim()),
-      ),
-    ];
-    const purchaseLotRows =
-      lotCodes.length > 0
-        ? await this.prisma.purchaseLot.findMany({
-            where: { code: { in: lotCodes } },
-            select: {
-              id: true,
-              code: true,
-              purchaseDate: true,
-              supplier: true,
-              traceModifiedAt: true,
-            },
-          })
-        : [];
-    const purchaseLotByCode = new Map(purchaseLotRows.map((p) => [p.code, p]));
-
-    const ingredients = recipe.ingredients.map((ing) => {
-      const inv = ing.inventoryItem;
-      const lineTotalCOP = new Prisma.Decimal(ing.quantity).mul(inv.unitCost);
-      const { sheetUnitCost, sheetQuantity } = parseRecipeSheetSupplier(
-        inv.supplier,
-      );
-      const lotCode = inv.lot?.trim() || null;
-      const pl = lotCode ? purchaseLotByCode.get(lotCode) : undefined;
-      const stockStatus = ingredientStockStatus(
-        inv.quantity,
-        inv.minStock,
-        inv.deletedAt,
-        inv.category?.name,
-      );
-      return {
-        id: ing.id,
-        sortOrder: ing.sortOrder,
-        inventoryItemId: ing.inventoryItemId,
-        ingredient: inv.name,
-        quantity: ing.quantity.toString(),
-        unit: ing.unit,
-        unitCostCOP: inv.unitCost.toString(),
-        lineTotalCOP: lineTotalCOP.toFixed(0),
-        sheetUnitCost,
-        sheetQuantity,
-        quantityOnHand: inv.quantity.toString(),
-        minStock: inv.minStock?.toString() ?? null,
-        inventoryCategoryName: inv.category
-          ? categoryDisplayName(inv.category.name)
-          : null,
-        lotCode,
-        purchaseLot: pl
-          ? mapPurchaseLotNestedForApi({
-              id: pl.id,
-              code: pl.code,
-              supplier: pl.supplier?.trim() || inv.supplier?.trim() || null,
-              purchaseDate: pl.purchaseDate,
-              traceModifiedAt: pl.traceModifiedAt,
-            })
-          : null,
-        inventoryArchived: inv.deletedAt != null,
-        stockStatus,
-      };
-    });
-
-    const hasUnavailableIngredient = ingredients.some(
-      (i) => i.stockStatus === 'DEPLETED' || i.stockStatus === 'ARCHIVED',
-    );
-    const productAvailable = product.active && !hasUnavailableIngredient;
-
-    const response = {
-      ...rest,
-      category: mapCategoryRelation(rest.category),
-      available: productAvailable,
-      recipe: {
-        recipeYield: recipe.recipeYield.toString(),
-        adminRate: recipe.adminRate.toString(),
-        costs,
-        ingredients,
-        available: productAvailable,
-      },
-    };
-    return response;
-  }
-
-  async getRecipeCostControls(productId: string) {
-    const product = await this.prisma.product.findFirst({
-      where: { id: productId, deletedAt: null },
-      include: {
-        recipe: {
-          include: {
-            ingredients: { include: { inventoryItem: true } },
-            costs: true,
-          },
-        },
-      },
-    });
-    if (!product) throw new NotFoundException('Product not found');
-    if (!product.recipe) {
-      return {
-        productId: product.id,
-        productName: product.name,
-        recipeId: null,
-        adminRate: '0.30',
-        totals: { materialsCOP: '0', servicesCOP: '0', baseCOP: '0' },
-      };
-    }
-
-    let materials = new Prisma.Decimal(0);
-    for (const ing of product.recipe.ingredients) {
-      materials = materials.add(
-        new Prisma.Decimal(ing.quantity).mul(ing.inventoryItem.unitCost),
-      );
-    }
-    let services = new Prisma.Decimal(0);
-    for (const c of product.recipe.costs) {
-      if (isServiceOrIndirectCostLine(c.name))
-        services = services.add(c.lineTotalCOP);
-    }
-    const base = materials.add(services);
-
-    return {
-      productId: product.id,
-      productName: product.name,
-      recipeId: product.recipe.id,
-      adminRate: product.recipe.adminRate.toString(),
-      totals: {
-        materialsCOP: materials.toFixed(0),
-        servicesCOP: services.toFixed(0),
-        baseCOP: base.toFixed(0),
-      },
-    };
-  }
-
-  async updateRecipeAdminRate(productId: string, adminRate: number) {
-    const product = await this.prisma.product.findFirst({
-      where: { id: productId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!product) throw new NotFoundException('Product not found');
-
-    // Si no existe receta todavía, no se puede recalcular (no hay base). Fuerza creación vía upsertRecipe.
-    const existing = await this.prisma.recipe.findUnique({
-      where: { productId },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw new BadRequestException('El producto no tiene receta aún');
-    }
-
-    await this.prisma.recipe.update({
-      where: { id: existing.id },
-      data: { adminRate: new Prisma.Decimal(adminRate) },
-    });
-
-    // Recalcula administración persistiendo receta (sin cambios de líneas).
-    const current = await this.prisma.product.findFirst({
-      where: { id: productId, deletedAt: null },
-      include: {
-        recipe: {
-          include: {
-            ingredients: true,
-            costs: true,
-          },
-        },
-      },
-    });
-    if (!current?.recipe) return this.findOne(productId);
-    await this.upsertRecipe(productId, {
-      recipeYield: Number(current.recipe.recipeYield.toString()),
-      adminRate,
-      ingredients: current.recipe.ingredients.map((i) => ({
-        inventoryItemId: i.inventoryItemId,
-        quantity: Number(i.quantity.toString()),
-        unit: i.unit,
-        sortOrder: i.sortOrder,
-      })),
-      costs: current.recipe.costs.map((c) => ({
-        kind: c.kind,
-        name: c.name,
-        quantity: c.quantity ? Number(c.quantity.toString()) : undefined,
-        unit: c.unit,
-        lineTotalCOP: Number(c.lineTotalCOP.toString()),
-        sheetUnitCost: c.sheetUnitCost ?? undefined,
-        sortOrder: c.sortOrder,
-      })),
-    });
-
-    this.invalidateProductsCache(productId);
-    return this.findOne(productId);
-  }
-
-  async update(id: string, dto: UpdateProductDto) {
+  async update(tenant: TenantContext, id: string, dto: UpdateProductDto) {
     const existing = await this.prisma.product.findFirst({
-      where: { id, deletedAt: null },
-      select: { id: true },
+      where: { id, companyId: tenant.companyId, status: { not: 'ARCHIVED' } },
     });
-    if (!existing) {
-      throw new NotFoundException('Product not found');
+    if (!existing) throw new NotFoundException('Producto no encontrado');
+
+    if (dto.categoryId) {
+      await this.ensureCategory(tenant.companyId, dto.categoryId);
     }
 
-    let categoryId: string | undefined;
+    const data: Prisma.ProductUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.description !== undefined) data.description = dto.description;
     if (dto.categoryId !== undefined) {
-      categoryId = await this.requireProductCategoryId(dto.categoryId);
+      data.category = { connect: { id: dto.categoryId } };
     }
+    if (dto.price !== undefined) data.salePrice = new Prisma.Decimal(dto.price);
+    if (dto.cost !== undefined) data.cost = new Prisma.Decimal(dto.cost);
+    if (dto.sku !== undefined) data.sku = dto.sku?.trim() || null;
+    if (dto.internalCode !== undefined) {
+      data.internalCode = dto.internalCode?.trim() || null;
+    }
+    if (dto.imageUrl !== undefined) {
+      data.primaryImageUrl = dto.imageUrl?.trim() || null;
+    }
+    if (dto.active !== undefined) data.status = activeToStatus(dto.active);
 
-    const updated = await this.prisma.product.update({
+    const product = await this.prisma.product.update({
       where: { id },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.price !== undefined
-          ? { price: new Prisma.Decimal(dto.price) }
-          : {}),
-        ...(categoryId !== undefined ? { categoryId } : {}),
-        ...(dto.type !== undefined ? { type: dto.type } : {}),
-        ...(dto.description !== undefined
-          ? { description: dto.description }
-          : {}),
-        ...(dto.size !== undefined ? { size: dto.size || null } : {}),
-        ...(dto.saleUnit !== undefined
-          ? { saleUnit: dto.saleUnit?.trim() || null }
-          : {}),
-        ...(dto.imageUrl !== undefined
-          ? { imageUrl: dto.imageUrl ?? null }
-          : {}),
-        ...(dto.active !== undefined ? { active: dto.active } : {}),
-        ...(dto.sku !== undefined ? { sku: dto.sku?.trim() || null } : {}),
-        ...(dto.unitCost !== undefined
-          ? {
-              unitCost:
-                dto.unitCost == null
-                  ? null
-                  : new Prisma.Decimal(dto.unitCost),
-            }
-          : {}),
-        ...(dto.traceModifiedAt !== undefined
-          ? {
-              traceModifiedAt: dto.traceModifiedAt
-                ? new Date(dto.traceModifiedAt)
-                : null,
-            }
-          : {}),
-      },
-      include: { category: true },
+      data,
+      include: this.productInclude,
     });
-    this.invalidateProductsCache(id);
-    return { ...updated, category: mapCategoryRelation(updated.category) };
+
+    return mapProduct(product);
   }
 
-  async remove(id: string) {
+  async remove(tenant: TenantContext, id: string) {
     const existing = await this.prisma.product.findFirst({
-      where: { id, deletedAt: null },
-      select: { id: true },
+      where: { id, companyId: tenant.companyId },
     });
-    if (!existing) {
-      throw new NotFoundException('Product not found');
-    }
+    if (!existing) throw new NotFoundException('Producto no encontrado');
 
-    const removed = await this.prisma.product.update({
+    await this.prisma.product.update({
       where: { id },
-      data: { deletedAt: new Date() },
-    });
-    this.invalidateProductsCache(id);
-    return removed;
-  }
-
-  async upsertRecipe(productId: string, dto: UpsertRecipeDto) {
-    const product = await this.prisma.product.findFirst({
-      where: { id: productId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!product) {
-      throw new NotFoundException('Product not found');
-    }
-
-    const ingredients = dto.ingredients ?? [];
-    const costsIn = dto.costs ?? [];
-
-    // Administración se recalcula siempre en backend (pero la tasa es editable por receta).
-    const costs = costsIn.filter((c) => !isAdminCostLine(c.name));
-
-    if (!ingredients.length && !costs.length) {
-      await this.prisma.recipe.deleteMany({ where: { productId } });
-      this.invalidateProductsCache(productId);
-      return this.findOne(productId);
-    }
-
-    const invIds =
-      ingredients.length > 0
-        ? [...new Set(ingredients.map((i) => i.inventoryItemId))]
-        : [];
-    const invRows =
-      invIds.length > 0
-        ? await this.prisma.inventory.findMany({
-            where: { id: { in: invIds }, deletedAt: null },
-            select: { id: true, unitCost: true },
-          })
-        : [];
-    if (invRows.length !== invIds.length) {
-      throw new BadRequestException(
-        'Uno o más insumos de inventario no existen o están archivados',
-      );
-    }
-    const invCostById = new Map(invRows.map((r) => [r.id, r.unitCost]));
-
-    // Admin rate: editable por receta (default 0.30 para receta nueva).
-    const adminRateDec =
-      dto.adminRate !== undefined ? new Prisma.Decimal(dto.adminRate) : null;
-
-    // Base: (costo insumos de inventario) + (servicios/indirectos)
-    let baseTotal = new Prisma.Decimal(0);
-    for (const ing of ingredients) {
-      const uc = invCostById.get(ing.inventoryItemId);
-      if (!uc) continue;
-      baseTotal = baseTotal.add(new Prisma.Decimal(ing.quantity).mul(uc));
-    }
-    for (const c of costs) {
-      if (!isServiceOrIndirectCostLine(c.name)) continue;
-      baseTotal = baseTotal.add(new Prisma.Decimal(c.lineTotalCOP));
-    }
-    // Si la receta existe, usa su adminRate actual cuando dto no lo provea.
-    const existingRecipe = await this.prisma.recipe.findUnique({
-      where: { productId },
-      select: { adminRate: true },
-    });
-    const effectiveRate =
-      adminRateDec ?? existingRecipe?.adminRate ?? new Prisma.Decimal(0.3);
-
-    const adminLineTotal = baseTotal.mul(effectiveRate).toDecimalPlaces(0);
-    const adminCostLine = adminLineTotal.gt(0)
-      ? {
-          kind: 'FIJO' as const,
-          name: 'Administración (30%)',
-          quantity: undefined,
-          unit: 'porción',
-          lineTotalCOP: Number(adminLineTotal.toString()),
-          sheetUnitCost: undefined,
-          sortOrder:
-            costs.length > 0
-              ? Math.max(...costs.map((x) => x.sortOrder ?? 0)) + 1
-              : 0,
-        }
-      : null;
-
-    const yieldDec = new Prisma.Decimal(dto.recipeYield);
-
-    await this.prisma.$transaction(async (tx) => {
-      let recipe = await tx.recipe.findUnique({ where: { productId } });
-      if (!recipe) {
-        recipe = await tx.recipe.create({
-          data: {
-            productId,
-            recipeYield: yieldDec,
-            adminRate: adminRateDec ?? new Prisma.Decimal(0.3),
-          },
-        });
-      } else {
-        await tx.recipe.update({
-          where: { id: recipe.id },
-          data: {
-            recipeYield: yieldDec,
-            ...(adminRateDec ? { adminRate: adminRateDec } : {}),
-          },
-        });
-        await tx.recipeIngredient.deleteMany({
-          where: { recipeId: recipe.id },
-        });
-        await tx.recipeCost.deleteMany({ where: { recipeId: recipe.id } });
-      }
-      if (ingredients.length > 0) {
-        await tx.recipeIngredient.createMany({
-          data: ingredients.map((ing, i) => ({
-            recipeId: recipe.id,
-            inventoryItemId: ing.inventoryItemId,
-            quantity: new Prisma.Decimal(ing.quantity),
-            unit: ing.unit,
-            sortOrder: ing.sortOrder ?? i,
-          })),
-        });
-      }
-      if (costs.length > 0) {
-        await tx.recipeCost.createMany({
-          data: costs.map((c, i) => ({
-            recipeId: recipe.id,
-            kind:
-              c.kind === 'VARIABLE'
-                ? RecipeCostKind.VARIABLE
-                : RecipeCostKind.FIJO,
-            name: c.name,
-            quantity:
-              c.quantity != null && c.quantity > 0
-                ? new Prisma.Decimal(c.quantity)
-                : null,
-            unit: c.unit,
-            lineTotalCOP: new Prisma.Decimal(c.lineTotalCOP),
-            sheetUnitCost: c.sheetUnitCost?.trim() || null,
-            sortOrder: c.sortOrder ?? i,
-          })),
-        });
-      }
-      if (adminCostLine) {
-        await tx.recipeCost.create({
-          data: {
-            recipeId: recipe.id,
-            kind: RecipeCostKind.FIJO,
-            name: adminCostLine.name,
-            quantity: null,
-            unit: adminCostLine.unit,
-            lineTotalCOP: new Prisma.Decimal(adminCostLine.lineTotalCOP),
-            sheetUnitCost: null,
-            sortOrder: adminCostLine.sortOrder,
-          },
-        });
-      }
+      data: { status: ProductStatus.ARCHIVED },
     });
 
-    this.invalidateProductsCache(productId);
-    return this.findOne(productId);
+    return { ok: true };
   }
 }

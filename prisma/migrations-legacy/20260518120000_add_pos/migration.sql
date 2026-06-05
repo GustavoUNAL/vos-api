@@ -1,4 +1,4 @@
--- POS (contrato arandano-front): mesas, órdenes, líneas y pagos
+-- POS (contrato vos-front): mesas, órdenes, líneas y pagos
 
 CREATE TYPE "PosTableStatus" AS ENUM ('FREE', 'OCCUPIED', 'RESERVED', 'CLOSING');
 CREATE TYPE "PosOrderStatus" AS ENUM ('OPEN', 'CLOSING', 'CLOSED', 'PAID');

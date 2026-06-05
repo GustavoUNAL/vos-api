@@ -1,483 +1,53 @@
-# arandano-api
+# vos-api — VOS AI Platform API
 
-API en [NestJS](https://nestjs.com/) con **Prisma** y **PostgreSQL**: menú, inventario, lotes de compra, aportes de socios, ventas y datos auxiliares.
+API NestJS + Prisma + PostgreSQL (Neon). Multi-empresa con módulo **Productos** activo.
 
-## Despliegue en la nube
-
-Guía paso a paso para servidor cloud / PaaS / Docker en VPS: **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**.
-
-Resumen rápido:
-
-1. Postgres gestionado + variable **`DATABASE_URL`** (con SSL si el proveedor lo pide).
-2. **`npx prisma migrate deploy`** (o `npm run db:migrate`) contra esa URL **antes** de tráfico real.
-3. Variables **`JWT_SECRET`**, **`NODE_ENV=production`**, **`CORS_ORIGIN`** (dominio del front).
-4. Imagen: **`Dockerfile`** en la raíz; ejemplo Compose producción: **`docker-compose.prod.yml`**.
-5. Comprobar **`GET /health`** (`database: up`).
-
-Desarrollo local, Docker de Postgres en `5433`, respaldos y scripts de datos siguen en las secciones siguientes.
-
-**CI/CD (GitHub):** en cada push a `main` corre build y tests (`.github/workflows/ci.yml`). Para aplicar migraciones o cargar datos en un Postgres en la nube sin tocar tu PC, usá el workflow manual **Cloud database** y los secretos descritos en [docs/DEPLOYMENT.md — GitHub Actions](./docs/DEPLOYMENT.md#github-actions-ci-y-base-en-la-nube).
-
-## Requisitos
-
-- Node.js (LTS recomendado)
-- PostgreSQL (local o remoto)
-- Variables en `.env` (al menos `DATABASE_URL`)
-
-### Postgres local con Docker (solo base de datos)
-
-Por defecto **`docker compose up -d`** levanta **solo Postgres** en **`127.0.0.1:5433`**, para seguir desarrollando el API con `npm run start:dev` en el host.
+## Inicio rápido
 
 ```bash
-cp .env.example .env
-docker compose up -d
+cp .env.example .env    # DATABASE_URL de Neon
 npm install
-npm run db:generate
 npm run db:migrate
-npm run db:seed
+npm run db:seed-platform
+npm run start:dev       # http://localhost:3000
 ```
 
-### Stack completo en Docker (Postgres + API + front)
+**Demo:** `admin@arandano.com` / `Arandano2026!` → **Arándano Café Bar**
 
-Un solo `docker-compose.yml`: el perfil **`full`** agrega **API** y **contenedor front** (Nginx sirviendo el build estático de Vite).
-
-```bash
-# 1) Copiá docker/front-build/Dockerfile a la raíz de tu repo Vite como "Dockerfile"
-#    (o dejá el placeholder si solo querés probar el stack).
-# 2) En .env (o export):
-#    FRONTEND_BUILD_CONTEXT=../tu-app-vite
-#    VITE_API_URL=http://localhost:3000
-npm run docker:stack
-```
-
-Opcional (datos demo): `docker compose exec api npx prisma db seed`
-
-- **Front:** `http://localhost:8080` (puerto `FRONT_STACK_PORT`).
-- **API:** `http://localhost:3000` (`API_STACK_PORT`).
-- **Postgres (host):** sigue en `5433` para herramientas locales; dentro de Docker el API usa `postgres:5432`.
-
-`npm run docker:stack:down` detiene y elimina contenedores **solo** de `api` y `frontend` (no apaga Postgres). Para apagar también Postgres: `docker compose down`. Los datos siguen en el volumen `arandano_pg_data` salvo que uses `docker compose down -v`.
-
-**Importante:** `docker compose down -v` **borra el volumen** y con él **toda la base**. Antes, haz respaldo:
-
-```bash
-npm run db:backup
-```
-
-Copia el archivo `backups/arandano-*.dump` a un lugar seguro (nube, otro disco). Para volver a cargar esa copia en una base vacía: `npm run db:restore-backup -- backups/arandano-....dump` (requiere `pg_restore`; sin confirmación interactiva: `SKIP_RESTORE_CONFIRM=1`). Detalle en `backups/README.md`.
-
-Scripts npm:
-
-- `npm run docker:stack` / `docker:stack:down` / `docker:stack:logs` — API + front + Postgres (perfil `full` en `docker-compose.yml`).
-- **`npm run db:local:up:terminal`** (solo macOS útil) — abre **Terminal.app** en una ventana nueva y ahí ejecuta `docker compose up -d`, para dejar Postgres en segundo plano mientras en Cursor sigues con migraciones y `start:dev`.
-
-Si aparece **Cannot connect to the Docker daemon**, abre **Docker Desktop** en macOS y espera a que esté “running”; luego `npm run db:local:up` o `db:local:up:terminal` de nuevo.
-
-Sin Docker, Postgres con Homebrew:
-
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-createdb arandano
-```
-
-En `.env`, por ejemplo: `DATABASE_URL="postgresql://TU_USUARIO@localhost:5432/arandano"` (en local Homebrew muchas veces no hay contraseña).
-
-**Error `Cannot connect to the Docker daemon`:** abre la app **Docker Desktop** en macOS y espera a que diga que está en ejecución; luego vuelve a ejecutar `npm run db:local:up`. Si no quieres usar Docker, usa Postgres con Homebrew:
-
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-createdb arandano
-```
-
-En `.env`: `DATABASE_URL="postgresql://TU_USUARIO@localhost:5432/arandano"` (Homebrew suele usar tu usuario del sistema sin contraseña en local).
-
-### Persistencia y despliegue (no perder información)
-
-| Objetivo | Qué usar |
-| -------- | -------- |
-| Datos locales sobreviven reinicios de Docker | Volumen `arandano_pg_data` en `docker-compose.yml` (ya configurado). |
-| Copia de seguridad antes de cambiar de PC o borrar volumen | `npm run db:backup` → archivo `.dump` en `backups/` (no va a git). |
-| Nueva máquina / Postgres vacío | `docker compose up -d` → `npm run db:migrate` → `npm run db:restore-backup -- …` **o** `npm run db:restore-from-repo-data` desde JSON/CSV del repo. |
-| Producción (Railway u otro Postgres gestionado) | El proveedor suele **persistir** la BD; despliega la API con la misma `DATABASE_URL`. Tras cada deploy: `npm run db:migrate` (o `prisma migrate deploy` en CI). |
-| Igualar local y remoto | En `.env`: `DATABASE_URL` (local) + `REMOTE_DATABASE_URL` (remoto). `PG_COPY_DIRECTION=pull npm run db:pg-copy-database` trae remoto → local; `push` envía local → remoto (**peligroso** si sobrescribes prod sin backup). |
-
-Cliente PostgreSQL en tu Mac: los scripts `db:backup`, `db:restore-backup` y `db:pg-copy-database` necesitan `pg_dump` / `pg_restore` (paquete `postgresql` / `libpq` con Homebrew).
-
-## Instalación
-
-```bash
-npm install
-npm run db:generate
-```
-
-## Aplicación
-
-```bash
-npm run start:dev    # desarrollo con recarga
-npm run build        # compilar
-npm run start:prod   # producción (tras build)
-npm run test         # tests unitarios
-```
-
-## API (rutas y funcionalidades)
-
-Por defecto **no hay prefijo global** (`/api`), así que las rutas cuelgan directo del host (ej. `http://localhost:3000`).
-
-### Convenciones para el frontend
-
-- **Base URL**: `http://localhost:3000` (o el dominio donde despliegues).
-- **Auth**: usa header `Authorization: Bearer <accessToken>` (por ahora solo se exige en `/auth/me`).
-- **Paginación**: `page` (1-based) y `limit` (máx 100) cuando aplique.
-- **Fechas**: se envían como ISO string (`YYYY-MM-DD` o `YYYY-MM-DDTHH:mm:ss.sssZ`).
-
-### Salud
-
-- `GET /` — respuesta simple (health/hello).
-- `GET /health` — comprueba que Postgres responde (`SELECT 1`). Útil para el front o monitoreo.
-
-Errores HTTP devuelven JSON `{ "statusCode", "message", "path", "code"?, "hint"? }`. El campo `hint` orienta al usuario (p. ej. migraciones o `DATABASE_URL`). CORS en local permite por defecto orígenes típicos de Vite (`localhost:5173`, etc.); en producción define `CORS_ORIGIN` con el dominio del front.
-
-### Auth (`/auth`)
-
-Autenticación JWT para roles `ADMIN` / `EMPLEADO`.
-
-- `POST /auth/login` — devuelve `accessToken` (Bearer) + `user`.
-
-  Body:
-
-```json
-{ "email": "admin@arandano.local", "password": "admin123" }
-```
-
-  Response:
-
-```json
-{
-  "accessToken": "…",
-  "user": { "sub": "usr_…", "email": "…", "name": "…", "role": "ADMIN" }
-}
-```
-
-- `GET /auth/me` — devuelve el payload del JWT (requiere `Authorization: Bearer <token>`).
-
-Variables:
-- `JWT_SECRET` (recomendado en prod)
-- `JWT_EXPIRES_IN` (ej. `7d`, `12h`)
-
-### Productos (`/products`)
-
-- `POST /products` — crea un producto.
-
-  Body:
-
-```json
-{
-  "name": "Café negro artesanal",
-  "price": 7000,
-  "categoryId": "cat_…",
-  "type": "bebida",
-  "description": "Opcional",
-  "size": "Opcional",
-  "imageUrl": "Opcional",
-  "active": true
-}
-```
-
-- `GET /products` — lista paginada.
-  - **Query**: `page`, `limit`, `search`, `categoryId`, `active` (`true|false`), `type`, `sort` (`name|price_asc|price_desc`).
-
-  Ejemplo:
-
-```text
-GET /products?page=1&limit=20&search=cafe&active=true&sort=name
-```
-
-- `GET /products/:id` — detalle de producto + receta (si existe).
-  - **Incluye receta**:
-    - **`recipe.ingredients`** (insumos físicos): `quantityOnHand`, `minStock`, `stockStatus` (`AVAILABLE|LOW|DEPLETED|ARCHIVED`), `lotCode`, `purchaseLot` (si coincide con `purchase_lots.code`), `inventoryArchived`, `sortOrder`.
-    - **`recipe.costs`** (líneas de costeo): `kind` (`FIJO|VARIABLE`), `lineTotalCOP`, `sheetUnitCost`, `sortOrder`.
-  - **Disponibilidad**:
-    - `available`: `true` si `product.active === true` y **ningún ingrediente** está `DEPLETED`/`ARCHIVED`.
-    - `recipe.available`: mismo flag (duplicado dentro de `recipe` para facilidad).
-- `PATCH /products/:id` — actualiza campos del producto (incluye `active`).
-
-  Body (todos opcionales):
-
-```json
-{ "price": 7500, "active": false }
-```
-
-- `DELETE /products/:id` — soft-delete (`deletedAt`).
-- `PUT /products/:id/recipe` — crea o reemplaza receta.
-  - **Body**: `recipeYield`, `adminRate?`, `ingredients?[]`, `costs?[]`.
-  - `ingredients[]`: `inventoryItemId`, `quantity`, `unit`, `sortOrder?`.
-  - `costs[]`: `kind`, `name`, `quantity?`, `unit`, `lineTotalCOP`, `sheetUnitCost?`, `sortOrder?`.
-  - Nota: `ingredients` enlaza inventario físico (impacta stock en ventas). `costs` vive en la tabla `costos` y **no** crea inventario.
-  - **Administración (30%)**:
-    - El backend **siempre recalcula** la línea `Administración (…)` y **ignora** cualquier línea enviada que empiece por “Administración…”.
-    - Fórmula: \(\text{adminRate}\) de \((\text{costo insumos de inventario}) + (\text{servicios/indirectos})\).
-    - Servicios/indirectos se identifican por nombre (contiene `Indirecto` o empieza por `Agua`/`Energía`).
-    - `adminRate` es editable por receta (default `0.30`).
-
-- `GET /products/:id/recipe/cost-controls` — devuelve `adminRate` y totales base (`materialsCOP`, `servicesCOP`, `baseCOP`).
-- `PUT /products/:id/recipe/admin` — actualiza `adminRate` del producto (recalcula administración automáticamente).
-
-  Ejemplo:
-
-```json
-{
-  "recipeYield": 1,
-  "ingredients": [
-    { "inventoryItemId": "inv_…", "quantity": 15, "unit": "g", "sortOrder": 0 }
-  ],
-  "costs": [
-    {
-      "kind": "FIJO",
-      "name": "Administración (30%)",
-      "unit": "porción",
-      "lineTotalCOP": 637,
-      "sortOrder": 10
-    }
-  ]
-}
-```
-
-### Recetas (`/recipes`)
-
-- `GET /recipes` — catálogo de recetas (por producto).
-  - **Query**: `categoryId?`.
-  - **Incluye**: `productActive`, `ingredientCount`, `costLineCount`, `depletedMaterialCount`, `lowStockMaterialCount`.
-- `GET /recipes/costs` — líneas en `costos` agrupadas por producto:
-  - `products[]`: cada producto trae `fixed[]` y `variable[]`, además de `rows[]` (flat ordenado) + `totals` por producto.
-  - `rows[]`: versión “flat” global (una fila por costo) para tablas.
-  - `totals`: suma global (`fixedCOP`, `variableCOP`, `totalCOP`).
-
-### Inventario (`/inventory`)
-
-- `POST /inventory` — crea ítem.
-
-  Body:
-
-```json
-{
-  "name": "Café molido",
-  "categoryId": "cat_…",
-  "quantity": 1000,
-  "unit": "g",
-  "unitCost": 81.5,
-  "supplier": "Opcional",
-  "lot": "Opcional",
-  "minStock": 200
-}
-```
-
-- `GET /inventory` — lista paginada.
-  - **Query**: `page`, `limit`, `search`, `categoryId`.
-- `GET /inventory/:id` — detalle.
-- `PATCH /inventory/:id` — actualiza.
-
-  Body (todos opcionales):
-
-```json
-{ "quantity": 800, "unitCost": 90 }
-```
-
-- `DELETE /inventory/:id` — archiva (`deletedAt`).
-
-### Lotes de compra (`/purchase-lots`)
-
-Los lotes son históricos y se enlazan por `inventory.lot` ↔ `purchase_lots.code`.
-
-- `GET /purchase-lots` — lista paginada.
-  - **Query**: `page`, `limit`, `search`, `dateFrom`, `dateTo`.
-- `GET /purchase-lots/:id` — detalle.
-- `PATCH /purchase-lots/:id` — actualiza (`purchaseDate`, `supplier`, `notes`, `totalValue`).
-
-  Body (todos opcionales):
-
-```json
-{ "purchaseDate": "2026-04-06", "supplier": "Proveedor", "totalValue": 123000 }
-```
-
-### Ventas (`/sales`)
-
-- `POST /sales` — crea venta con líneas.
-
-  Body:
-
-```json
-{
-  "saleDate": "2026-04-06T10:00:00.000Z",
-  "paymentMethod": "efectivo",
-  "source": "MANUAL",
-  "mesa": "5",
-  "notes": "Opcional",
-  "userId": "usr_…",
-  "lines": [
-    {
-      "productId": "prd_…",
-      "productName": "Café negro artesanal",
-      "quantity": 1,
-      "unitPrice": 7000,
-      "costAtSale": 1500,
-      "profit": 5500
-    }
-  ]
-}
-```
-
-- `GET /sales` — lista paginada.
-  - **Query**: `page`, `limit`, `search`, `source`, `dateFrom`, `dateTo`.
-  - **Respuesta** (`data[]`): `saleDate` (ISO), **`saleDateOnly`** (`YYYY-MM-DD`), `createdAt`, `updatedAt`, **`total`** (número COP, para tablas), **`totalCOP`** (string), `displayPerson` (nombre o `—`), `recordedByName` / `recordedByUserId`, **`lineCount`**, `paymentMethod`, `source`, `mesa`, `notes`, `userId`, `cartId`, `user`, `cart` (incluye `cart.user` si existe), `payments[]`, `paymentSummary`, `counts`.
-- `GET /sales/:id` — detalle completo para el front.
-  - Igual que el listado en cabecera (`total`, `totalCOP`, `saleDate`, `saleDateOnly`, `displayPerson`, …), más: **`lines`** con `unitPrice` / `lineTotal` (número), `lineSubtotalCOP`, costo/utilidad, producto ampliado, **`lineSummary`**, **`cart.items`** y **`cart.user`**, **`payments`** con `metadata`, **`stockMovements`**.
-- `PATCH /sales/:id` — actualiza cabecera (fecha, método, mesa, notas, usuario, source).
-
-  Body (todos opcionales):
-
-```json
-{ "notes": "Cerrado", "paymentMethod": "tarjeta" }
-```
-
-- `PUT /sales/:id/lines` — reemplaza todas las líneas y recalcula total.
-
-  Body:
-
-```json
-{
-  "lines": [
-    { "productId": "prd_…", "productName": "Café", "quantity": 2, "unitPrice": 7000 }
-  ]
-}
-```
-
-### Explorador de tablas (`/explorer`) — “gestión” tipo DB browser (solo lectura)
-
-- `GET /explorer/tables` — lista de tablas expuestas.
-- `GET /explorer/tables/:slug?limit=50&offset=0` — filas + columnas (paginado, `limit` máx 500).
-
-Tablas expuestas (slugs): `users`, `categories`, `products`, `inventory`, `purchase_lots`, `recipes`, `recipe_ingredients`, `costos`, `carts`, `cart_items`, `sales`, `sale_lines`, `payments`, `stock_movements`, `expenses`, `partners`, `partner_contributions`, `tasks`.
-
-### Gastos administrativos base (`/admin-expenses`)
-
-Tabla para guardar los **valores base** (mensuales) de: arriendo, agua, luz, internet, seguridad y salarios. Sirve para costeo/planeación; no reemplaza la tabla `expenses` (gastos transaccionales).
-
-- `GET /admin-expenses` — lista todos los valores base.
-- `PUT /admin-expenses` — upsert por `kind` (único).
-
-Body:
-
-```json
-{ "kind": "ARRIENDO", "name": "Arriendo local", "period": "MONTHLY", "amountCOP": 3500000, "active": true }
-```
-
-- `DELETE /admin-expenses/:kind` — elimina el registro (por `kind`).
-
-### Gastos base (`/gastos`)
-
-Tabla `gastos` para planeación/tablero (fijos vs variables).
-
-- `GET /gastos` — devuelve:
-  - `fixed[]` (mensuales) y `variable[]` (operativos)
-  - `items[]` (flat, todos los gastos)
-  - `fixedByType[]` / `variableByType[]` para render por secciones
-  - `totals` (`fixedCOP`, `variableCOP`, `totalCOP`)
-- `PUT /gastos` — upsert por `(kind,type)` (único).
-
-Body:
-
-```json
-{ "kind": "FIJO", "type": "ARRIENDO", "name": "Arriendo", "period": "MONTHLY", "amountCOP": 3500000, "active": true }
-```
-
-- `DELETE /gastos?kind=FIJO&type=ARRIENDO` — borra un gasto por su clave compuesta.
-
-## Base de datos
-
-### Migraciones
-
-```bash
-npm run db:migrate      # prisma migrate deploy (CI / prod)
-npm run db:migrate:dev  # crear/aplicar migración en desarrollo
-```
-
-Incluye la tabla `purchase_lots` (lotes de compra históricos enlazados por `inventory.lot`) y la tabla **`costos`** (`RecipeCost`): costeo de receta con **`FIJO`** vs **`VARIABLE`**, sin crear filas en `inventory`.
-
-- **`recipe_ingredients`**: solo enlaces a inventario físico (descuenta stock al vender).
-- **`costos`**: líneas de la hoja de costos (materiales sin stock, indirectos, etc.).
-
-Tras desplegar la migración de `costos`, si ya tenías recetas sembradas con inventario “Recetas (costeo)” o lotes `seed:receta:…`, ejecuta una vez:
-
-```bash
-npm run db:migrate-recipe-costs-to-costos
-```
-
-Luego puedes volver a sembrar menú con `npm run db:seed-menu-recipes`. El detalle de producto expone `recipe.costs` e `recipe.ingredients` (ya no un único `recipe.lines`).
-
-### Verificar consistencia de datos locales
-
-Comprueba que `inventory.json`, `inventory-purchase-lots.tsv` y los `productId` de ingredientes en `recipes.json` estén alineados:
-
-```bash
-npm run db:verify-data
-```
-
-Última verificación esperada: **222** ítems de inventario, **30** lotes distintos, **222** líneas en el TSV con los mismos `item_id`, y recetas sin referencias rotas.
-
-### Inventario, socios y lotes
-
-Los ítems viven en `prisma/data/tables/inventory.json` (ids estables `inv-…`). El export tabular de lotes se regenera desde ese JSON:
+## Scripts principales
 
 | Comando | Descripción |
-| --------|-------------|
-| `npm run db:export-inventory-lots-tsv` | Escribe `prisma/data/inventory-purchase-lots.tsv` |
-| `npm run db:import-inventory-partners` | Upsert de `inventory` + `PartnerContribution` (INSUMO) inferido por socio |
-| `npm run db:register-purchase-lots` | Upsert de `purchase_lots` (agregados por código de lote) |
-| `npm run db:backfill-purchase-lot-dates-from-code` | Ajusta `purchase_lots.purchase_date` infiriéndola del código de lote. Si la tabla está vacía, usa `--from-inventory` para crear/actualizar lotes desde `inventory.lot`. `--dry-run` solo lista cambios |
+|---------|-------------|
+| `npm run start:dev` | API desarrollo |
+| `npm run build` | Compilar producción |
+| `npm run start:prod` | Ejecutar `dist/` |
+| `npm run db:migrate` | `prisma migrate deploy` |
+| `npm run db:seed-platform` | Empresa, admin, categorías, productos demo |
+| `npm run db:studio` | Prisma Studio |
 
-Orden sugerido en una base nueva (tras migraciones):
+## Rutas API (plataforma v2)
 
-1. **`npm run db:register-purchase-lots`** — crea filas en `purchase_lots` desde `inventory.json` / TSV (necesario antes del inventario por la FK `inventory.lot` → `purchase_lots.code`).
-2. **`npm run db:import-inventory-partners`** — upsert de `inventory` + aportes.
+| Método | Ruta | Auth |
+|--------|------|------|
+| `POST` | `/auth/login` | No |
+| `GET` | `/auth/me` | JWT |
+| `POST` | `/auth/switch-company` | JWT |
+| `GET` | `/products` | JWT + `X-Company-Id` |
+| `POST/PATCH/DELETE` | `/products` | JWT + permisos RBAC |
+| `GET` | `/categories` | JWT + tenant |
+| `GET` | `/navigation` | No |
+| `GET` | `/health` | No |
 
-Atajo (mismo orden + productos CSV + conteos de ítems por lote):
+## VPS
 
 ```bash
-npm run db:restore-from-repo-data
+docker compose -f docker-compose.vps.yml --profile full up -d --build
 ```
 
-Opciones útiles: `--dry-run` en ambos scripts; el de socios acepta `--skip-delete-contributions` para no borrar aportes marcados con el prefijo de importación.
+Ver [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) y `../.env.vps.example`.
 
-### Otros scripts de datos
+## Esquema
 
-| Comando | Descripción |
-| --------|-------------|
-| `npm run db:backup` | Volcado completo de `DATABASE_URL` → `backups/arandano-*.dump` (`pg_dump`; no se sube a git) |
-| `npm run db:restore-backup -- archivo.dump` | Restaura volcado sobre `DATABASE_URL` (`pg_restore --clean`) |
-| `npm run db:import-organized` | Import desde `prisma/data/organized-dump.json` (asigna ids nuevos; no preserva `inv-…` del JSON de inventario) |
-| `npm run db:sync-products` | Productos desde `prisma/data/lista-productos.csv` |
-| `npm run db:import-sales-json` | Ventas desde JSON |
-| `npm run db:backfill-sale-lines` | Rellena costos en líneas de venta |
-| `npm run db:purge-soft-deleted` | Elimina físicamente productos soft-deleted |
-| `npm run db:seed-menu-recipes` | Siembra recetas de menú (cafetería, bar, comida) |
-| `npm run db:seed-cafeteria-recipes` | Solo cafetería; tablas en [docs/recetario-cafeteria.md](./docs/recetario-cafeteria.md) |
-| `npm run db:seed-bar-cocteles-shots-recipes` | Michelada, cócteles y shots; tablas en [docs/recetario-bar.md](./docs/recetario-bar.md) |
-| `npm run db:seed-comida-recipes` | Tostadas, hot dog, combo; tablas en [docs/recetario-comida.md](./docs/recetario-comida.md) |
-
-Exploración: `npm run db:studio`.
-
-## Estructura relevante
-
-- `prisma/schema.prisma` — modelos (`Inventory`, `RecipeCost` → tabla `costos`, `PurchaseLot`, …)
-- `prisma/data/tables/` — tablas en JSON para dumps / import
-- `scripts/` — importadores y utilidades de datos
-
-## Documentación NestJS
-
-Plantilla original del framework: [documentación NestJS](https://docs.nestjs.com).
-
-## Licencia
-
-UNLICENSED (privado).
+- Activo: `prisma/schema.prisma` (multi-tenant)
+- Legacy: `prisma/schema.legacy.prisma` (referencia v1)
+- Diseño: [../docs/database/VOS_PLATFORM_DESIGN.md](../docs/database/VOS_PLATFORM_DESIGN.md)

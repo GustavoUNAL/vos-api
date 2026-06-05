@@ -1,7 +1,7 @@
 # Stack para VPS: PostgreSQL persistente + API + front (perfil `full`).
 #
 # Requisitos en el servidor: Docker Engine + plugin Compose.
-# Archivo `.env` en la raíz de arandano-api con al menos:
+# Archivo `.env` en la raíz de vos-api con al menos:
 #   POSTGRES_PASSWORD=...
 #   JWT_SECRET=...
 #   CORS_ORIGIN=https://tu-dominio-o-ip    (o http://IP:PUERTO_FRONT en pruebas)
@@ -10,7 +10,7 @@
 # Solo base de datos:
 #   docker compose -f docker-compose.server.yml up -d
 #
-# BD + API + front (ajusta FRONTEND_* si tus carpetas no son hermanas bajo ~/projects/arandano_app):
+# BD + API + front (ajusta FRONTEND_* si tus carpetas no son hermanas bajo ~/projects/vos_app):
 #   docker compose -f docker-compose.server.yml --profile full up -d --build
 #
 # La contraseña de Postgres debe ser simple en la URL (letras, números; evitá @ : / en POSTGRES_PASSWORD).
@@ -18,7 +18,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: arandano-postgres-server
+    container_name: vos-postgres-server
     restart: unless-stopped
     ports:
       # Solo localhost: útil si corrés migraciones/node en el host; no expone la BD a internet.
@@ -26,14 +26,14 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}
-      POSTGRES_DB: ${POSTGRES_DB:-arandano}
+      POSTGRES_DB: ${POSTGRES_DB:-vos}
     volumes:
-      - arandano_server_pg_data:/var/lib/postgresql/data
+      - vos_server_pg_data:/var/lib/postgresql/data
     healthcheck:
       test:
         [
           'CMD-SHELL',
-          'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-arandano}',
+          'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-vos}',
         ]
       interval: 5s
       timeout: 5s
@@ -45,8 +45,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: arandano-api:latest
-    container_name: arandano-api-server
+    image: vos-api:latest
+    container_name: vos-api-server
     restart: unless-stopped
     ports:
       - '${API_SERVER_PORT:-3000}:3000'
@@ -54,7 +54,7 @@ services:
       NODE_ENV: production
       PORT: '3000'
       LISTEN_HOST: '0.0.0.0'
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-arandano}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vos}
       JWT_SECRET: ${JWT_SECRET:?Definí JWT_SECRET en .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
@@ -72,14 +72,14 @@ services:
   frontend:
     profiles: ['full']
     build:
-      context: ${FRONTEND_BUILD_CONTEXT:-../arandano-front}
-      dockerfile: ${FRONTEND_DOCKERFILE:-../arandano-api/docker/front-build/Dockerfile}
+      context: ${FRONTEND_BUILD_CONTEXT:-../vos-front}
+      dockerfile: ${FRONTEND_DOCKERFILE:-../vos-api/docker/front-build/Dockerfile}
       args:
         # Default solo para que `docker compose up -d` (sin perfil full) no falle al parsear.
         # Con perfil full definí VITE_API_URL en .env (URL que usa el navegador para el API).
         VITE_API_URL: ${VITE_API_URL:-http://127.0.0.1:3000}
-    image: arandano-frontend-server:latest
-    container_name: arandano-frontend-server
+    image: vos-frontend-server:latest
+    container_name: vos-frontend-server
     restart: unless-stopped
     ports:
       - '${FRONT_SERVER_PORT:-8080}:80'
@@ -87,4 +87,4 @@ services:
       - api
 
 volumes:
-  arandano_server_pg_data:
+  vos_server_pg_data:

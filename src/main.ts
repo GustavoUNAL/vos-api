@@ -1,4 +1,4 @@
-/** Carga arandano-api/.env antes de cualquier validación que lea process.env. */
+/** Carga vos-api/.env antes de cualquier validación que lea process.env. */
 import 'dotenv/config';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';

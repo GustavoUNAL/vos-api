@@ -22,9 +22,9 @@ async function main() {
     const passwordHash = await bcrypt.hash('admin123', 10);
 
     const admin = await prisma.user.upsert({
-      where: { email: 'admin@arandano.local' },
+      where: { email: 'admin@vos.ai.local' },
       create: {
-        email: 'admin@arandano.local',
+        email: 'admin@vos.ai.local',
         passwordHash,
         name: 'Administrador',
         role: UserRole.ADMIN,
@@ -175,7 +175,7 @@ async function main() {
     const partner = await prisma.partner.create({
       data: {
         name: 'Socio demo',
-        email: 'socio@arandano.local',
+        email: 'socio@vos.ai.local',
         active: true,
       },
     });

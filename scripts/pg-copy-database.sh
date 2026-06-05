@@ -54,7 +54,7 @@ fi
 command -v pg_dump >/dev/null || { echo "Instale pg_dump (PostgreSQL client)." >&2; exit 1; }
 command -v pg_restore >/dev/null || { echo "Instale pg_restore (PostgreSQL client)." >&2; exit 1; }
 
-TMP_DUMP="$(mktemp -t arandano-pg.XXXXXX.dump)"
+TMP_DUMP="$(mktemp -t vos-pg.XXXXXX.dump)"
 cleanup() { rm -f "$TMP_DUMP"; }
 trap cleanup EXIT
 

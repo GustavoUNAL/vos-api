@@ -1,0 +1,59 @@
+# VPS — API + front contra Postgres gestionado (Neon, RDS, etc.).
+# No incluye Postgres local: DATABASE_URL apunta a tu base en la nube.
+#
+# En vos-api/.env (no commitear):
+#   DATABASE_URL=postgresql://...@ep-xxx.neon.tech/neondb?sslmode=require
+#   JWT_SECRET=...   (≥32 chars, openssl rand -base64 48)
+#   CORS_ORIGIN=http://TU_IP:8080,https://tu-dominio.com
+#   VITE_API_URL=http://TU_IP:3000
+#   FRONTEND_BUILD_CONTEXT=../vos-front
+#   RUN_MIGRATIONS_ON_START=true
+#
+# Levantar:
+#   docker compose -f docker-compose.vps.yml --profile full up -d --build
+#
+# Solo API:
+#   docker compose -f docker-compose.vps.yml up -d --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vos-api:latest
+    container_name: vos-api-vps
+    restart: unless-stopped
+    ports:
+      - '${API_SERVER_PORT:-3000}:3000'
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      LISTEN_HOST: '0.0.0.0'
+      DATABASE_URL: ${DATABASE_URL:?Definí DATABASE_URL (Neon u otro Postgres)}
+      JWT_SECRET: ${JWT_SECRET:?Definí JWT_SECRET en .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:?Definí CORS_ORIGIN con la URL del front}
+      RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-true}
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/health']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+  frontend:
+    profiles: ['full']
+    build:
+      context: ${FRONTEND_BUILD_CONTEXT:-../vos-front}
+      dockerfile: ${FRONTEND_DOCKERFILE:-Dockerfile}
+      args:
+        VITE_API_URL: ${VITE_API_URL:?Definí VITE_API_URL (URL pública del API)}
+        VITE_PLATFORM_MODE: ${VITE_PLATFORM_MODE:-true}
+    image: vos-frontend:latest
+    container_name: vos-frontend-vps
+    restart: unless-stopped
+    ports:
+      - '${FRONT_SERVER_PORT:-8080}:80'
+    depends_on:
+      api:
+        condition: service_healthy

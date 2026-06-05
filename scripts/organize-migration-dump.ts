@@ -214,7 +214,7 @@ function parseArgs() {
   const argv = process.argv.slice(2);
   let input = path.resolve(
     process.cwd(),
-    '../ARANDANO/data/migration-dump.json',
+    '../vos.ai/data/migration-dump.json',
   );
   let output = path.resolve(process.cwd(), 'prisma/data/organized-dump.json');
   let split = false;

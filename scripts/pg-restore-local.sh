@@ -2,8 +2,8 @@
 # Restaura un volcado .dump (custom) sobre DATABASE_URL.
 # Usa --clean --if-exists: borra objetos en destino antes de importar. Haz backup antes si la BD tiene datos que quieras conservar.
 #
-# Uso: npm run db:restore-backup -- backups/arandano-20260108-120000.dump
-#      bash scripts/pg-restore-local.sh backups/arandano-....dump
+# Uso: npm run db:restore-backup -- backups/vos-20260108-120000.dump
+#      bash scripts/pg-restore-local.sh backups/vos-....dump
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,7 +22,7 @@ fi
 FILE="${1:-}"
 if [[ -z "$FILE" || ! -f "$FILE" ]]; then
   echo "Uso: bash scripts/pg-restore-local.sh <archivo.dump>" >&2
-  echo "Ejemplo: npm run db:restore-backup -- backups/arandano-20260108-120000.dump" >&2
+  echo "Ejemplo: npm run db:restore-backup -- backups/vos-20260108-120000.dump" >&2
   exit 1
 fi
 

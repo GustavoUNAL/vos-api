@@ -5,12 +5,12 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import type { JwtPayload } from './jwt.types';
+import { SwitchCompanyDto } from './dto/switch-company.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  /** Anti-bruteforce: 5 intentos por minuto por IP. */
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('login')
   login(@Body() dto: LoginDto) {
@@ -20,7 +20,15 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: JwtPayload) {
-    return user;
+    return this.auth.me(user);
+  }
+
+  @Post('switch-company')
+  @UseGuards(JwtAuthGuard)
+  switchCompany(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: SwitchCompanyDto,
+  ) {
+    return this.auth.switchCompany(user.sub, dto.companyId);
   }
 }
-

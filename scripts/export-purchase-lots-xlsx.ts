@@ -101,7 +101,7 @@ async function main(): Promise<void> {
     });
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'arandano-api';
+    wb.creator = 'vos-api';
     wb.created = new Date();
 
     // --- Hoja 0: Leyenda ---

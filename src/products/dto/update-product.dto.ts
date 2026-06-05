@@ -1,67 +1,52 @@
 import {
   IsBoolean,
-  IsDateString,
-  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  IsUrl,
   Min,
-  ValidateIf,
 } from 'class-validator';
 
 export class UpdateProductDto {
-  @IsString()
   @IsOptional()
-  @IsNotEmpty()
+  @IsString()
   name?: string;
 
-  @IsNumber()
   @IsOptional()
+  @IsNumber()
   @Min(0)
   price?: number;
 
-  @IsString()
   @IsOptional()
-  @IsNotEmpty()
+  @IsString()
   categoryId?: string;
 
-  @IsString()
   @IsOptional()
-  @IsNotEmpty()
+  @IsString()
   type?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   description?: string;
 
-  @IsString()
   @IsOptional()
-  size?: string;
+  @IsString()
+  sku?: string;
 
-  @IsString()
   @IsOptional()
-  saleUnit?: string;
+  @IsString()
+  internalCode?: string;
 
-  @IsString()
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  cost?: number;
+
+  @IsOptional()
+  @IsUrl({ require_tld: false })
   imageUrl?: string;
 
-  @IsString()
   @IsOptional()
-  sku?: string | null;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  unitCost?: number | null;
-
   @IsBoolean()
-  @IsOptional()
   active?: boolean;
-
-  /** ISO 8601, o `null` para borrar. Trazabilidad (distinta de `updatedAt` automático). */
-  @IsOptional()
-  @ValidateIf((_, v) => v != null)
-  @IsDateString()
-  traceModifiedAt?: string | null;
 }

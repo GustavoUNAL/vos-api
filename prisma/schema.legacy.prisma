@@ -1,0 +1,733 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums (labels stored in UPPERCASE in PostgreSQL)
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  EMPLEADO
+  MESERO
+  CAJERO
+}
+
+enum PosTableStatus {
+  FREE
+  OCCUPIED
+  RESERVED
+  CLOSING
+}
+
+enum PosOrderStatus {
+  OPEN
+  CLOSING
+  CLOSED
+  PAID
+}
+
+enum CategoryType {
+  PRODUCT
+  INVENTORY
+  EXPENSE
+}
+
+enum SaleSource {
+  CART
+  AI
+  MANUAL
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum PaymentGateway {
+  STRIPE
+  WOMPI
+  MERCADOPAGO
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  SALE
+  ADJUSTMENT
+  WASTE
+}
+
+enum CartStatus {
+  ACTIVE
+  CHECKED_OUT
+  ABANDONED
+}
+
+enum PartnerContributionType {
+  DINERO
+  INSUMO
+}
+
+/// Costeo de receta (no inventario físico): fijos vs variables.
+enum RecipeCostKind {
+  FIJO
+  VARIABLE
+}
+
+/// Gastos administrativos fijos para costeo (valores base mensuales).
+enum AdminExpenseKind {
+  ARRIENDO
+  AGUA
+  LUZ
+  INTERNET
+  SEGURIDAD
+  SALARIOS
+}
+
+enum AdminExpensePeriod {
+  MONTHLY
+}
+
+/// Gastos base para planeación (fijos vs variables).
+enum GastoKind {
+  FIJO
+  VARIABLE
+}
+
+enum GastoPeriod {
+  MONTHLY
+}
+
+enum GastoType {
+  // Fijos (mensuales)
+  ARRIENDO
+  SALARIOS
+  AGUA
+  LUZ
+  GAS
+  INTERNET
+  PLATAFORMA
+  IMPUESTOS
+  SEGURIDAD
+
+  // Variables (operativos)
+  LIMPIEZA
+  TRANSPORTE
+  MANTENIMIENTO
+  COMISIONES
+  EMPAQUES
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         UserRole @default(EMPLEADO)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  carts          Cart[]
+  sales          Sale[]          @relation("SaleRecordedBy")
+  expenses       Expense[]
+  stockMovements StockMovement[] @relation("StockMovementUser")
+  tasks          Task[]          @relation("TaskAssignee")
+  posOrders      PosOrder[]      @relation("PosOrderUser")
+
+  @@index([email], map: "idx_users_email")
+  @@index([role], map: "idx_users_role")
+  @@index([active], map: "idx_users_active")
+  @@map("users")
+}
+
+model Category {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  type      CategoryType
+  parentId  String?      @map("parent_id")
+  parent    Category?    @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[]   @relation("CategoryChildren")
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  products          Product[]
+  inventoryItems    Inventory[]
+  expenses          Expense[]
+  purchaseLotLines  PurchaseLotLine[]
+
+  @@index([parentId], map: "idx_categories_parent_id")
+  @@index([type], map: "idx_categories_type")
+  @@map("categories")
+}
+
+model Product {
+  id          String    @id @default(cuid())
+  name        String
+  description String    @default("")
+  price       Decimal   @db.Decimal(12, 2)
+  categoryId  String    @map("category_id")
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  type        String
+  imageUrl    String?   @map("image_url")
+  size        String?
+  /// Unidad por defecto en ventas (und, porción, oz, etc.).
+  saleUnit    String?   @map("sale_unit")
+  active      Boolean   @default(true)
+  sku         String?   @unique
+  unitCost    Decimal?  @map("unit_cost") @db.Decimal(12, 2)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  /// Fecha de última modificación/revisión declarada (trazabilidad; editable; distinta de `updated_at`).
+  traceModifiedAt DateTime? @map("trace_modified_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  recipe    Recipe?
+  saleLines     SaleLine[]
+  cartItems     CartItem[]
+  posOrderLines PosOrderLine[]
+
+  @@index([categoryId], map: "idx_products_category")
+  @@index([sku], map: "idx_products_sku")
+  @@index([deletedAt], map: "idx_products_deleted_at")
+  @@index([active], map: "idx_products_active")
+  @@index([type], map: "idx_products_type")
+  @@index([traceModifiedAt], map: "idx_products_trace_modified_at")
+  @@map("products")
+}
+
+/// Estado físico actual del insumo: existencias, costo unitario, mínimos.
+/// El consumo acumulado y mermas viven en `stock_movements` (SALE, OUT, WASTE, etc.).
+///
+/// `lot` referencia `purchase_lots.code` (FK). Si `lot` es null, el ítem no está asignado a una compra/lote.
+model Inventory {
+  id         String   @id @default(cuid())
+  name       String
+  categoryId String   @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  quantity  Decimal   @db.Decimal(12, 4)
+  unit      String
+  unitCost  Decimal   @map("unit_cost") @db.Decimal(12, 2)
+  supplier  String?
+  /// Código de lote = `purchase_lots.code` (obligatorio que exista la fila de compra si no es null).
+  lot       String?
+  purchaseLot PurchaseLot? @relation(fields: [lot], references: [code], onDelete: Restrict, onUpdate: Cascade)
+  /// Código numérico escaneable (EAN-13 interno); único por fila de inventario.
+  internalBarcode String? @unique @map("internal_barcode")
+  /// Mismo código en varias compras/lotes para agrupar trazabilidad del “mismo producto”.
+  traceProductCode String? @map("trace_product_code")
+  minStock  Decimal?  @map("min_stock") @db.Decimal(12, 4)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  recipeIngredients    RecipeIngredient[]
+  stockMovements       StockMovement[]
+  partnerContributions PartnerContribution[]
+  purchaseLotLine      PurchaseLotLine?
+
+  @@index([categoryId], map: "idx_inventory_category")
+  @@index([deletedAt], map: "idx_inventory_deleted_at")
+  @@index([lot], map: "idx_inventory_lot")
+  @@index([traceProductCode], map: "idx_inventory_trace_product_code")
+  @@map("inventory")
+}
+
+/// Evento de compra (entrada financiera): proveedor, monto pagado, fecha.
+/// No reemplaza el stock físico (`inventory` + `stock_movements`); resume la compra / factura.
+///
+/// Relación con inventario: `code` = `inventory.lot` (mismo string). `item_count` se mantiene
+/// alineado con el número de ítems activos enlazados vía la API/sincronización.
+/// Con `purchase_lot_lines`, `total_value` se persiste como `sumLineTotalsCOP` de esas líneas.
+/// Sin líneas, `total_value` es registro manual o agregados importados (no Σ valorización de stock).
+model PurchaseLot {
+  id           String   @id @default(cuid())
+  /// Clave de enlace con `inventory.lot` (única).
+  code         String   @unique
+  /// Título legible en panel (opcional). `code` sigue enlazando inventario y factura.
+  name         String?
+  purchaseDate DateTime @map("purchase_date") @db.Timestamptz(6)
+  supplier     String?
+  notes        String?
+
+  /// Ítems de inventario activos con `inventory.lot` = `code` (sincronizado desde API).
+  itemCount  Int      @default(0) @map("item_count")
+  /// Monto comprobante (COP). Con filas en `purchase_lot_lines`, debe igualar `sumLineTotalsCOP` (ver `src/common/purchase-lot-line-math.ts`).
+  totalValue Decimal? @map("total_value") @db.Decimal(12, 2)
+  /// Fecha de última modificación/revisión declarada (trazabilidad; editable; distinta de `updated_at`).
+  traceModifiedAt DateTime? @map("trace_modified_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  inventoryItems   Inventory[]
+  purchaseLotLines PurchaseLotLine[]
+
+  @@index([purchaseDate], map: "idx_purchase_lots_purchase_date")
+  @@index([traceModifiedAt], map: "idx_purchase_lots_trace_modified_at")
+  @@map("purchase_lots")
+}
+
+/// Línea de comprobante / factura de compra: cantidades y costos históricos (no se recalculan al consumir existencias).
+model PurchaseLotLine {
+  id              String @id @default(cuid())
+  purchaseLotCode String @map("purchase_lot_code")
+  purchaseLot     PurchaseLot @relation(fields: [purchaseLotCode], references: [code], onDelete: Cascade, onUpdate: Cascade)
+
+  inventoryItemId String?    @unique @map("inventory_item_id")
+  inventoryItem   Inventory? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  lineName   String    @map("line_name")
+  categoryId String?   @map("category_id")
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  quantityPurchased     Decimal @map("quantity_purchased") @db.Decimal(12, 4)
+  unit                  String
+  purchaseUnitCostCOP Decimal @map("purchase_unit_cost_cop") @db.Decimal(12, 2)
+  /// Total línea COP (enteros al persistir; convención `lineTotalForPurchaseAggregationCOP`).
+  lineTotalCOP          Decimal @map("line_total_cop") @db.Decimal(12, 2)
+  /// Notas por producto en este lote (visible en detalle de comprobante).
+  lineComment String? @map("line_comment")
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([purchaseLotCode], map: "idx_purchase_lot_lines_lot_code")
+  @@map("purchase_lot_lines")
+}
+
+/// Una receta por producto (`product_id` único). Columna SQL `yield` mapeada a `recipeYield` (evita palabra reservada en TS).
+model Recipe {
+  id        String  @id @default(cuid())
+  productId String  @unique @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  recipeYield Decimal @default(1) @map("yield") @db.Decimal(12, 4)
+  /// Porcentaje de administración (ej. 0.30 = 30%). Editable por receta.
+  adminRate  Decimal @default(0.30) @map("admin_rate") @db.Decimal(5, 4)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  ingredients RecipeIngredient[]
+  costs       RecipeCost[]
+
+  @@index([productId], map: "idx_recipes_product_id")
+  @@map("recipes")
+}
+
+/// Líneas de costo de la hoja (indirectos, materiales sin stock, etc.). Tabla `costos`.
+model RecipeCost {
+  id             String         @id @default(cuid())
+  recipeId       String         @map("recipe_id")
+  recipe         Recipe         @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  kind           RecipeCostKind
+  name           String
+  quantity       Decimal?       @db.Decimal(12, 4)
+  unit           String
+  lineTotalCOP   Decimal        @map("line_total_cop") @db.Decimal(12, 2)
+  sheetUnitCost  String?        @map("sheet_unit_cost")
+  sortOrder      Int            @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([recipeId], map: "idx_costos_recipe_id")
+  @@map("costos")
+}
+
+model RecipeIngredient {
+  id              String    @id @default(cuid())
+  recipeId        String    @map("recipe_id")
+  recipe          Recipe    @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  inventoryItemId String    @map("inventory_item_id")
+  inventoryItem   Inventory @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  quantity  Decimal @db.Decimal(12, 4)
+  unit      String
+  sortOrder Int     @default(0) @map("sort_order")
+
+  @@index([recipeId], map: "idx_recipe_ingredients_recipe_id")
+  @@index([inventoryItemId], map: "idx_recipe_ingredients_inventory_item_id")
+  @@map("recipe_ingredients")
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String?    @map("user_id")
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId String?    @map("session_id")
+  status    CartStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  items CartItem[]
+  sales Sale[]
+
+  @@index([userId], map: "idx_carts_user_id")
+  @@index([sessionId], map: "idx_carts_session_id")
+  @@index([status], map: "idx_carts_status")
+  @@map("carts")
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String  @map("cart_id")
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  quantity  Decimal @db.Decimal(12, 4)
+  unitPrice Decimal @map("unit_price") @db.Decimal(12, 2)
+
+  @@index([cartId], map: "idx_cart_items_cart_id")
+  @@index([productId], map: "idx_cart_items_product_id")
+  @@map("cart_items")
+}
+
+/// Cliente habitual (código legible C001, C002, …).
+model Client {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sales Sale[]
+
+  @@index([name], map: "idx_clients_name")
+  @@index([active], map: "idx_clients_active")
+  @@map("clients")
+}
+
+model Sale {
+  id            String     @id @default(cuid())
+  /// Código legible de venta (V001, V002, …). Coincide con `id` en histórico importado.
+  code          String?    @unique
+  saleDate      DateTime   @map("sale_date") @db.Timestamptz(6)
+  total         Decimal    @db.Decimal(12, 2)
+  paymentMethod String?    @map("payment_method")
+  source        SaleSource @default(MANUAL)
+
+  userId String? @map("user_id")
+  user   User?   @relation("SaleRecordedBy", fields: [userId], references: [id], onDelete: SetNull)
+  cartId String? @map("cart_id")
+  cart   Cart?   @relation(fields: [cartId], references: [id], onDelete: SetNull)
+
+  clientId String? @map("client_id")
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  mesa  String?
+  notes String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lines          SaleLine[]
+  payments       Payment[]
+  stockMovements StockMovement[]
+  posOrder       PosOrder?
+
+  @@index([saleDate], map: "idx_sales_sale_date")
+  @@index([userId], map: "idx_sales_user_id")
+  @@index([cartId], map: "idx_sales_cart_id")
+  @@index([clientId], map: "idx_sales_client_id")
+  @@index([source], map: "idx_sales_source")
+  @@map("sales")
+}
+
+model SaleLine {
+  id          String   @id @default(cuid())
+  /// Código legible de línea (D001, D002, …).
+  code        String?  @unique
+  saleId      String   @map("sale_id")
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId   String?  @map("product_id")
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName String   @map("product_name")
+  /// Unidad en el ticket (und, porción, etc.).
+  lineUnit    String?  @map("line_unit")
+  /// Tamaño / presentación en el ticket (6 oz, 330 ml, etc.).
+  lineSize    String?  @map("line_size")
+
+  quantity   Decimal  @db.Decimal(12, 4)
+  unitPrice  Decimal  @map("unit_price") @db.Decimal(12, 2)
+  costAtSale Decimal? @map("cost_at_sale") @db.Decimal(12, 2)
+  profit     Decimal? @db.Decimal(12, 2)
+
+  @@index([saleId], map: "idx_sale_lines_sale_id")
+  @@index([productId], map: "idx_sale_lines_product_id")
+  @@map("sale_lines")
+}
+
+model Payment {
+  id               String         @id @default(cuid())
+  saleId           String         @map("sale_id")
+  sale             Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  gateway          PaymentGateway
+  gatewayPaymentId String?        @unique @map("gateway_payment_id")
+  amount           Decimal        @db.Decimal(12, 2)
+  status           PaymentStatus  @default(PENDING)
+  metadata         Json?          @db.JsonB
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([saleId], map: "idx_payments_sale_id")
+  @@index([gatewayPaymentId], map: "idx_payments_gateway_id")
+  @@index([status], map: "idx_payments_status")
+  @@map("payments")
+}
+
+/// Historial físico: entradas (IN), salidas por venta (SALE), salidas manuales (OUT), mermas (WASTE), ajustes (ADJUSTMENT).
+model StockMovement {
+  id              String    @id @default(cuid())
+  inventoryItemId String    @map("inventory_item_id")
+  inventoryItem   Inventory @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  saleId          String?   @map("sale_id")
+  sale            Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  userId          String?   @map("user_id")
+  user            User?     @relation("StockMovementUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  type         StockMovementType
+  quantity     Decimal           @db.Decimal(12, 4)
+  unit         String
+  reason       String?
+  notes        String?
+  movementDate DateTime          @map("movement_date") @db.Timestamptz(6)
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([inventoryItemId], map: "idx_stock_movements_inventory_item_id")
+  @@index([saleId], map: "idx_stock_movements_sale_id")
+  @@index([userId], map: "idx_stock_movements_user_id")
+  @@index([movementDate], map: "idx_stock_movements_date")
+  @@index([type], map: "idx_stock_movements_type")
+  @@map("stock_movements")
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  description String
+  amount      Decimal  @db.Decimal(12, 2)
+  expenseDate DateTime @map("expense_date") @db.Timestamptz(6)
+
+  categoryId String   @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  type      String
+  relatedTo String?  @map("related_to")
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([expenseDate], map: "idx_expenses_expense_date")
+  @@index([categoryId], map: "idx_expenses_category")
+  @@index([userId], map: "idx_expenses_user_id")
+  @@map("expenses")
+}
+
+/// Valores base de gastos administrativos (no son movimientos contables).
+model AdminExpense {
+  id       String           @id @default(cuid())
+  kind     AdminExpenseKind @unique
+  name     String
+  period   AdminExpensePeriod @default(MONTHLY)
+  amountCOP Decimal         @map("amount_cop") @db.Decimal(12, 2)
+  active   Boolean          @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([active], map: "idx_admin_expenses_active")
+  @@map("admin_expenses")
+}
+
+/// Tabla principal de gastos base (para tablero/planeación).
+model Gasto {
+  id        String     @id @default(cuid())
+  kind      GastoKind
+  type      GastoType
+  name      String
+  period    GastoPeriod @default(MONTHLY)
+  amountCOP Decimal    @map("amount_cop") @db.Decimal(12, 2)
+  active    Boolean    @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([kind, type], map: "gastos_kind_type_key")
+  @@index([kind], map: "idx_gastos_kind")
+  @@index([active], map: "idx_gastos_active")
+  @@map("gastos")
+}
+
+model Partner {
+  id     String  @id @default(cuid())
+  name   String
+  email  String?
+  phone  String?
+  active Boolean @default(true)
+  notes  String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  contributions PartnerContribution[]
+
+  @@index([email], map: "idx_partners_email")
+  @@index([active], map: "idx_partners_active")
+  @@map("partners")
+}
+
+model PartnerContribution {
+  id        String                  @id @default(cuid())
+  partnerId String                  @map("partner_id")
+  partner   Partner                 @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  type      PartnerContributionType
+
+  amount          Decimal?   @db.Decimal(12, 2)
+  inventoryItemId String?    @map("inventory_item_id")
+  inventoryItem   Inventory? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  quantity        Decimal?   @db.Decimal(12, 4)
+
+  notes            String?
+  contributionDate DateTime @map("contribution_date") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([partnerId], map: "idx_partner_contributions_partner_id")
+  @@index([inventoryItemId], map: "idx_partner_contributions_inventory_item_id")
+  @@index([contributionDate], map: "idx_partner_contributions_date")
+  @@index([type], map: "idx_partner_contributions_type")
+  @@map("partner_contributions")
+}
+
+model Task {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+  category    String?
+  priority    String?
+
+  completed    Boolean @default(false)
+  assignedToId String? @map("assigned_to")
+  assignedTo   User?   @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  dueDate     DateTime? @map("due_date") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  tags        String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([completed], map: "idx_tasks_completed")
+  @@index([assignedToId], map: "idx_tasks_assigned_to")
+  @@index([dueDate], map: "idx_tasks_due_date")
+  @@map("tasks")
+}
+
+// ---------------------------------------------------------------------------
+// POS (contrato vos-front)
+// ---------------------------------------------------------------------------
+
+model PosTable {
+  id         String         @id @default(cuid())
+  number     Int            @unique
+  name       String
+  section    String?
+  capacity   Int?
+  notes      String?
+  guestCount Int?           @map("guest_count")
+  status     PosTableStatus @default(FREE)
+  deletedAt  DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  orders PosOrder[]
+
+  @@index([status], map: "idx_pos_tables_status")
+  @@index([section], map: "idx_pos_tables_section")
+  @@index([deletedAt], map: "idx_pos_tables_deleted_at")
+  @@map("pos_tables")
+}
+
+model PosOrder {
+  id          String         @id @default(cuid())
+  tableId     String         @map("table_id")
+  table       PosTable       @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  userId      String?        @map("user_id")
+  user        User?          @relation("PosOrderUser", fields: [userId], references: [id], onDelete: SetNull)
+  status      PosOrderStatus @default(OPEN)
+  taxRate     Decimal        @default(0.08) @map("tax_rate") @db.Decimal(5, 4)
+  subtotalCOP Decimal        @default(0) @map("subtotal_cop") @db.Decimal(18, 0)
+  taxCOP      Decimal        @default(0) @map("tax_cop") @db.Decimal(18, 0)
+  totalCOP    Decimal        @default(0) @map("total_cop") @db.Decimal(18, 0)
+  openedAt    DateTime       @default(now()) @map("opened_at") @db.Timestamptz(6)
+  closedAt    DateTime?      @map("closed_at") @db.Timestamptz(6)
+  paidAt      DateTime?      @map("paid_at") @db.Timestamptz(6)
+  saleId      String?        @unique @map("sale_id")
+  sale        Sale?          @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  deletedAt   DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lines    PosOrderLine[]
+  payments PosPayment[]
+
+  @@index([tableId], map: "idx_pos_orders_table_id")
+  @@index([status], map: "idx_pos_orders_status")
+  @@index([userId], map: "idx_pos_orders_user_id")
+  @@index([openedAt], map: "idx_pos_orders_opened_at")
+  @@index([paidAt], map: "idx_pos_orders_paid_at")
+  @@index([deletedAt], map: "idx_pos_orders_deleted_at")
+  @@map("pos_orders")
+}
+
+model PosOrderLine {
+  id          String   @id @default(cuid())
+  orderId     String   @map("order_id")
+  order       PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String   @map("product_id")
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName String   @map("product_name")
+  quantity    Decimal  @db.Decimal(18, 4)
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(18, 0)
+  notes       String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([orderId], map: "idx_pos_order_lines_order_id")
+  @@index([productId], map: "idx_pos_order_lines_product_id")
+  @@map("pos_order_lines")
+}
+
+model PosPayment {
+  id        String   @id @default(cuid())
+  orderId   String   @map("order_id")
+  order     PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method    String
+  amountCOP Decimal  @map("amount_cop") @db.Decimal(18, 0)
+  tipCOP    Decimal  @default(0) @map("tip_cop") @db.Decimal(18, 0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([orderId], map: "idx_pos_payments_order_id")
+  @@index([method], map: "idx_pos_payments_method")
+  @@map("pos_payments")
+}

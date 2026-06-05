@@ -8,29 +8,37 @@ import {
   ParseIntPipe,
   Patch,
   Post,
-  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantGuard } from '../tenant/tenant.guard';
+import { PermissionsGuard } from '../tenant/permissions.guard';
+import { RequirePermissions } from '../tenant/permissions.decorator';
+import { CurrentTenant } from '../tenant/tenant.decorator';
+import type { TenantContext } from '../tenant/tenant.types';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { UpsertRecipeDto } from './dto/upsert-recipe.dto';
-import { UpdateRecipeAdminDto } from './dto/update-recipe-admin.dto';
 import { ProductsService } from './products.service';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Post()
-  create(@Body() dto: CreateProductDto) {
-    return this.productsService.create(dto);
+  @RequirePermissions('products.create')
+  create(
+    @CurrentTenant() tenant: TenantContext,
+    @Body() dto: CreateProductDto,
+  ) {
+    return this.productsService.create(tenant, dto);
   }
 
   @Get()
+  @RequirePermissions('products.view')
   findAll(
+    @CurrentTenant() tenant: TenantContext,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('search') search?: string,
@@ -43,7 +51,7 @@ export class ProductsController {
     if (activeRaw === 'true') active = true;
     else if (activeRaw === 'false') active = false;
 
-    return this.productsService.findAll({
+    return this.productsService.findAll(tenant, {
       page,
       limit,
       search,
@@ -54,40 +62,25 @@ export class ProductsController {
     });
   }
 
-  @Put(':id/recipe')
-  upsertRecipe(@Param('id') id: string, @Body() dto: UpsertRecipeDto) {
-    return this.productsService.upsertRecipe(id, dto);
-  }
-
-  /** Lee administración/servicios actuales (incluye totales base). */
-  @Get(':id/recipe/cost-controls')
-  recipeCostControls(@Param('id') id: string) {
-    return this.productsService.getRecipeCostControls(id);
-  }
-
-  /** Actualiza la tasa de administración (se recalcula la línea automáticamente). */
-  @Put(':id/recipe/admin')
-  updateRecipeAdmin(@Param('id') id: string, @Body() dto: UpdateRecipeAdminDto) {
-    return this.productsService.updateRecipeAdminRate(id, dto.adminRate);
-  }
-
-  @Get(':id/history')
-  history(@Param('id') id: string) {
-    return this.productsService.getProductHistory(id);
-  }
-
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.productsService.findOne(id);
+  @RequirePermissions('products.view')
+  findOne(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.productsService.findOne(tenant, id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
-    return this.productsService.update(id, dto);
+  @RequirePermissions('products.update')
+  update(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() dto: UpdateProductDto,
+  ) {
+    return this.productsService.update(tenant, id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.productsService.remove(id);
+  @RequirePermissions('products.delete')
+  remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.productsService.remove(tenant, id);
   }
 }

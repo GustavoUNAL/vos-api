@@ -31,7 +31,7 @@ if [[ -n "${1:-}" ]]; then
   OUT="$1"
 else
   STAMP="$(date +%Y%m%d-%H%M%S)"
-  OUT="$BACKUP_DIR/arandano-${STAMP}.dump"
+  OUT="$BACKUP_DIR/vos-${STAMP}.dump"
 fi
 
 echo "Volcando → $OUT"

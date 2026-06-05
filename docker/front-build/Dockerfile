@@ -13,7 +13,9 @@ RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY . .
 
 ARG VITE_API_URL=http://localhost:3000
+ARG VITE_PLATFORM_MODE=true
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_PLATFORM_MODE=$VITE_PLATFORM_MODE
 
 RUN npm run build
 

@@ -13,18 +13,18 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: arandano-postgres
+    container_name: vos-postgres
     restart: unless-stopped
     ports:
       - '5433:5432'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: arandano
+      POSTGRES_DB: vos
     volumes:
-      - arandano_pg_data:/var/lib/postgresql/data
+      - vos_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres -d arandano']
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d vos']
       interval: 5s
       timeout: 5s
       retries: 12
@@ -35,8 +35,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: arandano-api:latest
-    container_name: arandano-api
+    image: vos-api:latest
+    container_name: vos-api
     restart: unless-stopped
     ports:
       - '${API_STACK_PORT:-3000}:3000'
@@ -44,7 +44,7 @@ services:
       NODE_ENV: production
       PORT: '3000'
       LISTEN_HOST: '0.0.0.0'
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/arandano
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/vos
       JWT_SECRET: ${JWT_SECRET:-docker-stack-change-me}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_STACK:-http://localhost:${FRONT_STACK_PORT:-8080},http://127.0.0.1:${FRONT_STACK_PORT:-8080},http://localhost:5173,http://127.0.0.1:5173}
@@ -66,8 +66,8 @@ services:
       dockerfile: ${FRONTEND_DOCKERFILE:-Dockerfile}
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:${API_STACK_PORT:-3000}}
-    image: arandano-frontend:latest
-    container_name: arandano-frontend
+    image: vos-frontend:latest
+    container_name: vos-frontend
     restart: unless-stopped
     ports:
       - '${FRONT_STACK_PORT:-8080}:80'
@@ -75,4 +75,4 @@ services:
       - api
 
 volumes:
-  arandano_pg_data:
+  vos_pg_data:

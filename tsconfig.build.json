@@ -6,6 +6,27 @@
     "dist",
     "**/*spec.ts",
     "prisma/**/*.ts",
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "src/inventory/**",
+    "src/sales/**",
+    "src/pos/**",
+    "src/recipes/**",
+    "src/purchase-lots/**",
+    "src/explorer/**",
+    "src/admin-expenses/**",
+    "src/gastos/**",
+    "src/stock-movements/**",
+    "src/clients/**",
+    "src/common/roles.guard.ts",
+    "src/common/roles.decorator.ts",
+    "src/common/category-display-name.ts",
+    "src/common/human-code.ts",
+    "src/common/sync-purchase-lot-aggregates.ts",
+    "src/common/purchase-lot-line-math.ts",
+    "src/common/purchase-lot-display-name.ts",
+    "src/common/prisma-purchase-lot-line-table.ts",
+    "src/common/inventory-capital-asset.ts",
+    "src/common/inventory-internal-barcode.ts",
+    "src/stock/**"
   ]
 }

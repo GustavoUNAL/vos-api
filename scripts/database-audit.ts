@@ -72,7 +72,7 @@ El aviso de Node sobre sslmode y “verify-full” viene del driver \`pg\`; pued
 }
 
 async function main() {
-  console.log('Auditoría de base de datos — arandano-api\n');
+  console.log('Auditoría de base de datos — vos-api\n');
 
   if (!runStep('Validación de esquema (prisma validate)', 'npx', ['prisma', 'validate'])) {
     process.exit(1);

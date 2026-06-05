@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { CategoryType, PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
+import { pgPoolConfig } from '../src/common/pg-pool-config';
 import {
   MENU_CATEGORY_SLUGS_IN_ORDER,
   SLUG_TO_CATEGORY_NAME,
@@ -26,7 +27,7 @@ async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required');
 
-  const pool = new Pool({ connectionString: url });
+  const pool = new Pool(pgPoolConfig(url));
   const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
   try {

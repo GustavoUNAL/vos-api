@@ -1,12 +1,11 @@
 import {
   IsBoolean,
-  IsDateString,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  IsUrl,
   Min,
-  ValidateIf,
 } from 'class-validator';
 
 export class CreateProductDto {
@@ -18,48 +17,36 @@ export class CreateProductDto {
   @Min(0)
   price!: number;
 
-  /** FK a `categories` con `type = product` */
   @IsString()
   @IsNotEmpty()
   categoryId!: string;
 
-  /** Slug de sección de menú: bar | cafeteria | cocteles | comida | shots */
-  @IsString()
-  @IsNotEmpty()
-  type!: string;
-
-  @IsString()
   @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
 
-  @IsString()
   @IsOptional()
-  size?: string;
-
   @IsString()
-  @IsOptional()
-  saleUnit?: string;
-
-  @IsString()
-  @IsOptional()
-  imageUrl?: string;
-
-  @IsString()
-  @IsOptional()
   sku?: string;
 
+  @IsOptional()
+  @IsString()
+  internalCode?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  @IsOptional()
-  unitCost?: number;
+  cost?: number;
 
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  imageUrl?: string;
+
+  @IsOptional()
   @IsBoolean()
-  @IsOptional()
   active?: boolean;
-
-  /** ISO 8601. Trazabilidad: última modificación/revisión declarada (distinta de `updatedAt` automático). */
-  @IsOptional()
-  @ValidateIf((_, v) => v != null)
-  @IsDateString()
-  traceModifiedAt?: string | null;
 }

@@ -1,6 +1,6 @@
-# Ejemplo: API en producción contra Postgres gestionado (Railway, RDS, etc.).
-# Para **Postgres + API + front en tu máquina**, usá el `docker-compose.yml` de la raíz con
-# `npm run docker:stack` (perfil `full`); este archivo sigue siendo útil cuando la BD no va en Docker.
+# Solo API contra Postgres externo (Neon, RDS, etc.).
+# Para VPS con API + front: usá docker-compose.vps.yml (recomendado).
+# Stack local con Postgres en Docker: docker-compose.yml en la raíz del monorepo.
 # DATABASE_URL apunta al Postgres real (variable de entorno en el host).
 #
 # Uso:
@@ -18,7 +18,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: arandano-api:latest
+    image: vos-api:latest
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"

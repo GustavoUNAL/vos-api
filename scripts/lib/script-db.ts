@@ -1,31 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
-import { Pool, type PoolConfig } from 'pg';
-
-function poolConfig(connectionString: string): PoolConfig {
-  let host = '';
-  let hasSslMode = false;
-  try {
-    const u = new URL(connectionString.replace(/^postgresql:/, 'postgres:'));
-    host = u.hostname;
-    hasSslMode = u.searchParams.has('sslmode');
-  } catch {
-    /* ignore */
-  }
-  const isLocal =
-    host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  /** Railway/Heroku: SSL en URL (`sslmode`) o explícito en el pool. */
-  const needsSslObject = !isLocal && !hasSslMode;
-
-  return {
-    connectionString,
-    max: 5,
-    connectionTimeoutMillis: 30_000,
-    idleTimeoutMillis: 60_000,
-    keepAlive: true,
-    ...(needsSslObject ? { ssl: { rejectUnauthorized: false } } : {}),
-  };
-}
+import { Pool } from 'pg';
+import { pgPoolConfig } from '../../src/common/pg-pool-config';
 
 export type ScriptDb = {
   prisma: PrismaClient;
@@ -36,7 +12,7 @@ export async function createScriptDb(): Promise<ScriptDb> {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required');
 
-  const pool = new Pool(poolConfig(url));
+  const pool = new Pool(pgPoolConfig(url));
 
   try {
     await pool.query('SELECT 1');
@@ -46,7 +22,7 @@ export async function createScriptDb(): Promise<ScriptDb> {
     throw new Error(
       `No se pudo conectar a Postgres: ${msg}\n` +
         '• Local: npm run db:local:up y DATABASE_URL en .env (puerto 5433)\n' +
-        '• Remoto: revisa que Railway esté activo (npm run db:tcp-check)',
+        '• Remoto (Neon/Railway): revisa DATABASE_URL y npm run db:tcp-check',
     );
   }
 

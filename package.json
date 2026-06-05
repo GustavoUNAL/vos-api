@@ -1,5 +1,5 @@
 {
-  "name": "arandano-api",
+  "name": "vos-api",
   "version": "0.0.1",
   "description": "",
   "author": "",
@@ -11,7 +11,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "build": "nest build",
-    "docker:build": "docker build -t arandano-api:latest .",
+    "docker:build": "docker build -t vos-api:latest .",
     "docker:stack": "docker compose --profile full up -d --build",
     "docker:stack:down": "bash -lc 'docker compose stop api frontend 2>/dev/null || true; docker compose rm -f api frontend 2>/dev/null || true'",
     "docker:stack:logs": "docker compose --profile full logs -f",
@@ -33,6 +33,8 @@
     "db:organize-dump": "ts-node --transpile-only scripts/organize-migration-dump.ts",
     "db:import-organized": "ts-node --transpile-only scripts/import-organized-dump.ts",
     "db:migrate": "prisma migrate deploy",
+    "db:neon-init": "prisma migrate deploy && npm run db:seed-platform",
+    "db:seed-platform": "ts-node --transpile-only prisma/seed-platform.ts",
     "db:railway-sync": "prisma migrate deploy",
     "db:tcp-check": "node scripts/db-tcp-check.cjs",
     "db:local:up": "docker compose up -d",
@@ -52,7 +54,7 @@
     "db:backfill-sale-lines": "ts-node --transpile-only scripts/backfill-sale-lines-products-cost.ts",
     "db:import-sales-json": "ts-node --transpile-only scripts/import-sales-json.ts",
     "db:import-legacy-sheet-sales": "ts-node --transpile-only scripts/import-legacy-sheet-sales.ts",
-    "db:import-legacy-sheet-sales:local": "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/arandano npm run db:migrate && DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/arandano ts-node --transpile-only scripts/import-legacy-sheet-sales.ts",
+    "db:import-legacy-sheet-sales:local": "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/vos npm run db:migrate && DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/vos ts-node --transpile-only scripts/import-legacy-sheet-sales.ts",
     "db:import-inventory-partners": "ts-node --transpile-only scripts/import-inventory-partner-contributions.ts",
     "db:register-purchase-lots": "ts-node --transpile-only scripts/register-purchase-lots.ts",
     "db:backfill-purchase-lot-dates-from-code": "ts-node --transpile-only scripts/backfill-purchase-lot-dates-from-code.ts",
