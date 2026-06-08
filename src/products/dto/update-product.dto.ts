@@ -1,11 +1,13 @@
 import {
   IsBoolean,
+  IsEnum,
   IsNumber,
   IsOptional,
   IsString,
   IsUrl,
   Min,
 } from 'class-validator';
+import { ProductCostSourceDto } from './create-product.dto';
 
 export class UpdateProductDto {
   @IsOptional()
@@ -41,6 +43,10 @@ export class UpdateProductDto {
   @IsNumber()
   @Min(0)
   cost?: number;
+
+  @IsOptional()
+  @IsEnum(ProductCostSourceDto)
+  costSource?: ProductCostSourceDto;
 
   @IsOptional()
   @IsUrl({ require_tld: false })

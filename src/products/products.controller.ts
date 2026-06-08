@@ -62,6 +62,12 @@ export class ProductsController {
     });
   }
 
+  @Get('sales-stats')
+  @RequirePermissions('products.view')
+  salesStats(@CurrentTenant() tenant: TenantContext) {
+    return this.productsService.getSalesStats(tenant);
+  }
+
   @Get(':id')
   @RequirePermissions('products.view')
   findOne(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {

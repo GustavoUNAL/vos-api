@@ -6,11 +6,13 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Post,
   Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CreatePurchaseLotDto } from './dto/create-purchase-lot.dto';
 import { ReplacePurchaseLotLinesDto } from './dto/replace-purchase-lot-lines.dto';
 import { UpdatePurchaseLotDto } from './dto/update-purchase-lot.dto';
 import { PurchaseLotsService } from './purchase-lots.service';
@@ -23,6 +25,20 @@ export class PurchaseLotsController {
   @Get('meta/suppliers')
   suppliersMeta() {
     return this.purchaseLotsService.listDistinctSuppliers();
+  }
+
+  /** Agregado por día para la vista calendario de compras. */
+  @Get('calendar')
+  calendar(
+    @Query('year', ParseIntPipe) year: number,
+    @Query('month', ParseIntPipe) month: number,
+  ) {
+    return this.purchaseLotsService.getCalendar(year, month);
+  }
+
+  @Post()
+  create(@Body() dto: CreatePurchaseLotDto) {
+    return this.purchaseLotsService.createManual(dto);
   }
 
   @Get()

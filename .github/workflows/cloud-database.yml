@@ -7,7 +7,7 @@
 #
 # Modos:
 #   migrate — Solo prisma migrate deploy (esquema al día).
-#   migrate_seed — Migrate + seed plataforma (Arándano Café Bar, admin, productos demo).
+#   migrate_seed — Migrate + seed plataforma (empresa demo, admin vos.ai, productos demo).
 #   restore_dump — pg_restore completo desde BACKUP_DOWNLOAD_URL (ideal BD vacía; equivale a clonar tu local).
 name: Cloud database
 
@@ -71,7 +71,7 @@ jobs:
         if: github.event.inputs.mode != 'restore_dump'
         run: npm run db:migrate
 
-      - name: Platform seed (Arándano Café Bar)
+      - name: Platform seed (vos.ai demo)
         if: github.event.inputs.mode == 'migrate_seed'
         run: npm run db:seed-platform
 

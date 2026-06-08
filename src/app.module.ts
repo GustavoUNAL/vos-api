@@ -11,11 +11,19 @@ import { NavigationModule } from './navigation/navigation.module';
 import { TenantModule } from './tenant/tenant.module';
 import { ProductCategoriesModule } from './product-categories/product-categories.module';
 import { CategoriesModule } from './categories/categories.module';
+import { ProductRecipesModule } from './product-recipes/product-recipes.module';
+import { PlatformInventoryModule } from './platform-inventory/platform-inventory.module';
+import { PlatformRecipesModule } from './platform-recipes/platform-recipes.module';
+import { PlatformSalesModule } from './platform-sales/platform-sales.module';
+import { PlatformPurchasesModule } from './platform-purchases/platform-purchases.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 120 }],
+      skipIf: () => process.env.NODE_ENV !== 'production',
+    }),
     PrismaModule,
     TenantModule,
     AuthModule,
@@ -23,6 +31,11 @@ import { CategoriesModule } from './categories/categories.module';
     ProductCategoriesModule,
     CategoriesModule,
     ProductsModule,
+    ProductRecipesModule,
+    PlatformInventoryModule,
+    PlatformRecipesModule,
+    PlatformSalesModule,
+    PlatformPurchasesModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

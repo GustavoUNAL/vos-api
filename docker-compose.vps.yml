@@ -1,12 +1,12 @@
 # VPS — API + front contra Postgres gestionado (Neon, RDS, etc.).
 # No incluye Postgres local: DATABASE_URL apunta a tu base en la nube.
 #
-# En vos-api/.env (no commitear):
+# En vos.ai-api/.env (no commitear):
 #   DATABASE_URL=postgresql://...@ep-xxx.neon.tech/neondb?sslmode=require
 #   JWT_SECRET=...   (≥32 chars, openssl rand -base64 48)
 #   CORS_ORIGIN=http://TU_IP:8080,https://tu-dominio.com
 #   VITE_API_URL=http://TU_IP:3000
-#   FRONTEND_BUILD_CONTEXT=../vos-front
+#   FRONTEND_BUILD_CONTEXT=../vos.ai-front
 #   RUN_MIGRATIONS_ON_START=true
 #
 # Levantar:
@@ -44,7 +44,7 @@ services:
   frontend:
     profiles: ['full']
     build:
-      context: ${FRONTEND_BUILD_CONTEXT:-../vos-front}
+      context: ${FRONTEND_BUILD_CONTEXT:-../vos.ai-front}
       dockerfile: ${FRONTEND_DOCKERFILE:-Dockerfile}
       args:
         VITE_API_URL: ${VITE_API_URL:?Definí VITE_API_URL (URL pública del API)}

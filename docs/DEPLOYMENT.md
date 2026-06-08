@@ -1,4 +1,4 @@
-# Despliegue — VOS AI (VPS + Neon)
+# Despliegue — vos.ai (VPS + Neon)
 
 ## Arquitectura recomendada
 
@@ -8,7 +8,7 @@
 | **API** | VPS — contenedor Docker o Node |
 | **Front** | VPS — contenedor Nginx (build Vite) |
 
-## Variables obligatorias (`vos-api/.env`)
+## Variables obligatorias (`vos.ai-api/.env`)
 
 | Variable | Ejemplo |
 |----------|---------|
@@ -23,7 +23,7 @@ Plantilla: `../.env.vps.example` en la raíz del monorepo.
 
 ```bash
 # 1. Migraciones + seed (una vez, desde PC o VPS con acceso a Neon)
-cd vos-api
+cd vos.ai-api
 npm install
 npm run db:migrate
 npm run db:seed-platform
@@ -54,10 +54,10 @@ NODE_ENV=production npm run start:prod
 ## Desarrollo local
 
 ```bash
-# vos-api/.env → DATABASE_URL de Neon
+# vos.ai-api/.env → DATABASE_URL de Neon
 npm run start:dev          # :3000
 
-# vos-front (otra terminal)
+# vos.ai-front (otra terminal)
 npm run dev                # :5173, proxy /dev-api
 ```
 
@@ -84,5 +84,5 @@ npm run dev                # :5173, proxy /dev-api
 | `docker-compose.vps.yml` | VPS con Neon (API + front) |
 | `docker-compose.prod.yml` | Solo API contra Postgres externo |
 | `Dockerfile` | Imagen API |
-| `prisma/seed-platform.ts` | Datos iniciales (Arándano Café Bar) |
+| `prisma/seed-platform.ts` | Datos iniciales (empresa demo, admin, menú) |
 | `docs/database/VOS_PLATFORM_DESIGN.md` | Esquema multi-tenant |

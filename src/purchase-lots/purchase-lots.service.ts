@@ -27,6 +27,7 @@ import {
   syncPurchaseLotItemCountFromInventory,
 } from '../common/sync-purchase-lot-aggregates';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreatePurchaseLotDto } from './dto/create-purchase-lot.dto';
 import { ReplacePurchaseLotLinesDto } from './dto/replace-purchase-lot-lines.dto';
 import { UpdatePurchaseLotDto } from './dto/update-purchase-lot.dto';
 
@@ -842,6 +843,112 @@ export class PurchaseLotsService {
     }
 
     return { linesByCode: result, migrationPending: false };
+  }
+
+  /**
+   * Agregado diario para la vista calendario de compras.
+   */
+  async getCalendar(year: number, month: number) {
+    if (
+      !Number.isInteger(year) ||
+      year < 2000 ||
+      year > 2100 ||
+      !Number.isInteger(month) ||
+      month < 1 ||
+      month > 12
+    ) {
+      throw new BadRequestException('year/month fuera de rango.');
+    }
+    const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+    const end = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+
+    const rows = await this.prisma.purchaseLot.findMany({
+      where: { purchaseDate: { gte: start, lt: end } },
+      select: { purchaseDate: true, totalValue: true },
+    });
+
+    const byDay = new Map<string, { count: number; total: Prisma.Decimal }>();
+    for (const r of rows) {
+      const day = r.purchaseDate.toISOString().slice(0, 10);
+      const prev = byDay.get(day);
+      const amount = r.totalValue ?? zeroDecimal();
+      if (prev) {
+        prev.count += 1;
+        prev.total = prev.total.add(amount);
+      } else {
+        byDay.set(day, { count: 1, total: new Prisma.Decimal(amount) });
+      }
+    }
+
+    const days = Array.from(byDay.entries())
+      .map(([date, agg]) => ({
+        date,
+        count: agg.count,
+        totalCOP: agg.total.toFixed(0),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      year,
+      month,
+      days,
+      totals: {
+        count: rows.length,
+        totalCOP: days
+          .reduce((acc, d) => acc.add(d.totalCOP), new Prisma.Decimal(0))
+          .toFixed(0),
+      },
+    };
+  }
+
+  async createManual(dto: CreatePurchaseLotDto) {
+    const purchaseDate = new Date(dto.purchaseDate.trim());
+    if (Number.isNaN(purchaseDate.getTime())) {
+      throw new BadRequestException('Fecha de compra inválida.');
+    }
+    const code = await this.generateUniqueLotCode(purchaseDate);
+    const supplier = dto.supplier?.trim() || null;
+    const name = formatPurchaseLotShortName(supplier, purchaseDate, {
+      lotCode: code,
+    });
+
+    const lot = await this.prisma.purchaseLot.create({
+      data: {
+        code,
+        purchaseDate,
+        supplier,
+        notes: dto.notes?.trim() || null,
+        name,
+      },
+    });
+
+    if (dto.lines?.length) {
+      await this.replacePurchaseLotLines(lot.id, {
+        lines: dto.lines,
+        expectedTotalValueCOP: dto.totalValue,
+      });
+    } else if (dto.totalValue != null) {
+      await this.prisma.purchaseLot.update({
+        where: { id: lot.id },
+        data: { totalValue: new Prisma.Decimal(dto.totalValue) },
+      });
+    }
+
+    this.invalidateListCache();
+    return this.findOne(lot.id);
+  }
+
+  private async generateUniqueLotCode(purchaseDate: Date): Promise<string> {
+    const ymd = purchaseDate.toISOString().slice(0, 10).replace(/-/g, '');
+    for (let n = 1; n <= 999; n += 1) {
+      const code = n === 1 ? `C${ymd}` : `C${ymd}-${n}`;
+      const exists = await this.prisma.purchaseLot.findUnique({
+        where: { code },
+        select: { id: true },
+      });
+      if (!exists) return code;
+    }
+    return `C${ymd}-${Date.now().toString(36).slice(-5)}`;
   }
 
   async findAll(params: ListParams) {

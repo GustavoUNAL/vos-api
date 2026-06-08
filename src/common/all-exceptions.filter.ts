@@ -167,6 +167,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
           hint = String((body as { hint: unknown }).hint);
         }
       }
+      if (status === HttpStatus.TOO_MANY_REQUESTS) {
+        message =
+          'Demasiados intentos. Esperá un minuto e intentá de nuevo.';
+        hint =
+          'Credenciales actuales: admin@vos.ai (la cuenta admin@arandano.com ya no aplica).';
+      }
       if (status >= 500) {
         this.logger.error(
           `${request.method} ${request.url} — ${message}`,

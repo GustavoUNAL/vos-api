@@ -18,6 +18,8 @@ export class NavigationService {
     }
 
     const hasProducts = enabledModules.includes('products');
+    const hasSales = enabledModules.includes('sales');
+    const hasPurchases = enabledModules.includes('purchases');
 
     return {
       version: 3,
@@ -50,9 +52,66 @@ export class NavigationService {
                 {
                   id: 'recipes',
                   label: 'Recetas',
-                  status: 'soon',
-                  endpoints: {},
-                  tables: [],
+                  status: hasProducts ? 'ready' : 'soon',
+                  endpoints: {
+                    catalog: 'GET /recipes',
+                    productRecipe: 'GET /products/:id/recipe',
+                  },
+                  tables: ['recipes', 'recipe_ingredients', 'recipe_costs'],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'sales',
+          title: 'Ventas',
+          subtitle: 'Registro diario y calendario',
+          groups: [
+            {
+              id: 'sales-items',
+              title: 'Ventas',
+              items: [
+                {
+                  id: 'sales',
+                  label: 'Ventas',
+                  status: hasSales ? 'ready' : 'soon',
+                  endpoints: {
+                    list: 'GET /sales',
+                    calendar: 'GET /sales/calendar',
+                    detail: 'GET /sales/:id',
+                    create: 'POST /sales',
+                  },
+                  tables: ['sales', 'sale_lines'],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'purchases',
+          title: 'Compras',
+          subtitle: 'Lotes, proveedores e insumos',
+          groups: [
+            {
+              id: 'purchases-items',
+              title: 'Compras',
+              items: [
+                {
+                  id: 'purchases',
+                  label: 'Compras',
+                  status: hasPurchases ? 'ready' : 'soon',
+                  endpoints: {
+                    list: 'GET /purchase-lots',
+                    calendar: 'GET /purchase-lots/calendar',
+                    detail: 'GET /purchase-lots/:id',
+                    create: 'POST /purchase-lots',
+                  },
+                  tables: [
+                    'purchase_lots',
+                    'purchase_lot_lines',
+                    'inventory_items',
+                  ],
                 },
               ],
             },
@@ -68,7 +127,6 @@ export class NavigationService {
               title: 'Próximamente',
               items: [
                 { id: 'inventory', label: 'Inventario', status: 'soon' },
-                { id: 'sales', label: 'Ventas', status: 'soon' },
                 { id: 'crm', label: 'CRM', status: 'soon' },
                 { id: 'finance', label: 'Finanzas', status: 'soon' },
               ],

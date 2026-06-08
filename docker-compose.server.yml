@@ -1,7 +1,7 @@
 # Stack para VPS: PostgreSQL persistente + API + front (perfil `full`).
 #
 # Requisitos en el servidor: Docker Engine + plugin Compose.
-# Archivo `.env` en la raíz de vos-api con al menos:
+# Archivo `.env` en la raíz de vos.ai-api con al menos:
 #   POSTGRES_PASSWORD=...
 #   JWT_SECRET=...
 #   CORS_ORIGIN=https://tu-dominio-o-ip    (o http://IP:PUERTO_FRONT en pruebas)
@@ -72,8 +72,8 @@ services:
   frontend:
     profiles: ['full']
     build:
-      context: ${FRONTEND_BUILD_CONTEXT:-../vos-front}
-      dockerfile: ${FRONTEND_DOCKERFILE:-../vos-api/docker/front-build/Dockerfile}
+      context: ${FRONTEND_BUILD_CONTEXT:-../vos.ai-front}
+      dockerfile: ${FRONTEND_DOCKERFILE:-../vos.ai-api/docker/front-build/Dockerfile}
       args:
         # Default solo para que `docker compose up -d` (sin perfil full) no falle al parsear.
         # Con perfil full definí VITE_API_URL en .env (URL que usa el navegador para el API).

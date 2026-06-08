@@ -11,6 +11,7 @@ export type ProductApiRow = {
   sku: string | null;
   internalCode: string | null;
   cost: string;
+  costSource: 'MANUAL' | 'RECIPE';
   marginPercent: string | null;
   active: boolean;
   status: ProductStatus;
@@ -49,6 +50,7 @@ export function mapProduct(
     sku: p.sku,
     internalCode: p.internalCode,
     cost: p.cost.toString(),
+    costSource: p.costSource,
     marginPercent: p.marginPercent?.toString() ?? null,
     active: statusToActive(p.status),
     status: p.status,

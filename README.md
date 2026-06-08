@@ -1,4 +1,4 @@
-# vos-api — VOS AI Platform API
+# vos-api — vos.ai Platform API
 
 API NestJS + Prisma + PostgreSQL (Neon). Multi-empresa con módulo **Productos** activo.
 
@@ -12,7 +12,7 @@ npm run db:seed-platform
 npm run start:dev       # http://localhost:3000
 ```
 
-**Demo:** `admin@arandano.com` / `Arandano2026!` → **Arándano Café Bar**
+**Demo:** `admin@vos.ai` / `VosAi2026!` → **Café Bar Demo**
 
 ## Scripts principales
 

@@ -1,4 +1,4 @@
--- VOS AI — Multi-tenant platform initialization (PostgreSQL 16+)
+-- vos.ai — Multi-tenant platform initialization (PostgreSQL 16+)
 -- Run on a fresh database (Neon production branch).
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

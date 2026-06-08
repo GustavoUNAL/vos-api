@@ -1,4 +1,4 @@
-// VOS AI — Multi-tenant platform schema (v2 foundation)
+// vos.ai — Multi-tenant platform schema (v2 foundation)
 // Deploy target: fresh PostgreSQL (Neon). Legacy single-tenant schema lives in schema.legacy.prisma.
 
 generator client {
@@ -29,6 +29,27 @@ enum ProductStatus {
   ACTIVE
   INACTIVE
   ARCHIVED
+}
+
+enum ProductCostSource {
+  MANUAL
+  RECIPE
+}
+
+enum RecipeCostKind {
+  FIJO
+  VARIABLE
+}
+
+enum InventoryBehavior {
+  CONSUMABLE
+  CAPITAL_ASSET
+}
+
+enum SaleSource {
+  MANUAL
+  POS
+  IMPORT
 }
 
 enum AuditAction {
@@ -73,6 +94,11 @@ model Company {
   aiConversations  AiConversation[]
   aiMessages       AiMessage[]
   auditLogs        AuditLog[]
+  inventoryItems   InventoryItem[]
+  recipes          Recipe[]
+  sales            Sale[]
+  purchaseLots     PurchaseLot[]
+  purchaseLotLines PurchaseLotLine[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -92,6 +118,7 @@ model User {
   memberships     CompanyMember[]
   aiConversations AiConversation[]
   auditLogs       AuditLog[]
+  salesRecorded   Sale[]           @relation("SaleRecordedBy")
 
   @@index([active], map: "idx_users_active")
   @@map("users")
@@ -220,7 +247,9 @@ model ProductCategory {
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  products Product[]
+  products         Product[]
+  inventoryItems InventoryItem[]
+  purchaseLotLines PurchaseLotLine[]
 
   @@unique([companyId, slug], map: "product_categories_company_slug_key")
   @@index([companyId], map: "idx_product_categories_company_id")
@@ -240,6 +269,7 @@ model Product {
   internalCode    String?       @map("internal_code")
   salePrice       Decimal       @map("sale_price") @db.Decimal(14, 2)
   cost            Decimal       @default(0) @db.Decimal(14, 2)
+  costSource      ProductCostSource @default(MANUAL) @map("cost_source")
   /// Read-only: PostgreSQL GENERATED STORED column (see vos-platform-init.sql).
   marginPercent   Decimal?      @map("margin_percent") @db.Decimal(8, 4) @default(dbgenerated())
   status          ProductStatus @default(DRAFT)
@@ -248,6 +278,8 @@ model Product {
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   images ProductImage[]
+  recipe Recipe?
+  saleLines SaleLine[]
 
   @@unique([companyId, sku], map: "products_company_sku_key")
   @@unique([companyId, internalCode], map: "products_company_internal_code_key")
@@ -274,6 +306,188 @@ model ProductImage {
   @@index([productId], map: "idx_product_images_product_id")
   @@index([productId, isPrimary], map: "idx_product_images_product_primary")
   @@map("product_images")
+}
+
+// ---------------------------------------------------------------------------
+// Inventory & recipes (multi-tenant)
+// ---------------------------------------------------------------------------
+
+model InventoryItem {
+  id         String            @id @default(cuid())
+  companyId  String            @map("company_id")
+  company    Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  categoryId String?           @map("category_id")
+  category   ProductCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name       String
+  unit       String            @default("und")
+  unitCost   Decimal           @default(0) @map("unit_cost") @db.Decimal(14, 2)
+  quantity   Decimal           @default(0) @db.Decimal(14, 4)
+  minStock   Decimal?          @map("min_stock") @db.Decimal(14, 4)
+  lotLabel   String?           @map("lot_label")
+  behavior   InventoryBehavior @default(CONSUMABLE)
+  active     Boolean           @default(true)
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  recipeIngredients RecipeIngredient[]
+  purchaseLotId     String?           @map("purchase_lot_id")
+  purchaseLot       PurchaseLot?      @relation(fields: [purchaseLotId], references: [id], onDelete: SetNull)
+  purchaseLotLine   PurchaseLotLine?
+
+  @@index([companyId], map: "idx_inventory_items_company_id")
+  @@index([categoryId], map: "idx_inventory_items_category_id")
+  @@index([companyId, active], map: "idx_inventory_items_company_active")
+  @@map("inventory_items")
+}
+
+/// Una receta por producto (`product_id` único).
+model Recipe {
+  id          String  @id @default(cuid())
+  companyId   String  @map("company_id")
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  productId   String  @unique @map("product_id")
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  recipeYield Decimal @default(1) @map("yield") @db.Decimal(12, 4)
+  adminRate   Decimal @default(0.30) @map("admin_rate") @db.Decimal(5, 4)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  ingredients RecipeIngredient[]
+  costs       RecipeCost[]
+
+  @@index([companyId], map: "idx_recipes_company_id")
+  @@index([productId], map: "idx_recipes_product_id")
+  @@map("recipes")
+}
+
+model RecipeCost {
+  id            String         @id @default(cuid())
+  recipeId      String         @map("recipe_id")
+  recipe        Recipe         @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  kind          RecipeCostKind
+  name          String
+  quantity      Decimal?       @db.Decimal(12, 4)
+  unit          String
+  lineTotalCOP  Decimal        @map("line_total_cop") @db.Decimal(12, 2)
+  sheetUnitCost String?        @map("sheet_unit_cost")
+  sortOrder     Int            @default(0) @map("sort_order")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([recipeId], map: "idx_recipe_costs_recipe_id")
+  @@map("recipe_costs")
+}
+
+model RecipeIngredient {
+  id              String        @id @default(cuid())
+  recipeId        String        @map("recipe_id")
+  recipe          Recipe        @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  inventoryItemId String        @map("inventory_item_id")
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  quantity        Decimal       @db.Decimal(12, 4)
+  unit            String
+  sortOrder       Int           @default(0) @map("sort_order")
+
+  @@index([recipeId], map: "idx_recipe_ingredients_recipe_id")
+  @@index([inventoryItemId], map: "idx_recipe_ingredients_inventory_item_id")
+  @@map("recipe_ingredients")
+}
+
+// ---------------------------------------------------------------------------
+// Sales & purchases (multi-tenant)
+// ---------------------------------------------------------------------------
+
+model Sale {
+  id            String     @id @default(cuid())
+  companyId     String     @map("company_id")
+  company       Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code          String?
+  saleDate      DateTime   @map("sale_date") @db.Timestamptz(6)
+  total         Decimal    @db.Decimal(14, 2)
+  paymentMethod String?    @map("payment_method")
+  source        SaleSource @default(MANUAL)
+  userId        String?    @map("user_id")
+  user          User?      @relation("SaleRecordedBy", fields: [userId], references: [id], onDelete: SetNull)
+  mesa          String?
+  notes         String?
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lines SaleLine[]
+
+  @@unique([companyId, code], map: "sales_company_code_key")
+  @@index([companyId], map: "idx_sales_company_id")
+  @@index([companyId, saleDate], map: "idx_sales_company_sale_date")
+  @@index([saleDate], map: "idx_sales_sale_date")
+  @@map("sales")
+}
+
+model SaleLine {
+  id          String   @id @default(cuid())
+  saleId      String   @map("sale_id")
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId   String?  @map("product_id")
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName String   @map("product_name")
+  lineUnit    String?  @map("line_unit")
+  lineSize    String?  @map("line_size")
+  quantity    Decimal  @db.Decimal(12, 4)
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(14, 2)
+  costAtSale  Decimal? @map("cost_at_sale") @db.Decimal(14, 2)
+  profit      Decimal? @db.Decimal(14, 2)
+
+  @@index([saleId], map: "idx_sale_lines_sale_id")
+  @@index([productId], map: "idx_sale_lines_product_id")
+  @@map("sale_lines")
+}
+
+model PurchaseLot {
+  id           String   @id @default(cuid())
+  companyId    String   @map("company_id")
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code         String
+  name         String?
+  purchaseDate DateTime @map("purchase_date") @db.Timestamptz(6)
+  supplier     String?
+  notes        String?
+  itemCount    Int      @default(0) @map("item_count")
+  totalValue   Decimal? @map("total_value") @db.Decimal(14, 2)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lines            PurchaseLotLine[]
+  inventoryItems   InventoryItem[]
+
+  @@unique([companyId, code], map: "purchase_lots_company_code_key")
+  @@index([companyId], map: "idx_purchase_lots_company_id")
+  @@index([companyId, purchaseDate], map: "idx_purchase_lots_company_purchase_date")
+  @@index([purchaseDate], map: "idx_purchase_lots_purchase_date")
+  @@map("purchase_lots")
+}
+
+model PurchaseLotLine {
+  id                  String           @id @default(cuid())
+  companyId           String           @map("company_id")
+  company             Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  purchaseLotId       String           @map("purchase_lot_id")
+  purchaseLot         PurchaseLot      @relation(fields: [purchaseLotId], references: [id], onDelete: Cascade)
+  inventoryItemId     String?          @unique @map("inventory_item_id")
+  inventoryItem       InventoryItem?   @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  categoryId          String?          @map("category_id")
+  category            ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  lineName            String           @map("line_name")
+  quantityPurchased   Decimal          @map("quantity_purchased") @db.Decimal(12, 4)
+  unit                String
+  purchaseUnitCostCOP Decimal          @map("purchase_unit_cost_cop") @db.Decimal(14, 2)
+  lineTotalCOP        Decimal          @map("line_total_cop") @db.Decimal(14, 2)
+  lineComment         String?          @map("line_comment")
+  sortOrder           Int              @default(0) @map("sort_order")
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([purchaseLotId], map: "idx_purchase_lot_lines_lot_id")
+  @@index([companyId], map: "idx_purchase_lot_lines_company_id")
+  @@map("purchase_lot_lines")
 }
 
 // ---------------------------------------------------------------------------

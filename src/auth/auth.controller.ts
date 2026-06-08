@@ -11,7 +11,12 @@ import { SwitchCompanyDto } from './dto/switch-company.dto';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @Throttle({
+    default: {
+      ttl: 60_000,
+      limit: process.env.NODE_ENV === 'production' ? 15 : 60,
+    },
+  })
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto.email, dto.password);

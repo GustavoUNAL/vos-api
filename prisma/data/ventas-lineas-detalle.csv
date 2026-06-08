@@ -1,0 +1,134 @@
+sale_id,fecha,hora,sale_total,metodo_pago,mesa,notas,linea_num,product_id,product_name,quantity,unit_price,line_subtotal
+sale-1773189651626-ocgrqngs1,2026-03-10,14,5500,efectivo,,Ventas 10 marzo: 1 cerveza + 2 cigarrillos.,1,cerveza-club-colombia-330,Cerveza Club Colombia 330cm3,1,3500,3500
+sale-1773189651626-ocgrqngs1,2026-03-10,14,5500,efectivo,,Ventas 10 marzo: 1 cerveza + 2 cigarrillos.,2,cig-marlboro-rojo,Cigarrillo Marlboro rojo,2,1000,2000
+sale-1773189651500-pyoi6zb2m,2026-03-09,14,10500,efectivo,,Ventas 9 marzo: 1 hervido + 1 cerveza.,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,1,6000,6000
+sale-1773189651500-pyoi6zb2m,2026-03-09,14,10500,efectivo,,Ventas 9 marzo: 1 hervido + 1 cerveza.,2,cerveza-club-colombia-330,Cerveza Club Colombia 330cm3,1,4500,4500
+sale-1772997552773-5vwyqrfnr,2026-03-06,23,35000,efectivo,Ing. Harold,Ing. Harold: 1/2 botella Smirnoff.,1,vodka-smirnoff-media,1/2 botella Vodka Smirnoff,1,35000,35000
+sale-1772997552756-fh7c5k68k,2026-03-06,22,13000,efectivo,Oscar Guerrero,"Oscar Guerrero: 3 Club, 1 cigarro.",1,cerveza-club-colombia-330,Cerveza Club Colombia 330cm3,3,4000,12000
+sale-1772997552756-fh7c5k68k,2026-03-06,22,13000,efectivo,Oscar Guerrero,"Oscar Guerrero: 3 Club, 1 cigarro.",2,cigarro-suelto,Cigarro suelto,1,1000,1000
+sale-1772997552730-8ln2tnscd,2026-03-06,21,82000,efectivo-aporte,Mesa 2 - Mauricio,[APORTE] Pagó $74.000 de $82.000 (deuda $8.000 a nombre de Mauricio - Mesa 2). Incluye deuda anterior $58.000.,1,refajo,Refajo,1,5000,5000
+sale-1772997552730-8ln2tnscd,2026-03-06,21,82000,efectivo-aporte,Mesa 2 - Mauricio,[APORTE] Pagó $74.000 de $82.000 (deuda $8.000 a nombre de Mauricio - Mesa 2). Incluye deuda anterior $58.000.,2,cafe-negro,Café negro artesanal,1,4000,4000
+sale-1772997552730-8ln2tnscd,2026-03-06,21,82000,efectivo-aporte,Mesa 2 - Mauricio,[APORTE] Pagó $74.000 de $82.000 (deuda $8.000 a nombre de Mauricio - Mesa 2). Incluye deuda anterior $58.000.,3,papas,Papas,1,7000,7000
+sale-1772997552730-8ln2tnscd,2026-03-06,21,82000,efectivo-aporte,Mesa 2 - Mauricio,[APORTE] Pagó $74.000 de $82.000 (deuda $8.000 a nombre de Mauricio - Mesa 2). Incluye deuda anterior $58.000.,4,cerveza-club-colombia-330,Cerveza,2,4000,8000
+sale-1772997552699-z2ze7kuhv,2026-03-06,20,375000,efectivo,Mauri,"Mariana Estuduantes: tequila, 2 empanadas, soda, 2 botellas, 1 cerveza. Pendiente: 1 copa $7.000.",1,tequila-olmeca-shot,Tequila (shot),1,10000,10000
+sale-1772997552699-z2ze7kuhv,2026-03-06,20,375000,efectivo,Mauri,"Mariana Estuduantes: tequila, 2 empanadas, soda, 2 botellas, 1 cerveza. Pendiente: 1 copa $7.000.",2,acompanante,Empanada,2,4000,8000
+sale-1772997552699-z2ze7kuhv,2026-03-06,20,375000,efectivo,Mauri,"Mariana Estuduantes: tequila, 2 empanadas, soda, 2 botellas, 1 cerveza. Pendiente: 1 copa $7.000.",3,bebida-soda,Soda,1,3000,3000
+sale-1772997552699-z2ze7kuhv,2026-03-06,20,375000,efectivo,Mauri,"Mariana Estuduantes: tequila, 2 empanadas, soda, 2 botellas, 1 cerveza. Pendiente: 1 copa $7.000.",4,botella-generica,Botella de licor,2,175000,350000
+sale-1772997552699-z2ze7kuhv,2026-03-06,20,375000,efectivo,Mauri,"Mariana Estuduantes: tequila, 2 empanadas, soda, 2 botellas, 1 cerveza. Pendiente: 1 copa $7.000.",5,cerveza-club-colombia-330,Cerveza,1,4000,4000
+sale-1772997552673-dnzzvo0pw,2026-03-06,19,18000,efectivo-aporte,Vecino,[APORTE] Pagó $14.000 de $18.000 (deuda $4.000 a nombre de Vecino),1,bebida-limonada,Limonada,2,7500,15000
+sale-1772997552673-dnzzvo0pw,2026-03-06,19,18000,efectivo-aporte,Vecino,[APORTE] Pagó $14.000 de $18.000 (deuda $4.000 a nombre de Vecino),2,acompanante,Acompañante del día (Empanada),1,3000,3000
+sale-1772666871725-p46zrn5iz,2026-03-04,18,11000,nequi,,café inga de aponte,1,cafe-negro,Café negro artesanal,2,4000,8000
+sale-1772666871725-p46zrn5iz,2026-03-04,18,11000,nequi,,café inga de aponte,2,acompanante,Acompañante del día (empanada o buñuelo),1,3000,3000
+sale-1772682136027-4r30l0ajo,2026-03-04,12,28000,efectivo,,vecino edificio ,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,4,7000,28000
+sale-1772680986261-vi6caad13,2026-03-04,12,14000,efectivo,,sras universidad,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,2,7000,14000
+sale-1772680954826-eoq0jmnkf,2026-03-04,12,7000,efectivo,,don ivan,1,cerveza-poker-330,Cerveza Poker,2,3500,7000
+sale-1772680905315-gtytkpbeo,2026-03-03,12,45000,nequi,,compra erika y ferney,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,4,7000,28000
+sale-1772680905315-gtytkpbeo,2026-03-03,12,45000,nequi,,compra erika y ferney,2,prod-1770687422697-le373wgmo,Cerveza michelada,1,5000,5000
+sale-1772680905315-gtytkpbeo,2026-03-03,12,45000,nequi,,compra erika y ferney,3,gin-gordons-shot,Shot ginebra,1,12000,12000
+sale-1772679539684-vq90dm836,2026-03-03,12,58000,efectivo-aporte,,Mauricio con el sobrino  [APORTE] Pagó $0 de $58.000 (deuda $58.000 a nombre de Mauricio),1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,4,7000,28000
+sale-1772679539684-vq90dm836,2026-03-03,12,58000,efectivo-aporte,,Mauricio con el sobrino  [APORTE] Pagó $0 de $58.000 (deuda $58.000 a nombre de Mauricio),2,prod-aromatica,Aromática,2,4000,8000
+sale-1772679539684-vq90dm836,2026-03-03,12,58000,efectivo-aporte,,Mauricio con el sobrino  [APORTE] Pagó $0 de $58.000 (deuda $58.000 a nombre de Mauricio),3,acompanante,Acompañante del día (empanada o buñuelo),2,3000,6000
+sale-1772679539684-vq90dm836,2026-03-03,12,58000,efectivo-aporte,,Mauricio con el sobrino  [APORTE] Pagó $0 de $58.000 (deuda $58.000 a nombre de Mauricio),4,sandwich-dia,Sándwich del día,1,10000,10000
+sale-1772679539684-vq90dm836,2026-03-03,12,58000,efectivo-aporte,,Mauricio con el sobrino  [APORTE] Pagó $0 de $58.000 (deuda $58.000 a nombre de Mauricio),5,cerveza-club-colombia-330,Cerveza Club Colombia,1,4000,4000
+sale-1772679539684-vq90dm836,2026-03-03,12,58000,efectivo-aporte,,Mauricio con el sobrino  [APORTE] Pagó $0 de $58.000 (deuda $58.000 a nombre de Mauricio),6,prod-suspiros,Suspiros,2,1000,2000
+sale-1772662034380-778e4jfx6,2026-03-03,12,4000,efectivo,,vecino del tequila ,1,cafe-negro,Café negro artesanal,1,4000,4000
+sale-1772661881157-ts4a7xjdj,2026-02-25,12,20000,nequi,,venta sonia a clientes organicos,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,2,7000,14000
+sale-1772661881157-ts4a7xjdj,2026-02-25,12,20000,nequi,,venta sonia a clientes organicos,2,acompanante,Acompañante del día (empanada o buñuelo),2,3000,6000
+sale-1772661681998-pfsshd9yt,2026-02-23,12,30000,nequi,,vecino que pidió el cable para cargar,1,cerveza-budweiser,Cerveza Budweiser,8,3500,28000
+sale-1772661681998-pfsshd9yt,2026-02-23,12,30000,nequi,,vecino que pidió el cable para cargar,2,cig-marlboro-morado,Marlboro Morado,2,1000,2000
+sale-1772648479672-mcnx525mo,2026-02-19,12,28000,nequi,,Oscar guerror en la barra,1,cerveza-budweiser,Cerveza Budweiser,4,3500,14000
+sale-1772648479672-mcnx525mo,2026-02-19,12,28000,nequi,,Oscar guerror en la barra,2,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,2,7000,14000
+sale-1772648161648-7k3l5gcfx,2026-02-19,12,7000,efectivo,,vecino edificio,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,1,7000,7000
+sale-1772647839276-9m8pderko,2026-02-19,12,87000,efectivo,,equipo emssanar ,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,8,7000,56000
+sale-1772647839276-9m8pderko,2026-02-19,12,87000,efectivo,,equipo emssanar ,2,cerveza-club-colombia-330,Cerveza Club Colombia,4,4000,16000
+sale-1772647839276-9m8pderko,2026-02-19,12,87000,efectivo,,equipo emssanar ,3,bebida-1767478306369-c8s8nr6nh,Moscow Mule,1,15000,15000
+sale-1772647989144-sd67464tb,2026-02-18,12,35000,nequi,,mauricio ,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,5,7000,35000
+sale-1772647118647-en5pi9evv,2026-02-17,12,110000,efectivo-aporte,,[APORTE] Pagó $70.000 de $110.000 (deuda $40.000 a nombre de mauricio.),1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,10,7000,70000
+sale-1772647118647-en5pi9evv,2026-02-17,12,110000,efectivo-aporte,,[APORTE] Pagó $70.000 de $110.000 (deuda $40.000 a nombre de mauricio.),2,cerveza-heineken,Cerveza Heineken,1,5000,5000
+sale-1772647118647-en5pi9evv,2026-02-17,12,110000,efectivo-aporte,,[APORTE] Pagó $70.000 de $110.000 (deuda $40.000 a nombre de mauricio.),3,media-aguardiente-narino,Media Aguardiente Nariño,1,35000,35000
+sale-1772645075730-p7uoek1s4,2026-02-16,12,7000,efectivo,,britanico champions,1,cerveza-poker-330,Cerveza Poker,2,3500,7000
+sale-1772645024451-y44q7p21v,2026-02-16,12,8000,efectivo,,osito amigo sebastian,1,cerveza-poker-330,Cerveza Poker,2,3500,7000
+sale-1772645024451-y44q7p21v,2026-02-16,12,8000,efectivo,,osito amigo sebastian,2,cig-marlboro-morado,Marlboro Morado,1,1000,1000
+sale-1772644552537-tmdliall3,2026-02-16,12,10500,efectivo,,Don ivan partido champions,1,cerveza-poker-330,Cerveza Poker,3,3500,10500
+sale-1771051217889-lwulw8liz,2026-02-14,23,30000,efectivo,Mesa circular 2,cuchito con la amiga,1,bebida-1767478463497-c2aya0ta0,Cóctel de Campari,2,15000,30000
+sale-1771898422822-qt3p2y42y,2026-02-13,22,49000,efectivo,,guillermo,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,7,7000,49000
+sale-1771898223503-d9yipmku3,2026-02-13,21,70000,nequi,,"jose, blanca y george",1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,10,7000,70000
+sale-1771900802158-dg9b4axq1,2026-02-13,12,22000,efectivo,Barra,mauricio presento mama,1,cerveza-club-colombia-330,Cerveza Club Colombia,2,4000,8000
+sale-1771900802158-dg9b4axq1,2026-02-13,12,22000,efectivo,Barra,mauricio presento mama,2,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,2,7000,14000
+sale-1771900531495-zxw1f3u8n,2026-02-13,12,94000,nequi,Barra,Pelados raros,1,cerveza-club-colombia-330,Cerveza Club Colombia,6,4000,24000
+sale-1771900531495-zxw1f3u8n,2026-02-13,12,94000,nequi,Barra,Pelados raros,2,prod-1768501042805-nuujaxetr,Aguardiente Amarillo,1,70000,70000
+sale-1771899345471-43d9412yv,2026-02-13,12,22000,efectivo,Barra,Maricio,1,cerveza-club-colombia-330,Cerveza Club Colombia,2,4000,8000
+sale-1771899345471-43d9412yv,2026-02-13,12,22000,efectivo,Barra,Maricio,2,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,2,7000,14000
+sale-1771898860671-vdq5fd12k,2026-02-13,11,126000,efectivo,,señores cuchitos,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,18,7000,126000
+sale-1771001520233-rsdixoupk,2026-02-12,22,10000,efectivo,,Oscar Mono — 2 cervezas micheladas — 10pm,1,prod-1770687422697-le373wgmo,Cerveza michelada,2,5000,10000
+sale-1771001634157-i0nch7xit,2026-02-11,15,12000,efectivo,,el vecino 201 olimpo — 2 cafés + 2 galletas — 3:00pm,1,cafe-negro,Café negro artesanal,2,4000,8000
+sale-1771001634157-i0nch7xit,2026-02-11,15,12000,efectivo,,el vecino 201 olimpo — 2 cafés + 2 galletas — 3:00pm,2,acompanante,Acompañante del día (empanada o buñuelo),2,2000,4000
+sale-1770685077576-q7qreztwc,2026-02-10,19,12000,efectivo,,,1,cafe-negro,Café negro artesanal,3,4000,12000
+sale-1770684864461-h1tioyo43,2026-02-10,19,10500,efectivo,,,1,cafe-negro,Café negro artesanal,3,4000,12000
+sale-1770684328046-0rhe9d7wh,2026-02-10,19,9000,efectivo,,,1,cafe-negro,Café negro artesanal,3,4000,12000
+sale-1770684223435-g6fnt8fwk,2026-02-10,19,42000,efectivo,,Don Ivan ,1,cerveza-poker-330,Cerveza Poker 330cm3,12,3500,42000
+sale-1770685372826-wbaok2zln,2026-02-09,20,10500,efectivo,,vecinos local,1,cafe-negro,Café negro artesanal,3,4000,12000
+sale-1770684460133-di8r9859m,2026-02-09,19,42000,,,12 cervezas Poker — 7:46pm,1,cerveza-poker-330,Cerveza Poker 330cm3,12,3500,42000
+sale-1770572624925-icmd975g7,2026-02-07,14,45500,,,Mauricio,1,cerveza-poker-330,Cerveza Poker 330cm3,3,3500,10500
+sale-1770572624925-icmd975g7,2026-02-07,14,45500,,,Mauricio,2,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,5,7000,35000
+sale-1770572624925-9pf7fqpze,2026-02-06,16,17500,,,Don Iván - 6 cervezas,1,cerveza-poker-330,Cerveza Poker 330cm3,6,2916,17496
+sale-1770572624925-t4gh0gjzc,2026-02-06,15,45000,,,Sr. edificio 505,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,4,7000,28000
+sale-1770572624925-t4gh0gjzc,2026-02-06,15,45000,,,Sr. edificio 505,2,bebida-1767478306369-c8s8nr6nh,Cóctel Chapil,2,7000,14000
+sale-1770572624925-t4gh0gjzc,2026-02-06,15,45000,,,Sr. edificio 505,3,prod-1768843715583-n44rw1kv2,Cigarrillo,3,1000,3000
+sale-1770572624925-wmo4t0bwa,2026-02-06,14,49000,,,Mauricio,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,6,7000,42000
+sale-1770572624925-wmo4t0bwa,2026-02-06,14,49000,,,Mauricio,2,cerveza-poker-330,Cerveza Poker 330cm3,2,3500,7000
+sale-1770572624924-e4079gcfs,2026-02-06,12,8000,,,Hervido + bizcocho,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,1,5000,5000
+sale-1770572624924-e4079gcfs,2026-02-06,12,8000,,,Hervido + bizcocho,2,pastel-dia,Pastel del día,1,3000,3000
+sale-1770572624919-9p6ro00il,2026-02-05,12,10000,,,Jueves 5 feb,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,1,7000,7000
+sale-1770572624919-9p6ro00il,2026-02-05,12,10000,,,Jueves 5 feb,2,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,3000,3000
+sale-1769918176719-96iiwnsjd,2026-01-31,19,7000,efectivo,,Hervido #3,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,1,7000,7000
+sale-1769918176718-aeq69ntzl,2026-01-31,19,7000,efectivo,,Hervido #2,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,1,7000,7000
+sale-1769918176718-wia2jxk1c,2026-01-31,19,7000,efectivo,,Hervido #1,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,1,7000,7000
+sale-1769918176718-7jzoiv1wo,2026-01-31,19,35000,nequi,,Mitad Smirnoff tamarindo,1,vodka-smirnoff-botella,Vodka Smirnoff tamarindo,1,35000,35000
+sale-1769918176718-b0ar5kb93,2026-01-31,19,27500,nequi,,Media aguardiente Nariño,1,prod-1768501043986-dzy4iyvgk,Aguardiente Nariño,1,27500,27500
+sale-1769918176718-r0kdx3srx,2026-01-31,19,21000,nequi,,,1,cerveza-heineken,Cerveza Heineken,6,3500,21000
+sale-1769918176675-tavc4h32s,2026-01-31,19,21000,nequi,,,1,cerveza-poker-330,Cerveza Poker 330cm3,6,3500,21000
+sale-1769919360966-6pm2herv,2026-01-30,18,14000,nequi,,,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,2,7000,14000
+sale-1769918330663-btdoqdv84,2026-01-30,18,14000,nequi,,,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada,2,7000,14000
+sale-1769814535451-1p4fcq7jv,2026-01-30,18,10000,nequi,,Cliente Organanicos,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada ,2,5000,10000
+sale-1769919360971-5pmcafe,2026-01-30,17,7000,efectivo,,,1,cafe-negro,Café negro artesanal,1,4000,4000
+sale-1769919360971-5pmcafe,2026-01-30,17,7000,efectivo,,,2,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,3000,3000
+sale-1769918463128-c8godzhfj,2026-01-30,17,7000,efectivo,,,1,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,3000,3000
+sale-1769918463128-c8godzhfj,2026-01-30,17,7000,efectivo,,,2,cafe-negro,Café negro artesanal,1,4000,4000
+sale-1769814735949-rnfr26pio,2026-01-30,23,37000,,,Clientes organicos,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada ,6,5000,30000
+sale-1769814735949-rnfr26pio,2026-01-30,23,37000,,,Clientes organicos,2,cerveza-aguila-330,Cerveza Águila 330cm3,2,3500,7000
+sale-1769814535452-stouvqcv8,2026-01-30,18,7000,,,Cliente Sebastian,1,cerveza-poker-330,Cerveza Poker 330cm3,2,3500,7000
+sale-1769231497804-i7esck4l2,2026-01-24,0,60000,nequi,,ing harold,1,bebida-1767478306369-c8s8nr6nh,Cóctel moscowmule,4,15000,60000
+sale-1769218771268-prj4v1m16,2026-01-22,12,104000,nequi,,"Venta: 11 Poker (cobradas a 4.000, precio real 3.500), diferencia como cigarrillos, 3 hervidos, 3 moscowmule",1,cerveza-poker-330,Cerveza Poker 330cm3,11,3500,38500
+sale-1769218771268-prj4v1m16,2026-01-22,12,104000,nequi,,"Venta: 11 Poker (cobradas a 4.000, precio real 3.500), diferencia como cigarrillos, 3 hervidos, 3 moscowmule",2,prod-1768843715583-n44rw1kv2,Cigarrillo,1,5500,5500
+sale-1769218771268-prj4v1m16,2026-01-22,12,104000,nequi,,"Venta: 11 Poker (cobradas a 4.000, precio real 3.500), diferencia como cigarrillos, 3 hervidos, 3 moscowmule",3,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada ,3,5000,15000
+sale-1769218771268-prj4v1m16,2026-01-22,12,104000,nequi,,"Venta: 11 Poker (cobradas a 4.000, precio real 3.500), diferencia como cigarrillos, 3 hervidos, 3 moscowmule",4,bebida-1767478306369-c8s8nr6nh,Cóctel moscowmule,3,15000,45000
+sale-1769218653927-pdct7h6fr,2026-01-22,10,10000,nequi,,Venta de 2 hervidos a 5.000 cada uno,1,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada ,2,5000,10000
+sale-1769218529782-j440klula,2026-01-21,14,20000,efectivo,,Venta de 2 shots a 10.000 cada uno,1,gin-gordons-shot,Ginebra Gordon's,2,10000,20000
+sale-1768959427267-flylu7tj7,2026-01-21,20,7000,efectivo,,jose ,1,pastel-dia,Pastel del día,1,7000,7000
+sale-1768878867305-47pf96fb7,2026-01-20,22,20000,efectivo,,,1,vodka-smirnoff-shot,Vodka Smirnoff,1,11000,11000
+sale-1768878867305-47pf96fb7,2026-01-20,22,20000,efectivo,,,2,tequila-olmeca-shot,Shot Tequila Olmeca,1,12000,12000
+sale-1768843907626-o4fyt4fzg,2026-01-19,20,10500,efectivo,,sebastian lugo,1,cerveza-poker-330,Cerveza Poker 330cm3,3,3500,10500
+sale-1768845945726-xd9z7cety,2026-01-18,20,56500,efectivo,,,1,cerveza-budweiser,Cerveza Budweiser,3,5000,15000
+sale-1768845945726-xd9z7cety,2026-01-18,20,56500,efectivo,,,2,cerveza-poker-330,Cerveza Poker 330cm3,7,4500,31500
+sale-1768845945726-xd9z7cety,2026-01-18,20,56500,efectivo,,,3,bebida-1767479537737-5pcmv20sn,Hervido de fruta de temporada ,2,5000,10000
+sale-1768845945713-li37b9wsv,2026-01-18,20,108000,efectivo,,,1,cerveza-budweiser,Cerveza Budweiser,3,5000,15000
+sale-1768845945713-li37b9wsv,2026-01-18,20,108000,efectivo,,,2,cerveza-heineken,Cerveza Heineken,6,5000,30000
+sale-1768845945713-li37b9wsv,2026-01-18,20,108000,efectivo,,,3,cerveza-poker-330,Cerveza Poker 330cm3,3,4500,13500
+sale-1768845945713-li37b9wsv,2026-01-18,20,108000,efectivo,,,4,prod-1768843715583-n44rw1kv2,Cigarrillo,1,1000,1000
+sale-1768845945713-li37b9wsv,2026-01-18,20,108000,efectivo,,,5,tequila-olmeca-shot,Shot Tequila Olmeca,4,12000,48000
+sale-1768850597179-ipwv4m24l,2026-01-16,14,14000,nequi,,,1,cerveza-poker-330,Cerveza Poker 330cm3,4,3500,14000
+sale-1768843907628-lxccmynjn,2026-01-16,20,10500,efectivo,,,1,cerveza-poker-330,Cerveza Poker 330cm3,3,3500,10500
+sale-1768705024627-4raapk186,2026-01-16,15,20000,,,Ver detalle,1,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,20000,20000
+sale-1768705024627-cs79z583x,2026-01-15,13,10000,,,Budweiser,1,cerveza-budweiser,Cerveza Budweiser,3,3500,10500
+sale-1768705024627-tzxr9niuc,2026-01-14,14,77000,nequi,,Cuadra con Nequi,1,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,77000,77000
+sale-1768705024626-vs699m2c3,2026-01-07,12,15000,,,Ver detalle,1,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,15000,15000
+sale-1768705024626-95rfna5m6,2026-01-06,18,337000,,,Incluye entrada Sebastián,1,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,337000,337000
+sale-1768705024626-ck918keyd,2026-01-05,16,196000,nequi,,Venta Nequi – Mauricio Ortiz,1,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,196000,196000
+sale-1768705024626-0x84rzh7l,2026-01-04,15,64000,,,Ver detalle,1,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,64000,64000
+sale-1768705024626-iy1p0xq9u,2026-01-03,14,69000,,,Ver detalle,1,acompanante,"Acompañante del día (Empanada, Buñuelo)",1,69000,69000
+sale-1768704949501-7fdz4ni4s,2025-12-31,12,52000,nequi,,,1,combo-cafe-pastel,Café artesanal caliente + pastel del día,4,13000,52000
+sale-1768704949501-fa1ggvb5t,2025-12-31,10,5000,efectivo,,,1,cafe-negro,Café negro artesanal,1,5000,5000
+sale-1768704949500-8tdebrg03,2025-12-30,20,45000,nequi,,,1,bebida-1767478306369-c8s8nr6nh,Cóctel moscowmule,6,7500,45000
+sale-1768704949500-3k5mk2wq3,2025-12-30,18,15000,nequi,,Parte de sixpack latón,1,cerveza-aguila-330,Cerveza Águila 330cm3,1,15000,15000
+sale-1768704949500-7gtzlryoi,2025-12-30,18,20000,efectivo,,Parte de sixpack latón,1,cerveza-aguila-330,Cerveza Águila 330cm3,1,20000,20000

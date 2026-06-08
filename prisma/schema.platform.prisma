@@ -1,4 +1,4 @@
-// VOS AI — Multi-tenant platform schema (v2 foundation)
+// vos.ai — Multi-tenant platform schema (v2 foundation)
 // Deploy target: fresh PostgreSQL (Neon). Legacy single-tenant schema lives in schema.legacy.prisma.
 
 generator client {
@@ -29,6 +29,11 @@ enum ProductStatus {
   ACTIVE
   INACTIVE
   ARCHIVED
+}
+
+enum ProductCostSource {
+  MANUAL
+  RECIPE
 }
 
 enum AuditAction {
@@ -240,6 +245,7 @@ model Product {
   internalCode    String?       @map("internal_code")
   salePrice       Decimal       @map("sale_price") @db.Decimal(14, 2)
   cost            Decimal       @default(0) @db.Decimal(14, 2)
+  costSource      ProductCostSource @default(MANUAL) @map("cost_source")
   /// Read-only: PostgreSQL GENERATED STORED column (see vos-platform-init.sql).
   marginPercent   Decimal?      @map("margin_percent") @db.Decimal(8, 4) @default(dbgenerated())
   status          ProductStatus @default(DRAFT)

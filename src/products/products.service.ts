@@ -3,12 +3,13 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma, ProductStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { activeToStatus, mapProduct } from './product.mapper';
+import { mapRecipeDto } from '../product-recipes/recipe.mapper';
 
 type ListOpts = {
   page: number;
@@ -49,6 +50,7 @@ export class ProductsService {
         description: dto.description?.trim() ?? '',
         salePrice: new Prisma.Decimal(dto.price),
         cost: new Prisma.Decimal(dto.cost ?? 0),
+        costSource: dto.costSource ?? 'MANUAL',
         sku: dto.sku?.trim() || null,
         internalCode: dto.internalCode?.trim() || null,
         primaryImageUrl: dto.imageUrl?.trim() || null,
@@ -126,12 +128,25 @@ export class ProductsService {
       include: {
         ...this.productInclude,
         images: { orderBy: { sortOrder: 'asc' } },
+        recipe: {
+          include: {
+            ingredients: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                inventoryItem: { include: { category: true } },
+              },
+            },
+            costs: { orderBy: { sortOrder: 'asc' } },
+          },
+        },
       },
     });
     if (!product) throw new NotFoundException('Producto no encontrado');
+    const { recipe, images, ...rest } = product;
     return {
-      ...mapProduct(product),
-      images: product.images,
+      ...mapProduct(rest),
+      images,
+      ...(recipe ? { recipe: mapRecipeDto(recipe) } : {}),
     };
   }
 
@@ -153,7 +168,16 @@ export class ProductsService {
     }
     if (dto.price !== undefined) data.salePrice = new Prisma.Decimal(dto.price);
     if (dto.cost !== undefined) data.cost = new Prisma.Decimal(dto.cost);
-    if (dto.sku !== undefined) data.sku = dto.sku?.trim() || null;
+    if (dto.costSource !== undefined) data.costSource = dto.costSource;
+    if (dto.sku !== undefined) {
+      const nextSku = dto.sku?.trim() || null;
+      const currentSku = existing.sku?.trim() || null;
+      if (nextSku !== currentSku) {
+        throw new BadRequestException(
+          'El código del producto no se puede modificar después de crearlo.',
+        );
+      }
+    }
     if (dto.internalCode !== undefined) {
       data.internalCode = dto.internalCode?.trim() || null;
     }
@@ -171,17 +195,41 @@ export class ProductsService {
     return mapProduct(product);
   }
 
+  async getSalesStats(tenant: TenantContext) {
+    const rows = await this.prisma.$queryRaw<
+      { product_id: string; units_sold: Prisma.Decimal; revenue: Prisma.Decimal }[]
+    >`
+      SELECT
+        sl.product_id,
+        SUM(sl.quantity) AS units_sold,
+        SUM(sl.quantity * sl.unit_price) AS revenue
+      FROM sale_lines sl
+      INNER JOIN sales s ON s.id = sl.sale_id
+      WHERE s.company_id = ${tenant.companyId}
+        AND sl.product_id IS NOT NULL
+      GROUP BY sl.product_id
+    `;
+
+    return rows.map((row) => ({
+      productId: row.product_id,
+      unitsSold: Number(row.units_sold),
+      revenue: Number(row.revenue),
+    }));
+  }
+
   async remove(tenant: TenantContext, id: string) {
     const existing = await this.prisma.product.findFirst({
       where: { id, companyId: tenant.companyId },
+      select: { id: true, name: true },
     });
     if (!existing) throw new NotFoundException('Producto no encontrado');
 
-    await this.prisma.product.update({
-      where: { id },
-      data: { status: ProductStatus.ARCHIVED },
+    await this.prisma.$transaction(async (tx) => {
+      // Recipe, imágenes e insumos de receta se eliminan en cascada.
+      // Líneas de venta conservan product_name y desvinculan product_id (SetNull).
+      await tx.product.delete({ where: { id } });
     });
 
-    return { ok: true };
+    return { ok: true, deleted: true, id: existing.id, name: existing.name };
   }
 }
