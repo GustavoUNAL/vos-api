@@ -16,6 +16,8 @@ import { PlatformInventoryModule } from './platform-inventory/platform-inventory
 import { PlatformRecipesModule } from './platform-recipes/platform-recipes.module';
 import { PlatformSalesModule } from './platform-sales/platform-sales.module';
 import { PlatformPurchasesModule } from './platform-purchases/platform-purchases.module';
+import { PlatformStaffModule } from './platform-staff/platform-staff.module';
+import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { PlatformPurchasesModule } from './platform-purchases/platform-purchases
     PlatformRecipesModule,
     PlatformSalesModule,
     PlatformPurchasesModule,
+    PlatformStaffModule,
+    PlatformAnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

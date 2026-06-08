@@ -18,8 +18,11 @@ export class NavigationService {
     }
 
     const hasProducts = enabledModules.includes('products');
+    const hasInventory = enabledModules.includes('inventory');
     const hasSales = enabledModules.includes('sales');
     const hasPurchases = enabledModules.includes('purchases');
+    const hasStaff = enabledModules.includes('staff');
+    const hasFinance = enabledModules.includes('finance');
 
     return {
       version: 3,
@@ -58,6 +61,32 @@ export class NavigationService {
                     productRecipe: 'GET /products/:id/recipe',
                   },
                   tables: ['recipes', 'recipe_ingredients', 'recipe_costs'],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'inventory',
+          title: 'Inventario',
+          subtitle: 'Stock de insumos y alertas de mínimo',
+          groups: [
+            {
+              id: 'inventory-items',
+              title: 'Inventario',
+              items: [
+                {
+                  id: 'inventory',
+                  label: 'Inventario',
+                  status: hasInventory ? 'ready' : 'soon',
+                  endpoints: {
+                    list: 'GET /inventory',
+                    detail: 'GET /inventory/:id',
+                    create: 'POST /inventory',
+                    update: 'PATCH /inventory/:id',
+                    categories: 'GET /inventory/categories',
+                  },
+                  tables: ['inventory_items'],
                 },
               ],
             },
@@ -118,6 +147,53 @@ export class NavigationService {
           ],
         },
         {
+          id: 'staff',
+          title: 'Personal',
+          subtitle: 'Turnos, horas y pago por hora',
+          groups: [
+            {
+              id: 'staff-items',
+              title: 'Personal',
+              items: [
+                {
+                  id: 'staff',
+                  label: 'Personal',
+                  status: hasStaff ? 'ready' : 'soon',
+                  endpoints: {
+                    list: 'GET /staff',
+                    shifts: 'GET /staff-shifts',
+                    summary: 'GET /staff/summary',
+                    create: 'POST /staff',
+                  },
+                  tables: ['staff_members', 'staff_shifts'],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'finance',
+          title: 'Finanzas',
+          subtitle: 'Análisis de ventas, compras y nómina',
+          groups: [
+            {
+              id: 'finance-items',
+              title: 'Análisis',
+              items: [
+                {
+                  id: 'analytics',
+                  label: 'Análisis financiero',
+                  status: hasFinance ? 'ready' : 'soon',
+                  endpoints: {
+                    overview: 'GET /analytics/financial',
+                  },
+                  tables: ['sales', 'purchase_lots', 'staff_shifts'],
+                },
+              ],
+            },
+          ],
+        },
+        {
           id: 'operations',
           title: 'Operaciones',
           subtitle: 'Módulos en roadmap',
@@ -126,9 +202,7 @@ export class NavigationService {
               id: 'ops-items',
               title: 'Próximamente',
               items: [
-                { id: 'inventory', label: 'Inventario', status: 'soon' },
                 { id: 'crm', label: 'CRM', status: 'soon' },
-                { id: 'finance', label: 'Finanzas', status: 'soon' },
               ],
             },
           ],

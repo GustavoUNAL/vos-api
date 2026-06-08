@@ -1,0 +1,193 @@
+{
+  "companyId": "seed-arandano-cafe-bar",
+  "source": "Registro histórico Arándano Café Bar (imágenes)",
+  "staffMember": {
+    "name": "David",
+    "notes": "Horarios registrados en libro histórico Mar–Jun 2026"
+  },
+  "days": [
+    {
+      "date": "2026-03-09",
+      "comandas": 2,
+      "salesCOP": 18500,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-03-13",
+      "comandas": 9,
+      "salesCOP": 136000,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-03-14",
+      "comandas": null,
+      "salesCOP": 31500,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": "Comandas: no registrado"
+    },
+    {
+      "date": "2026-03-16",
+      "comandas": 2,
+      "salesCOP": 70000,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-03-17",
+      "comandas": 3,
+      "salesCOP": 95400,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": "Valor registrado $95.400+; en el libro aparece signo “+” y una cifra adicional tachada"
+    },
+    {
+      "date": "2026-04-06",
+      "comandas": 2,
+      "salesCOP": 30000,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-04-07",
+      "comandas": 1,
+      "salesCOP": 14000,
+      "purchasesCOP": 0,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-04-09",
+      "comandas": 1,
+      "salesCOP": 44000,
+      "purchasesCOP": 0,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-04-10",
+      "comandas": 1,
+      "salesCOP": 22000,
+      "purchasesCOP": 0,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-04-14",
+      "comandas": 1,
+      "salesCOP": 22000,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-04-15",
+      "comandas": 6,
+      "salesCOP": 91500,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-04-16",
+      "comandas": 1,
+      "salesCOP": 35000,
+      "purchasesCOP": 0,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-04-17",
+      "comandas": 1,
+      "salesCOP": 26000,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-04-21",
+      "comandas": 1,
+      "salesCOP": 12000,
+      "purchasesCOP": null,
+      "davidSchedule": null,
+      "notes": null
+    },
+    {
+      "date": "2026-04-28",
+      "comandas": 5,
+      "salesCOP": 69800,
+      "purchasesCOP": 0,
+      "davidSchedule": "2:00 pm – 7:00 pm",
+      "davidHours": 5,
+      "notes": null
+    },
+    {
+      "date": "2026-04-29",
+      "comandas": 10,
+      "salesCOP": 178000,
+      "purchasesCOP": 53800,
+      "davidSchedule": "2:30 pm – 9:30 pm",
+      "davidHours": 7,
+      "notes": null
+    },
+    {
+      "date": "2026-04-30",
+      "comandas": 3,
+      "salesCOP": 103500,
+      "purchasesCOP": 118662,
+      "davidSchedule": "2:00 pm – 8:00 pm",
+      "davidHours": 6,
+      "notes": null
+    },
+    {
+      "date": "2026-05-01",
+      "comandas": 2,
+      "salesCOP": 81500,
+      "purchasesCOP": null,
+      "davidSchedule": "2:00 pm – 10:00 pm",
+      "davidHours": 8,
+      "notes": null
+    },
+    {
+      "date": "2026-05-04",
+      "comandas": 3,
+      "salesCOP": 57000,
+      "purchasesCOP": 79200,
+      "davidSchedule": "3:00 pm – 10:00 pm",
+      "davidHours": 7,
+      "notes": null
+    },
+    {
+      "date": "2026-06-03",
+      "comandas": null,
+      "salesCOP": 248000,
+      "purchasesCOP": 41400,
+      "davidSchedule": "3:00 pm – 12:30 am",
+      "davidHours": 9.5,
+      "notes": "Deuda del día: $147.000 faltantes. Comandas: no registrado"
+    },
+    {
+      "date": "2026-06-04",
+      "comandas": 3,
+      "salesCOP": 62000,
+      "purchasesCOP": 0,
+      "davidSchedule": "3:00 pm – 9:30 pm",
+      "davidHours": 6.5,
+      "notes": null
+    },
+    {
+      "date": "2026-06-05",
+      "comandas": 4,
+      "salesCOP": 158500,
+      "purchasesCOP": 416323,
+      "davidSchedule": null,
+      "notes": "Compras: licores, panes y perros calientes. Deuda Mauricio: $80.000"
+    }
+  ]
+}

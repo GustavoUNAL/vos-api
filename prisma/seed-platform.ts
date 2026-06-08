@@ -11,9 +11,10 @@ const MODULES = [
   { slug: 'inventory', name: 'Inventario', description: 'Stock y movimientos', sortOrder: 20 },
   { slug: 'sales', name: 'Ventas', description: 'POS y facturación', sortOrder: 30 },
   { slug: 'purchases', name: 'Compras', description: 'Lotes y proveedores', sortOrder: 35 },
+  { slug: 'staff', name: 'Personal', description: 'Turnos y nómina por hora', sortOrder: 38 },
+  { slug: 'finance', name: 'Finanzas', description: 'Análisis y reportes', sortOrder: 42 },
   { slug: 'crm', name: 'CRM', description: 'Clientes y relaciones', sortOrder: 40 },
   { slug: 'projects', name: 'Proyectos', description: 'Gestión de proyectos', sortOrder: 50 },
-  { slug: 'finance', name: 'Finanzas', description: 'Contabilidad y reportes', sortOrder: 60 },
 ] as const;
 
 const PRODUCT_PERMISSIONS = [
@@ -29,10 +30,28 @@ const SALES_PERMISSIONS = [
   { slug: 'sales.update', name: 'Editar ventas' },
 ] as const;
 
+const INVENTORY_PERMISSIONS = [
+  { slug: 'inventory.view', name: 'Ver inventario' },
+  { slug: 'inventory.create', name: 'Crear ítems de inventario' },
+  { slug: 'inventory.update', name: 'Editar inventario' },
+  { slug: 'inventory.delete', name: 'Eliminar inventario' },
+] as const;
+
 const PURCHASES_PERMISSIONS = [
   { slug: 'purchases.view', name: 'Ver compras' },
   { slug: 'purchases.create', name: 'Registrar compras' },
   { slug: 'purchases.update', name: 'Editar compras' },
+] as const;
+
+const STAFF_PERMISSIONS = [
+  { slug: 'staff.view', name: 'Ver personal' },
+  { slug: 'staff.create', name: 'Registrar personal y turnos' },
+  { slug: 'staff.update', name: 'Editar personal y turnos' },
+  { slug: 'staff.delete', name: 'Eliminar personal y turnos' },
+] as const;
+
+const FINANCE_PERMISSIONS = [
+  { slug: 'finance.view', name: 'Ver análisis financiero' },
 ] as const;
 
 async function main() {
@@ -125,11 +144,27 @@ async function main() {
     const salesModule = await prisma.module.findUniqueOrThrow({
       where: { slug: 'sales' },
     });
+    const inventoryModule = await prisma.module.findUniqueOrThrow({
+      where: { slug: 'inventory' },
+    });
     const purchasesModule = await prisma.module.findUniqueOrThrow({
       where: { slug: 'purchases' },
     });
+    const staffModule = await prisma.module.findUniqueOrThrow({
+      where: { slug: 'staff' },
+    });
+    const financeModule = await prisma.module.findUniqueOrThrow({
+      where: { slug: 'finance' },
+    });
 
-    for (const mod of [productsModule, salesModule, purchasesModule]) {
+    for (const mod of [
+      productsModule,
+      inventoryModule,
+      salesModule,
+      purchasesModule,
+      staffModule,
+      financeModule,
+    ]) {
       await prisma.companyModule.upsert({
         where: {
           companyId_moduleId: {
@@ -148,8 +183,11 @@ async function main() {
 
     for (const perm of [
       ...PRODUCT_PERMISSIONS,
+      ...INVENTORY_PERMISSIONS,
       ...SALES_PERMISSIONS,
       ...PURCHASES_PERMISSIONS,
+      ...STAFF_PERMISSIONS,
+      ...FINANCE_PERMISSIONS,
     ]) {
       await prisma.permission.upsert({
         where: { slug: perm.slug },
@@ -164,7 +202,9 @@ async function main() {
 
     const permissions = await prisma.permission.findMany({
       where: {
-        moduleSlug: { in: ['products', 'sales', 'purchases'] },
+        moduleSlug: {
+          in: ['products', 'inventory', 'sales', 'purchases', 'staff', 'finance'],
+        },
       },
     });
 
@@ -682,9 +722,6 @@ async function main() {
     for (const p of menuProducts) {
       const categoryId = categoryIds[p.categorySlug];
       if (!categoryId) continue;
-      const existing = await prisma.product.findFirst({
-        where: { companyId: company.id, name: p.name },
-      });
       const estimatedCost = estimateProductionCostCOP(p.price, p.categorySlug);
       const data = {
         categoryId,
@@ -694,33 +731,57 @@ async function main() {
         cost: estimatedCost,
         costSource: 'MANUAL' as const,
         status: 'ACTIVE' as const,
+        sku: p.sku,
       };
-      if (existing) {
+
+      const bySku = await prisma.product.findFirst({
+        where: { companyId: company.id, sku: p.sku },
+      });
+      if (bySku) {
         await prisma.product.update({
-          where: { id: existing.id },
-          data: { ...data, sku: p.sku },
+          where: { id: bySku.id },
+          data,
+        });
+        continue;
+      }
+
+      const byName = await prisma.product.findFirst({
+        where: { companyId: company.id, name: p.name },
+      });
+      if (byName) {
+        await prisma.product.update({
+          where: { id: byName.id },
+          data,
         });
       } else {
         await prisma.product.create({
           data: {
             companyId: company.id,
-            sku: p.sku,
             ...data,
           },
         });
       }
     }
 
-    await prisma.product.updateMany({
+    await prisma.product.deleteMany({
       where: {
         companyId: company.id,
         sku: { notIn: catalogSkus },
       },
-      data: { status: 'INACTIVE' },
     });
 
-    const insumosCategory = await prisma.productCategory.findFirst({
-      where: { companyId: company.id, slug: 'insumos' },
+    const insumosCategory = await prisma.productCategory.upsert({
+      where: {
+        companyId_slug: { companyId: company.id, slug: 'insumos' },
+      },
+      create: {
+        companyId: company.id,
+        name: 'INVENTORY::Insumos',
+        slug: 'insumos',
+        sortOrder: 100,
+        active: true,
+      },
+      update: { name: 'INVENTORY::Insumos', active: true },
     });
 
     const demoInventory = [
@@ -775,12 +836,18 @@ async function main() {
       },
     });
 
+    const enabledModuleRows = await prisma.companyModule.findMany({
+      where: { companyId: company.id, isEnabled: true },
+      include: { module: { select: { slug: true } } },
+      orderBy: { module: { sortOrder: 'asc' } },
+    });
+
     console.log('Platform seed OK:', {
       companyId: company.id,
       companyName: company.name,
       adminEmail: adminUser.email,
       adminPassword,
-      enabledModules: ['products', 'sales', 'purchases'],
+      enabledModules: enabledModuleRows.map((r) => r.module.slug),
       categories: menuCategories.map((c) => c.slug),
       products: menuProducts.length,
     });

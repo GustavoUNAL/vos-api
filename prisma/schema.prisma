@@ -52,6 +52,12 @@ enum SaleSource {
   IMPORT
 }
 
+enum StaffShiftStatus {
+  OPEN
+  CLOSED
+  PAID
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -99,6 +105,8 @@ model Company {
   sales            Sale[]
   purchaseLots     PurchaseLot[]
   purchaseLotLines PurchaseLotLine[]
+  staffMembers     StaffMember[]
+  staffShifts      StaffShift[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -551,6 +559,55 @@ model AiMessage {
   @@index([conversationId], map: "idx_ai_messages_conversation_id")
   @@index([createdAt], map: "idx_ai_messages_created_at")
   @@map("ai_messages")
+}
+
+// ---------------------------------------------------------------------------
+// Personal — turnos y tarifa por hora
+// ---------------------------------------------------------------------------
+
+model StaffMember {
+  id                 String   @id @default(cuid())
+  companyId          String   @map("company_id")
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name               String
+  phone              String?
+  email              String?
+  idNumber           String?  @map("id_number")
+  defaultHourlyRate  Decimal  @default(0) @map("default_hourly_rate") @db.Decimal(14, 2)
+  active             Boolean  @default(true)
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shifts StaffShift[]
+
+  @@index([companyId], map: "idx_staff_members_company_id")
+  @@index([companyId, active], map: "idx_staff_members_company_active")
+  @@map("staff_members")
+}
+
+model StaffShift {
+  id             String           @id @default(cuid())
+  companyId      String           @map("company_id")
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staffMemberId  String           @map("staff_member_id")
+  staffMember    StaffMember      @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+  shiftDate      DateTime         @map("shift_date") @db.Date
+  startAt        DateTime         @map("start_at") @db.Timestamptz(6)
+  endAt          DateTime?        @map("end_at") @db.Timestamptz(6)
+  hourlyRateCOP  Decimal          @map("hourly_rate_cop") @db.Decimal(14, 2)
+  hoursWorked    Decimal?         @map("hours_worked") @db.Decimal(8, 4)
+  totalPayCOP    Decimal?         @map("total_pay_cop") @db.Decimal(14, 2)
+  status         StaffShiftStatus @default(OPEN)
+  notes          String?
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([companyId], map: "idx_staff_shifts_company_id")
+  @@index([staffMemberId], map: "idx_staff_shifts_staff_member_id")
+  @@index([companyId, shiftDate], map: "idx_staff_shifts_company_shift_date")
+  @@index([shiftDate], map: "idx_staff_shifts_shift_date")
+  @@map("staff_shifts")
 }
 
 // ---------------------------------------------------------------------------

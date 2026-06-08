@@ -2,28 +2,43 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
-import { matchSaleLineToCatalog, normalizeProductLabel } from './lib/sale-line-product-match';
+import { pgPoolConfig } from '../src/common/pg-pool-config';
 import { computeSaleLineCostProfit } from '../src/sales/recipe-sale-line-cost';
+import { SEED_COMPANY_ID } from './lib/platform-recipe-seed';
+import {
+  matchSaleLineToCatalog,
+  normalizeProductLabel,
+} from './lib/sale-line-product-match';
 
 /**
- * Enlaza cada `sale_line` a un `product_id` del menú actual y rellena
- * `cost_at_sale` / `profit` según la receta vigente (× multiplicador para medias).
+ * Enlaza cada `sale_line` al catálogo activo y rellena costo/utilidad.
  *
- * No borra ventas: solo actualiza líneas. Líneas sin producto en catálogo se omiten.
- *
- * Uso: npm run db:backfill-sale-lines
+ * Uso:
+ *   npm run db:backfill-sale-lines
+ *   npm run db:backfill-sale-lines -- --company-id=seed-arandano-cafe-bar
  */
 
+function parseArgs() {
+  let companyId = SEED_COMPANY_ID;
+  for (const arg of process.argv.slice(2)) {
+    if (arg.startsWith('--company-id=')) {
+      companyId = arg.slice('--company-id='.length);
+    }
+  }
+  return { companyId };
+}
+
 async function main() {
+  const { companyId } = parseArgs();
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required');
 
-  const pool = new Pool({ connectionString: url });
+  const pool = new Pool(pgPoolConfig(url));
   const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
   try {
     const products = await prisma.product.findMany({
-      where: { deletedAt: null },
+      where: { companyId, status: { not: 'ARCHIVED' } },
       select: { id: true, name: true },
     });
     const nameToId = new Map<string, { id: string; name: string }>();
@@ -32,6 +47,7 @@ async function main() {
     }
 
     const lines = await prisma.saleLine.findMany({
+      where: { sale: { companyId } },
       select: {
         id: true,
         productName: true,
@@ -44,6 +60,7 @@ async function main() {
     let updated = 0;
     let skipped = 0;
     let noRecipe = 0;
+    let namesNormalized = 0;
 
     for (const line of lines) {
       const hit = matchSaleLineToCatalog(line.productName, nameToId);
@@ -62,10 +79,14 @@ async function main() {
 
       if (costAtSale == null) noRecipe++;
 
+      const canonicalName = hit.productName;
+      if (canonicalName !== line.productName.trim()) namesNormalized++;
+
       await prisma.saleLine.update({
         where: { id: line.id },
         data: {
           productId: hit.productId,
+          productName: canonicalName,
           costAtSale,
           profit,
         },
@@ -74,7 +95,18 @@ async function main() {
     }
 
     console.log(
-      `Líneas actualizadas: ${updated} (sin receta/costo: ${noRecipe}), sin match catálogo: ${skipped}, total: ${lines.length}`,
+      JSON.stringify(
+        {
+          companyId,
+          updated,
+          namesNormalized,
+          noRecipeOrCost: noRecipe,
+          skippedNoCatalogMatch: skipped,
+          totalLines: lines.length,
+        },
+        null,
+        2,
+      ),
     );
   } finally {
     await prisma.$disconnect();

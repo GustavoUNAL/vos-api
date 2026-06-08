@@ -37,47 +37,15 @@ export const H1_2026_MENU: readonly {
   },
   { name: 'Carajillo', categorySlug: 'cafeteria', price: 8000, sku: '1005' },
   { name: 'Café irlandés', categorySlug: 'cafeteria', price: 10000, sku: '1006' },
-  {
-    name: 'Café frío artesanal',
-    categorySlug: 'cafeteria',
-    price: 4000,
-    sku: '1017',
-  },
-  {
-    name: 'Café frío con leche',
-    categorySlug: 'cafeteria',
-    price: 5000,
-    sku: '1018',
-  },
   { name: 'Affogato', categorySlug: 'cafeteria', price: 10000, sku: '1008' },
-  // Pastelería
+  // Cócteles
   {
-    name: 'Acompañante del día',
-    categorySlug: 'comida-rapida',
-    price: 3000,
-    sku: '2007',
-    description: 'Empanada, buñuelo o galleta del día.',
+    name: 'Hervido',
+    categorySlug: 'cocteles',
+    price: 8000,
+    sku: '4000',
+    description: 'Cóctel de frutas cítricas (hervido de temporada).',
   },
-  {
-    name: 'Pastel del día',
-    categorySlug: 'comida-rapida',
-    price: 7000,
-    sku: '2008',
-  },
-  {
-    name: 'Sándwich del día',
-    categorySlug: 'comida-rapida',
-    price: 10000,
-    sku: '2009',
-  },
-  {
-    name: 'Combo café y pastel',
-    categorySlug: 'cafeteria',
-    price: 12000,
-    sku: '1019',
-    description: 'Café artesanal caliente + pastel del día.',
-  },
-  // Cócteles / hervidos
   {
     name: 'Cóctel Arándano',
     categorySlug: 'cocteles',
@@ -103,18 +71,6 @@ export const H1_2026_MENU: readonly {
     sku: '4005',
   },
   { name: 'Margarita', categorySlug: 'cocteles', price: 15000, sku: '4004' },
-  {
-    name: 'Hervido de fruta de temporada',
-    categorySlug: 'cocteles',
-    price: 8000,
-    sku: '4000',
-  },
-  {
-    name: 'Vino caliente',
-    categorySlug: 'cocteles',
-    price: 10000,
-    sku: '4013',
-  },
   // Cervezas
   {
     name: 'Cerveza Águila',
@@ -143,23 +99,11 @@ export const H1_2026_MENU: readonly {
     sku: '3005',
   },
   {
-    name: 'Cerveza Heineken',
-    categorySlug: 'cervezas',
-    price: 5000,
-    sku: '3010',
-  },
-  {
     name: 'Cerveza Poker',
     categorySlug: 'cervezas',
     price: 4500,
     sku: '3001',
     description: '330 ml.',
-  },
-  {
-    name: 'Cerveza Poker 475 ml',
-    categorySlug: 'cervezas',
-    price: 7000,
-    sku: '3009',
   },
   // Shots
   {
@@ -192,25 +136,6 @@ export const H1_2026_MENU: readonly {
     price: 4000,
     sku: '1010',
   },
-  {
-    name: 'Cigarrillo',
-    categorySlug: 'comida-rapida',
-    price: 1000,
-    sku: '2010',
-    description: 'Cigarrillo suelto.',
-  },
-  {
-    name: 'Refajo',
-    categorySlug: 'cervezas',
-    price: 5000,
-    sku: '2011',
-  },
-  {
-    name: 'Papas fritas',
-    categorySlug: 'comida-rapida',
-    price: 7000,
-    sku: '2012',
-  },
   // Licores (botellas)
   {
     name: 'Vodka Smirnoff Tamarindo',
@@ -236,23 +161,12 @@ export const H1_2026_MENU: readonly {
     price: 75000,
     sku: '6001',
   },
-  {
-    name: 'Botella de licor',
-    categorySlug: 'licores',
-    price: 175000,
-    sku: '6012',
-    description: 'Botella genérica (histórico).',
-  },
 ] as const;
 
 /** IDs legacy del POS → nombre en catálogo H1 2026. */
 export const LEGACY_PRODUCT_ID_MAP: Record<string, string> = {
   'cafe-negro': 'Café negro artesanal',
-  acompanante: 'Acompañante del día',
-  'pastel-dia': 'Pastel del día',
-  'sandwich-dia': 'Sándwich del día',
-  'combo-cafe-pastel': 'Combo café y pastel',
-  'bebida-1767479537737-5pcmv20sn': 'Hervido de fruta de temporada',
+  'bebida-1767479537737-5pcmv20sn': 'Hervido',
   'bebida-1767478463497-c2aya0ta0': 'Cóctel de Campari',
   'bebida-1767478306369-c8s8nr6nh': 'Moscow Mule',
   'bebida-soda': 'Soda',
@@ -263,7 +177,6 @@ export const LEGACY_PRODUCT_ID_MAP: Record<string, string> = {
   'cerveza-club-colombia-330': 'Cerveza Club Colombia',
   'cerveza-poker-330': 'Cerveza Poker',
   'cerveza-budweiser': 'Cerveza Budweiser',
-  'cerveza-heineken': 'Cerveza Heineken',
   'cerveza-aguila-330': 'Cerveza Águila',
   'tequila-olmeca-shot': 'Shot tequila',
   'gin-gordons-shot': 'Shot ginebra',
@@ -273,13 +186,6 @@ export const LEGACY_PRODUCT_ID_MAP: Record<string, string> = {
   'media-aguardiente-narino': 'Media Aguardiente Nariño',
   'prod-1768501043986-dzy4iyvgk': 'Media Aguardiente Nariño',
   'prod-1768501042805-nuujaxetr': 'Aguardiente Amarillo',
-  'botella-generica': 'Botella de licor',
-  refajo: 'Refajo',
-  papas: 'Papas fritas',
-  'cig-marlboro-rojo': 'Cigarrillo',
-  'cig-marlboro-morado': 'Cigarrillo',
-  'cigarro-suelto': 'Cigarrillo',
-  'prod-1768843715583-n44rw1kv2': 'Cigarrillo',
 };
 
 export async function ensureH1MenuProducts(
@@ -323,20 +229,6 @@ export async function ensureH1MenuProducts(
         });
 
     byName.set(item.name, row);
-  }
-
-  // Alias: producto antiguo "Hervido" → mismo id que hervido de temporada
-  const hervido = byName.get('Hervido de fruta de temporada');
-  if (hervido) {
-    const old = await prisma.product.findFirst({
-      where: { companyId, name: 'Hervido', status: { not: 'ARCHIVED' } },
-    });
-    if (old && old.id !== hervido.id) {
-      await prisma.product.update({
-        where: { id: old.id },
-        data: { status: 'ARCHIVED' },
-      });
-    }
   }
 
   return byName;

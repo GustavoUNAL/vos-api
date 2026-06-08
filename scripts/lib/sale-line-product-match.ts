@@ -60,11 +60,11 @@ const RULES: Rule[] = [
     catalogName: 'Aromática con fruta',
   },
   {
-    test: /hervido/i,
-    catalogName: 'Hervido de fruta de temporada',
+    test: /hervido|c[oó]ctel\s*de\s*frutas?|fruta\s*de\s*temporada/i,
+    catalogName: 'Hervido',
   },
   {
-    test: /moscow|moscowmule|chapil/i,
+    test: /moscow|moscowmule|chapil|c[oó]ctel\s*moscow/i,
     catalogName: 'Moscow Mule',
   },
   {
@@ -76,8 +76,12 @@ const RULES: Rule[] = [
     catalogName: 'Cerveza Michelada',
   },
   {
-    test: /club\s*colombia|^cerveza\s*club/i,
+    test: /club\s*colombia|cerveza\s*club.*330|^cerveza\s*club/i,
     catalogName: 'Cerveza Club Colombia',
+  },
+  {
+    test: /poker.*330|330.*poker/i,
+    catalogName: 'Cerveza Poker',
   },
   {
     test: /^cerveza$/i,
@@ -94,10 +98,6 @@ const RULES: Rule[] = [
   {
     test: /águila|aguila/i,
     catalogName: 'Cerveza Águila',
-  },
-  {
-    test: /poker.*475|475.*poker/i,
-    catalogName: 'Cerveza Poker 475 ml',
   },
   {
     test: /poker/i,

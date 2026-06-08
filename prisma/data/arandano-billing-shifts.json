@@ -1,0 +1,177 @@
+{
+  "source": "Cuentas de cobro Arándano — detalle de turnos David (abr–may 2026)",
+  "staffMember": "David",
+  "hourlyRateCOP": 9000,
+  "expectedTotalHours": 136.8333,
+  "expectedTotalLabel": "136 h 50 min · 20 turnos con fecha + 2 cuentas de cobro",
+  "shifts": [
+    {
+      "date": "2026-04-27",
+      "hours": 5,
+      "schedule": null,
+      "notes": "Turno 1 · Cuenta de Cobro 1 · horario no especificado"
+    },
+    {
+      "date": "2026-04-28",
+      "hours": 7,
+      "schedule": null,
+      "notes": "Turno 2 · Cuenta de Cobro 1 · horario no especificado"
+    },
+    {
+      "date": "2026-05-02",
+      "hours": 6,
+      "schedule": null,
+      "notes": "Turno 3 · Cuenta de Cobro 2 · horario no especificado"
+    },
+    {
+      "date": "2026-05-03",
+      "hours": 8,
+      "schedule": null,
+      "notes": "Turno 4 · Cuenta de Cobro 2 · horario no especificado"
+    },
+    {
+      "date": "2026-05-04",
+      "hours": 7,
+      "schedule": "3:00 pm – 10:00 pm",
+      "salesCOP": 57000,
+      "purchasesCOP": 51200,
+      "notes": "4 comandas · venta muy baja"
+    },
+    {
+      "date": "2026-05-06",
+      "hours": 9,
+      "schedule": "1:30 pm – 10:30 pm",
+      "salesCOP": 372000,
+      "purchasesCOP": 243995,
+      "notes": "Partido de fútbol · 32 cervezas, 2 botellas aguardiente"
+    },
+    {
+      "date": "2026-05-07",
+      "hours": 7,
+      "schedule": "2:30 pm – 9:30 pm",
+      "salesCOP": 39500,
+      "purchasesCOP": 0,
+      "notes": "3 comandas · día muy flojo"
+    },
+    {
+      "date": "2026-05-08",
+      "hours": 8.5,
+      "schedule": "2:30 pm – 11:00 pm",
+      "salesCOP": 88500,
+      "purchasesCOP": 6000,
+      "notes": "5 comandas · 8 h 30 min"
+    },
+    {
+      "date": "2026-05-11",
+      "hours": 7,
+      "schedule": "2:30 pm – 9:30 pm",
+      "salesCOP": 90000,
+      "purchasesCOP": 4000,
+      "notes": "Atención al cliente y preparación de bebidas"
+    },
+    {
+      "date": "2026-05-12",
+      "hours": 6,
+      "schedule": "2:30 pm – 8:30 pm",
+      "salesCOP": 91000,
+      "purchasesCOP": 4000,
+      "notes": "Reorganización de precios y productos"
+    },
+    {
+      "date": "2026-05-13",
+      "hours": 5,
+      "schedule": "3:00 pm – 8:00 pm",
+      "salesCOP": 29000,
+      "purchasesCOP": 291800,
+      "notes": "Reabastecimiento grande"
+    },
+    {
+      "date": "2026-05-14",
+      "hours": 4,
+      "schedule": "3:00 pm – 7:00 pm",
+      "salesCOP": 29000,
+      "purchasesCOP": 4000,
+      "notes": "Capacitación Notion y procesos"
+    },
+    {
+      "date": "2026-05-15",
+      "hours": 7,
+      "schedule": "3:00 pm – 10:00 pm",
+      "salesCOP": 56000,
+      "purchasesCOP": 46000,
+      "notes": "Fotos y edición marketing · partido del Pasto"
+    },
+    {
+      "date": "2026-05-19",
+      "hours": 4.5,
+      "schedule": "3:00 pm – 7:30 pm",
+      "salesCOP": 0,
+      "purchasesCOP": 6600,
+      "notes": "Trabajo administrativo y diseño de menús"
+    },
+    {
+      "date": "2026-05-20",
+      "hours": 4.5,
+      "schedule": "3:00 pm – 7:30 pm",
+      "salesCOP": 66500,
+      "purchasesCOP": 0,
+      "notes": "Cambio de precios y atención al cliente"
+    },
+    {
+      "date": "2026-05-21",
+      "hours": 5,
+      "schedule": "3:00 pm – 8:00 pm",
+      "salesCOP": 172000,
+      "purchasesCOP": 11000,
+      "notes": "Muy buen desempeño para día normal"
+    },
+    {
+      "date": "2026-05-22",
+      "hours": 8,
+      "schedule": "3:00 pm – 11:00 pm",
+      "salesCOP": 122000,
+      "purchasesCOP": 0,
+      "notes": "Inventario completo y creación de QR"
+    },
+    {
+      "date": "2026-05-25",
+      "hours": 7,
+      "schedule": "3:00 pm – 10:00 pm",
+      "salesCOP": 117000,
+      "purchasesCOP": 190470,
+      "notes": "Compras importantes de insumos"
+    },
+    {
+      "date": "2026-05-26",
+      "hours": 8,
+      "schedule": "3:00 pm – 11:00 pm",
+      "salesCOP": 163000,
+      "purchasesCOP": 0,
+      "notes": "Venta fuerte cócteles y 8 perros calientes"
+    },
+    {
+      "date": "2026-05-27",
+      "hours": 9,
+      "schedule": "3:00 pm – 12:00 am",
+      "salesCOP": 136000,
+      "purchasesCOP": 14000,
+      "notes": "Diseño de menú y atención constante"
+    },
+    {
+      "date": "2026-05-28",
+      "hours": 7,
+      "schedule": "3:00 pm – 10:00 pm",
+      "salesCOP": 0,
+      "purchasesCOP": 282100,
+      "notes": "Día dedicado a abastecimiento y organización"
+    },
+    {
+      "date": "2026-05-29",
+      "hours": 9.8333,
+      "schedule": "3:00 pm – 12:50 am",
+      "salesCOP": 75000,
+      "purchasesCOP": 91800,
+      "notes": "Aprendizaje coctelería · 9 h 50 min"
+    }
+  ]
+}

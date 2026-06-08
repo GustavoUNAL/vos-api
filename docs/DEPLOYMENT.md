@@ -17,7 +17,7 @@
 | `CORS_ORIGIN` | `http://203.0.113.10:8080` o `https://app.tudominio.com` |
 | `VITE_API_URL` | URL que el **navegador** usa para el API: `http://203.0.113.10:3000` |
 
-Plantilla: `../.env.vps.example` en la raíz del monorepo.
+Plantilla: `.env.vps.example` en la raíz del monorepo (copiar a `vos.ai-api/.env`).
 
 ## Orden de despliegue
 

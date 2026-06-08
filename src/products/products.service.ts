@@ -196,25 +196,74 @@ export class ProductsService {
   }
 
   async getSalesStats(tenant: TenantContext) {
-    const rows = await this.prisma.$queryRaw<
-      { product_id: string; units_sold: Prisma.Decimal; revenue: Prisma.Decimal }[]
-    >`
-      SELECT
-        sl.product_id,
-        SUM(sl.quantity) AS units_sold,
-        SUM(sl.quantity * sl.unit_price) AS revenue
-      FROM sale_lines sl
-      INNER JOIN sales s ON s.id = sl.sale_id
-      WHERE s.company_id = ${tenant.companyId}
-        AND sl.product_id IS NOT NULL
-      GROUP BY sl.product_id
-    `;
+    const [byProductId, byNameMatch] = await Promise.all([
+      this.prisma.$queryRaw<
+        {
+          product_id: string;
+          units_sold: Prisma.Decimal;
+          revenue: Prisma.Decimal;
+        }[]
+      >`
+        SELECT
+          sl.product_id,
+          SUM(sl.quantity) AS units_sold,
+          SUM(sl.quantity * sl.unit_price) AS revenue
+        FROM sale_lines sl
+        INNER JOIN sales s ON s.id = sl.sale_id
+        INNER JOIN products p ON p.id = sl.product_id AND p.status = 'ACTIVE'
+        WHERE s.company_id = ${tenant.companyId}
+          AND sl.product_id IS NOT NULL
+        GROUP BY sl.product_id
+      `,
+      this.prisma.$queryRaw<
+        {
+          product_id: string;
+          units_sold: Prisma.Decimal;
+          revenue: Prisma.Decimal;
+        }[]
+      >`
+        SELECT
+          p.id AS product_id,
+          SUM(sl.quantity) AS units_sold,
+          SUM(sl.quantity * sl.unit_price) AS revenue
+        FROM sale_lines sl
+        INNER JOIN sales s ON s.id = sl.sale_id
+        INNER JOIN products p ON p.company_id = s.company_id
+          AND p.status = 'ACTIVE'
+          AND (
+            LOWER(TRIM(sl.product_name)) = LOWER(TRIM(p.name))
+            OR (
+              LOWER(TRIM(p.name)) = 'hervido'
+              AND (
+                LOWER(TRIM(sl.product_name)) LIKE '%hervido%'
+                OR LOWER(TRIM(sl.product_name)) LIKE '%cóctel de fruta%'
+                OR LOWER(TRIM(sl.product_name)) LIKE '%coctel de fruta%'
+                OR LOWER(TRIM(sl.product_name)) LIKE '%fruta de temporada%'
+              )
+            )
+          )
+        WHERE s.company_id = ${tenant.companyId}
+          AND sl.product_id IS NULL
+        GROUP BY p.id
+      `,
+    ]);
 
-    return rows.map((row) => ({
-      productId: row.product_id,
-      unitsSold: Number(row.units_sold),
-      revenue: Number(row.revenue),
-    }));
+    const merged = new Map<string, { unitsSold: number; revenue: number }>();
+    for (const row of [...byProductId, ...byNameMatch]) {
+      const prev = merged.get(row.product_id) ?? { unitsSold: 0, revenue: 0 };
+      merged.set(row.product_id, {
+        unitsSold: prev.unitsSold + Number(row.units_sold),
+        revenue: prev.revenue + Number(row.revenue),
+      });
+    }
+
+    return [...merged.entries()]
+      .map(([productId, stat]) => ({
+        productId,
+        unitsSold: stat.unitsSold,
+        revenue: stat.revenue,
+      }))
+      .sort((a, b) => b.unitsSold - a.unitsSold);
   }
 
   async remove(tenant: TenantContext, id: string) {
