@@ -3,14 +3,17 @@ import {
   Controller,
   DefaultValuePipe,
   Get,
+  Header,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { SaleSource } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../tenant/tenant.guard';
@@ -100,6 +103,72 @@ export class PlatformSalesController {
     @Body() dto: UpdateSaleDto,
   ) {
     return this.platformSalesService.update(tenant, id, dto);
+  }
+
+  @Get(':id/invoice/client.pdf')
+  @RequirePermissions('sales.view')
+  @Header('Content-Type', 'application/pdf')
+  async invoiceClientPdf(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const sale = await this.platformSalesService.findOne(tenant, id);
+    const buf = await this.platformSalesService.getInvoicePdf(
+      tenant,
+      id,
+      'client',
+    );
+    const code = sale.code ?? id.slice(0, 8);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="factura-cliente-${code}.pdf"`,
+    );
+    res.send(buf);
+  }
+
+  @Get(':id/invoice/business.pdf')
+  @RequirePermissions('sales.view')
+  @Header('Content-Type', 'application/pdf')
+  async invoiceBusinessPdf(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const sale = await this.platformSalesService.findOne(tenant, id);
+    const buf = await this.platformSalesService.getInvoicePdf(
+      tenant,
+      id,
+      'business',
+    );
+    const code = sale.code ?? id.slice(0, 8);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="factura-negocio-${code}.pdf"`,
+    );
+    res.send(buf);
+  }
+
+  @Get(':id/invoice.pdf')
+  @RequirePermissions('sales.view')
+  @Header('Content-Type', 'application/pdf')
+  async invoicePdf(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const sale = await this.platformSalesService.findOne(tenant, id);
+    const buf = await this.platformSalesService.getInvoicePdf(
+      tenant,
+      id,
+      'client',
+    );
+    const code = sale.code ?? id.slice(0, 8);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="factura-cliente-${code}.pdf"`,
+    );
+    res.send(buf);
   }
 
   @Get(':id')

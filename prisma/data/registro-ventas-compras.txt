@@ -1,0 +1,808 @@
+================================================================
+REGISTRO DE VENTAS Y COMPRAS - NEGOCIO PASTO
+Transcripción de libro de comandas manuscrito (166 páginas)
+Ciudad: Pasto | Operador: David
+================================================================
+
+NOTA: El documento está escaneado en orden inverso (más reciente primero).
+Se reorganiza aquí en orden cronológico ascendente.
+Las fechas con [?] tienen lectura parcialmente ilegible.
+"Perro" o "Perrito" = hot dog. "Hervido" = bebida caliente típica.
+"Poker", "Club", "Bud" = cervezas. "Nequi/Negui" = pago por Nequi.
+
+================================================================
+SECCIÓN 1: CIERRES DIARIOS (CUADERNO)
+(Resúmenes escritos al final de cada jornada)
+================================================================
+
+---[ 04/03/26 ]---
+  Comandas     : 2
+  Total ventas : $18.500
+  Total compras: (en blanco)
+
+---[ 09/03/26 ]---
+  Comandas     : 2
+  Total ventas : $18.500
+  Total compras: (en blanco)
+
+---[ 14/03/26 ]---
+  Comandas     : (ver comandas sección 2 - fecha 14/03/26)
+  Nota         : Recibo "Don Ivan" - 14/03/26
+
+---[ 16/03/26 ]---
+  Comandas     : 2
+  Total ventas : $70.000
+  Total compras: (en blanco)
+
+---[ 21/05/26 ]---  [Nota: posiblemente 21/05/25 según escritura en p.40]
+  Comandas     : 2
+  Total ventas : $172.000
+  Total compras: $11.000
+  Operación David: 3:00pm - 8:00pm
+
+---[ 01/05/26 ]---
+  Comandas     : 3
+  Total ventas : $57.000
+  Total compras: $79.200
+  Operación David: 3:00pm - 10:00pm
+
+---[ 04/05/26 ]---
+  Comandas     : 3
+  Total ventas : $57.000
+  Total compras: $79.200
+  Operación David: 3:00pm - 10:00pm
+
+---[ 06/05/26 ]---
+  Comandas     : (ver comandas Erika, Señor chaqueta roja, Señor de siempre)
+  Total ventas : (ver comandas individuales)
+  Total compras: -
+
+---[ 07/05/26 ]---
+  Comandas     : (ver comanda Señores pareja)
+  Nota         : Señores pareja - 07/05/26
+
+---[ 08/05/26 ]---
+  Comandas     : (ver comanda Daud/David)
+  Nota         : David - 08/05/26
+
+---[ 09/05/26 ]---
+  Fecha visible en p.74: 09/05/26 [lectura probable]
+
+---[ 11/05/26 ]---
+  Comandas     : 2
+  Total ventas : $22.000
+  Total compras: $0
+  Operación David: 3:00pm - 11:00pm
+
+---[ 12/05/26 ]---
+  Comandas     : 4
+  Total vendido: $91.000
+  Total comprado: $0
+  Operación David: 3:00pm - 10:00pm
+
+---[ 13/05/26 ]---
+  Comandas     : 2
+  Total ventas : $29.000
+  Total compras: $286.800
+  Operación David: 3:00pm - 8:00pm
+
+---[ 14/05/26 ]---
+  Comandas     : 5
+  Total ventas : $68.000
+  Total compras: $0
+  Operación David: 3:00pm - 7:00pm
+
+---[ 15/05/26 ]---
+  Comandas     : 3
+  Total ventas : $63.000
+  Total compras: $48.000
+  Operación David: 3:00pm - 10:00pm
+
+---[ 19/05/26 ]---
+  Comandas     : 0
+  Total ventas : $0
+  Total compras: $6.000
+  Operación David: 3:00pm - 7:30pm
+
+---[ 20/05/26 ]---
+  Comandas     : 5
+  Total vendido: $65.000
+  Total comprado: (en blanco / 0)
+  Operación David: 3:00pm - 7:30pm
+
+---[ 21/05/26 ]---
+  Comandas     : 2
+  Total ventas : $172.000
+  Total compras: $11.000
+  Operación David: 3:00pm - 8:00pm
+
+---[ 22/05/26 ]---
+  Comandas     : 4
+  Total vendido: $122.000
+  Total comprado: $0
+  Operación David: 3:00pm - 11:00pm
+
+---[ 25/05/26 ]---
+  Comandas     : 3
+  Total vendido: $117.000
+  Total comprado: $190.470
+  Operación David: 3:00pm - 10:00pm
+
+---[ 26/05/26 ]---
+  Comandas     : 1
+  Total vendido: $163.000
+  Total comprado: $0
+  Operación David: 3:00pm - 11:00pm
+
+---[ 27/05/26 ]---
+  Comandas     : 1
+  Total vendido: $141.000
+  Total comprado: $14.000
+  Operación David: 3:00pm - 12:00pm (medianoche)
+
+---[ 28/05/26 ]---
+  Comandas     : 0
+  Total vendido: $0
+  Total comprado: $288.250
+  Operación David: 3:00pm - 10:00pm
+
+---[ 29/05/26 ]---
+  Comandas     : 4
+  Total ventas : $132.000
+  Total compras: $8.500
+  Operación David: 3:00pm - 12:50am
+
+---[ 01/06/26 ]---
+  Comandas     : 4  [lectura: "4#" posible 40+]
+  Total ventas : $87.000
+  Total compras: $306.400
+  Operación David: 3:00pm - 7:30pm
+
+---[ 02/06/26 ]---
+  Comandas     : 41  [lectura: "41 comandas"]
+  Total ventas : $187.000
+  Total compras: $17.000
+  Operación David: 3:00pm - 10:00pm
+
+
+================================================================
+SECCIÓN 2: DETALLE DE COMANDAS INDIVIDUALES (POR DÍA)
+================================================================
+
+----------------------------------------------------------------
+FECHA: 02/06/26
+----------------------------------------------------------------
+COMANDA: Ernesto
+  Tipo: Cuenta de Cobro / Recibo
+  1 x Poker              $5.000
+  1 x Cigarro            $1.000
+  4 x Poker (tachado)   ($20.000) [tachado]
+  1 x Perro              $7.000
+  2 x Cigarros (tach.)  ($2.000)  [tachado]
+  Subtotal visible       $13.000
+  TOTAL: $35.000
+  Pago: (firma)
+
+COMANDA: Amigos Ernesto
+  Tipo: Recibo de Pago
+  4 x Poker              $20.000
+  2 x Cigarre            $2.000
+  TOTAL: $22.000
+
+COMANDA: Arandano
+  Tipo: Recibo de Pago
+  4 x Cebollar           X (precio ilegible)
+  X x Cajas de icopor    X
+     - 8500
+     - 4500
+  Subtotal visible       $13.000
+  TOTAL: ~$[?]  (ilegible, posible tachado)
+  Tipo: COMPRA
+
+COMANDA: Señores recomendadores
+  Ciudad: Pasto
+  Tipo: Recibo de Pago
+  2 x Hervidos           $7.000 c/u    $14.000
+  TOTAL: $14.000
+  Pago: Pagado Cash
+
+COMANDA: Señor vecino
+  Ciudad: Pasto
+  Tipo: Recibo de Pago
+  1 x Perro gr           $11.000   $11.000
+  1 x 5000               $5.000    $5.000
+  1 x Michelada          $2.000    $2.000
+  TOTAL: $18.000
+
+COMANDA: Señor carro blanco
+  Ciudad: Pasto
+  Tipo: Recibo de Pago
+  3 x Perros gr (tach.)  $14.000   $42.000 [tachado, corrección]
+  TOTAL: $42.000
+
+COMANDA: Sociología
+  Tipo: Recibo de Pago
+  1 x Pola Poker                    $5.000
+  2 x Hervidos (tachado)           ($14.000) [tachado]
+  2 x Cigarros                      $2.000
+  1 x Poker                         $5.000
+  1 x Moscow Mule                  $15.000
+  1 x Hervido                       $7.000
+  -- descuento -$4.000
+  2 x Cigarros (tachado)           ($2.000) [tachado]
+  1 x Pola                          $5.000
+  2 x Poker (desglosado al pie)     $10.000
+  TOTAL: $39.000 / $45.000 (dos totales visibles)
+  Pago: Pagado
+
+COMANDA: (sin nombre)
+  Fecha: 01/06/26 [p.8]
+  Tipo: Cuenta de Cobro
+  1 x Soda               $5.000    $5.000
+  1 x Michelada Club     $6.000    $8.000 (recargo nota)
+  1 x Michelada Bud      $8.000    $7.000 (descuento nota)
+  3 x Perros             $7.000   $21.000
+  Efectivo               $26.000
+  TOTAL: $41.000
+
+COMANDA: Alex
+  Fecha: 01/06/26 [p.10]
+  Tipo: Recibo de Pago
+  1 x Cerveza            $4.000
+  1 x Perro              $7.000
+  Pago: Pagado efectivo
+  TOTAL: $11.000
+
+----------------------------------------------------------------
+FECHA: 01/06/26
+----------------------------------------------------------------
+COMANDA: Pantocho [lectura probable: nombre ilegible p.11]
+  1 x Perro              $7.000
+  1 x Coca               $4.000
+  Pago: Pagado efectivo
+  TOTAL: $11.000
+
+COMANDA: Chica gomela
+  Ciudad: Pasto
+  1 x Perro gr           $11.000   $11.000
+  1 x Desechable         $1.000    $1.000
+  Pago: Pagado Nequi
+  TOTAL: $12.000
+
+----------------------------------------------------------------
+FECHA: 01/05/26
+----------------------------------------------------------------
+COMANDA: Arandano Cafe
+  Ciudad: Pasto
+  3 x Maracuya                      $3.500
+  6 x Limones                       $3.500
+  Tipo: COMPRA
+  TOTAL: $7.000
+
+COMANDA: Arandano [p.14 - fecha parcial: ?/05/26]
+  7 x Papas (triplo)               $9.000
+  Tipo: COMPRA
+  TOTAL: $9.000
+
+----------------------------------------------------------------
+FECHA: 29/05/26
+----------------------------------------------------------------
+COMANDA: Chica de paso con pareja y grupo
+  Ciudad: Pasto
+  1 x Perrito para llevar   $6.000   $6.000
+  1 x Envase plástico       $1.000   $1.000
+  19 x Club col             $4.000  $76.000
+  1 x Cafe                  $4.000   $4.000
+  1 x Poker                 $3.500   $3.500
+  2 x Perrito para llevar   $6.000  $12.000
+  2 x Plasticor             $1.000   $2.000
+  PROPINA                   $5.000   $5.000
+  7 x Club trigo            $4.500  $31.500
+  Pago: Pagado
+  TOTAL: $141.000
+
+----------------------------------------------------------------
+FECHA: 28/05/26
+----------------------------------------------------------------
+(Sin comandas de venta - día de compras únicamente)
+Total comprado registrado en cuaderno: $288.250
+
+----------------------------------------------------------------
+FECHA: 27/05/26
+----------------------------------------------------------------
+COMANDA: Señores agradables
+  Ciudad: Pasto
+  2 x Poker              $3.500    $7.000
+  2 x Perritos (tach.)   $6.000  ($12.000) [tachados]
+  1 x Poker              $3.500    $7.000
+  2 x Poker              $3.500    $7.000
+  1 x Cafe Carajillo     $8.000    $8.000
+  3 x Poker              $3.500   $10.500
+  3 x Poker              $3.500   $10.500
+  Subtotal tachado       ($62.000)
+  3 x Poker (adición)    $3.500   $10.500
+  Pago: Pagado Nequi
+  TOTAL: $72.500
+
+COMANDA: Señor de paso
+  Ciudad: Pasto
+  Pago: Efectivo
+  1 x Cafe con leche     $5.000    $5.000
+  TOTAL: $5.000
+
+COMANDA: Chico de negro
+  Ciudad: Pasto
+  Pago: Efectivo (tachado)
+  1 x Perro pequeño      $6.000    $6.000 [tachado]
+  1 x Soda               $2.000    $2.000
+  1 x Hervido            $7.000    $7.000
+  1 x Carajillo          $7.000    $7.000 [tachado]
+  1 x Hervido            $7.000    $7.000 [tachado]
+  2 x Poker              $3.500    $7.000 [tachado]
+  3 x Poker              $3.500   $10.500
+  Pago: Pagado
+  TOTAL: $39.500
+
+----------------------------------------------------------------
+FECHA: 26/05/26
+----------------------------------------------------------------
+COMANDA: General Día
+  Ciudad: Pasto
+  1 x Poker              $3.500    $3.500
+  1 x Club               $4.000    $4.000
+  1 x Hervido            $7.000    $7.000
+  1 x Perrito            $6.000    $6.000
+  2 x Perro grande      $11.000   $22.000
+  2 x Coca cola          $3.000    $6.000
+  1 x Shot ginebra       $7.000    $7.000
+  1 x Carajillo          $8.000    $8.000
+  2 x Coctel arandano   $15.000   $30.000
+  1 x Whiski en rocas   $22.000   $22.000
+  4 x Perros gr p/llevar $11.000  $44.000 [lectura: 44.000]
+  4 x Desechables        $1.000    $4.000
+  Pago: PAGADO
+  TOTAL: $163.000
+
+----------------------------------------------------------------
+FECHA: 25/05/26
+----------------------------------------------------------------
+COMANDA: Señores agradables
+  Ciudad: Pasto
+  Pago: Nequi
+  DÍA 25 / MES 5 / AÑO 25 [p.27 - posible error año]
+  2 x Poker              $3.500    $7.000
+  2 x Perritos           $6.000   $12.000
+  1 x Poker              $3.500    $7.000
+  2 x Poker              $3.500    $7.000
+  1 x Cafe Carajillo     $8.000    $8.000
+  3 x Poker              $3.500   $10.500
+  3 x Poker              $3.500   $10.500
+  Subtotal               $62.000
+  3 x Poker (adición)    $3.500   $10.500
+  Pago: Pagado Nequi
+  TOTAL: $72.500
+
+COMANDA: Señor de paso
+  DÍA 25 / MES 5 [p.28]
+  Ciudad: Pasto | Pago: Efectivo
+  1 x Cafe con leche     $5.000    $5.000
+  TOTAL: $5.000
+
+COMANDA: Chico de negro
+  DÍA 25 / MES 5 [p.29]
+  Ciudad: Pasto | Pago: Efectivo (tachado)
+  1 x Perro pequeño      $6.000    $6.000 [tachado]
+  1 x Soda               $2.000    $2.000
+  1 x Hervido            $7.000    $7.000
+  1 x Carajillo          $7.000    $7.000 [tachado]
+  1 x Hervido            $7.000    $7.000 [tachado]
+  2 x Poker              $3.500    $7.000 [tachado]
+  3 x Poker              $3.500   $10.500
+  Pago: Pagado
+  TOTAL: $39.500
+
+----------------------------------------------------------------
+FECHA: 24/05/26
+----------------------------------------------------------------
+COMANDA: Claro de paso
+  Tipo: Cuenta de Cobro [p.16]
+  2 x Cigarrillo         $1.000    $2.000
+  1 x Perrito            $6.000    $6.000
+  Pago: Pagado
+  TOTAL: $8.000
+
+----------------------------------------------------------------
+FECHA: 22/05/26
+----------------------------------------------------------------
+COMANDA: Pareja
+  DÍA 22 / MES 5 [p.31]
+  Ciudad: Pasto | Pago: Cash
+  2 x Perros gr         $11.000   $22.000
+  2 x Hervidos           $7.000   $14.000
+  TOTAL: $36.000
+
+COMANDA: Chicas agradables
+  DÍA 22 / MES 5 [p.32]
+  Ciudad: Pasto | Pago: Nequi y efectivo
+  2 x Perrito            $6.000   $12.000
+  1 x Perro gr (sin piña)$11.000  $11.000 [tachado línea]
+  1 x Hervido            $7.000    $7.000
+  Pago: Pagado
+  TOTAL: $30.000
+
+COMANDA: Señor y amigos
+  DÍA 22 / MES 5 [p.33]
+  Ciudad: Pasto | Pago: Nequi
+  1 x Poker              $3.500    $3.500
+  1 x Hervido            $7.000    $7.000
+  1 x Club verde         $4.000    $4.000
+  1 x Poker (tachado)    $3.500   ($3.500) [tachado]
+  1 x Club verde         $4.000    $4.000
+  1 x Poker              $3.500    $3.500
+  1 x Club verde         $4.000  ($18.000) [agrupado/circulado]
+  1 x Poker              $3.500
+  1 x Cafe con 1onz Ron  $8.000    $8.000
+  Subtotal               $41.000 / $46.000
+  Pago: Pagado
+  TOTAL: ~$46.000
+
+COMANDA: Chico amable
+  DÍA 22 / MES 5 [p.34]
+  Ciudad: Pasto | Pago: Nequi
+  1 x Margarita         $15.000   $15.000
+  Pago: Pagado
+  TOTAL: $15.000
+
+----------------------------------------------------------------
+FECHA: 21/05/26
+----------------------------------------------------------------
+COMANDA: Muchacho Mariana [p.37]
+  DÍA 21 / MES 5
+  1 x Botella (licor)              $65.000
+  2 x 1/2 Botella                  $35.000
+  1 x 1/2 Smirnoff                 $45.000
+  3 x Perros sin Sandwich          $12.000
+  Pago: Pagado
+  TOTAL: $157.000
+
+COMANDA: Arandano Cafe
+  DÍA 21 / MES 5 [p.38]
+  4 x Papas jalapeña (vipio)  $1.500   $6.000
+  Tipo: COMPRA
+  TOTAL: $6.000
+
+COMANDA: Arandano Cafe
+  DÍA 21 / MES 5 [p.39]
+  2 x Bolsas basura grande    $2.500   $5.000
+  Tipo: COMPRA
+  TOTAL: $5.000
+
+COMANDA: Oso amigo honesto [p.36]
+  DÍA 21 / MES 5
+  2 x Cerveza                       $8.000
+  1 x Hervido                       $7.000
+  Pago: (firma)
+  TOTAL: $15.000
+
+----------------------------------------------------------------
+FECHA: 20/05/26
+----------------------------------------------------------------
+COMANDA: Kevin
+  DÍA 20 / MES 5 [p.41]
+  Ciudad: Pasto | Pago: Efectivo
+  1 x Perro gr          $11.000   $11.000
+  Falta de ripio         -$1.000   -$1.000
+  Pago: Pagado
+  TOTAL: $10.000
+
+COMANDA: Señor perros
+  DÍA 20 / MES 5 [p.42]
+  Ciudad: Pasto | Pago: Efectivo
+  1 x Perro gr          $11.000   $11.000
+  1 x Vaso leche         $5.000    $5.000
+  Pago: Pagado
+  TOTAL: $16.000
+
+COMANDA: Grupo de personas
+  DÍA 20 / MES 5 [p.43]
+  Ciudad: Pasto
+  3 x Hervidos           $7.000   $21.000
+  Pago: Pagado
+  TOTAL: $21.000
+
+COMANDA: Señor vecino
+  DÍA 20 / MES 5 [p.44]
+  Ciudad: Pasto | Pago: Efectivo
+  1 x Perro gr          $11.000   $11.000
+  1 x Coca cola          $3.000    $3.000
+  Pago: Pagado
+  TOTAL: $14.000
+
+COMANDA: Tipo amable
+  DÍA 20 / MES 5 [p.45]
+  Ciudad: Pasto | Pago: Nequi
+  1 x Cigarrillos        $1.000    $1.000
+  1 x Poker             $3.500    $3.500
+  Pago: Pagado Nequi
+  TOTAL: $4.500
+
+----------------------------------------------------------------
+FECHA: 15/05/26
+----------------------------------------------------------------
+COMANDA: Señor Cafe
+  DÍA 15 / MES 5 [p.48]
+  Ciudad: Pasto
+  1 x Hervido            $7.000    $7.000
+  1 x Hervido            $7.000    $7.000
+  1 x Hervido            $7.000    $7.000
+  1 x Shot brandy        $5.000    $5.000
+  7 x Hervidos           $7.000   $49.000
+  2 x Hervidas           $7.000   $14.000
+  Subtotal               $54.000
+  Pago: (firma)
+  TOTAL: ~$89.000 (aprox. con adiciones)
+
+COMANDA: Señor de paso
+  DÍA 15 / MES 5 [p.49]
+  Ciudad: Pasto | Pago: Efectivo
+  2 x Cigarrillos        $1.000    $2.000
+  Pago: Pagado Efectivo
+  TOTAL: $2.000
+
+----------------------------------------------------------------
+FECHA: 14/05/26
+----------------------------------------------------------------
+COMANDA: Chico gafas
+  DÍA 14 / MES 5 [p.52]
+  Ciudad: Pasto | Pago: Nequi
+  1 x Perro pequeño      $6.000    $6.000
+  1 x Cerv Club          $4.000    $4.000
+  Pago: Pagado
+  TOTAL: $10.000
+
+COMANDA: Amigo Gustavo
+  DÍA 14 / MES 5 [p.53]
+  Ciudad: Pasto | Pago: Nequi
+  4 x Poker             $3.500   $14.000
+  Pago: Pagado
+  TOTAL: $14.000
+
+COMANDA: Señor azul
+  DÍA 14 / MES 5 [p.54]
+  Ciudad: Pasto | Pago: Efectivo
+  1 x Perro gr          $11.000   $11.000
+  1 x Paquete           $2.000    $2.000
+  Pago: Pagado
+  TOTAL: $13.000
+
+COMANDA: Señores de la city
+  DÍA 14 / MES 5 [p.55]
+  Pago: Efectivo
+  4 x Hervidos           $7.000   $21.000
+  [Nota: factura dice 28.000 pero se corrigió]
+  Pago: Pagado
+  TOTAL: $21.000 [o $28.000 según versión]
+
+COMANDA: Señores profesores
+  DÍA 14 / MES 5 [p.56]
+  Ciudad: Pasto | Pago: Efectivo
+  1 x Hervido            $7.000    $7.000
+  PROPINA                $3.000    $3.000
+  Pago: Pagado
+  TOTAL: $10.000
+
+----------------------------------------------------------------
+FECHA: 13/05/26
+----------------------------------------------------------------
+COMANDA: Pareja alegre
+  DÍA 13 / MES 5 [p.58]
+  Ciudad: Pasto | Pago: Nequi
+  1 x Poker Cerv         $3.500    $3.500
+  1 x Cerv Club col      $4.000    $4.000
+  1 x Hervido            $7.000    $7.000
+  1 x Poker  (tachado)   $3.500
+  1 x Club   (tachado)   $4.000
+  Pago: Pagado Nequi
+  TOTAL: ~$22.000
+
+COMANDA: Señor [p.62]
+  DÍA 12 / MES 5
+  Ciudad: Pasto | Pago: Nequi y Efectivo
+  (1 línea tachada - ilegible)
+  1 x Bud Cerveza        $3.500    $3.500
+  1 x Cigarrillo         $1.000    $1.000
+  Pago: Pagado
+  TOTAL: $4.500
+
+----------------------------------------------------------------
+FECHA: 08/05/26
+----------------------------------------------------------------
+COMANDA: David (el mismo operador)
+  DÍA 8 / MES 5 [p.71]
+  1 x Ca Especial        $3.000    $3.000
+  Pago: Pagado Nequi
+  TOTAL: $3.000
+
+----------------------------------------------------------------
+FECHA: 07/05/26
+----------------------------------------------------------------
+COMANDA: Señores pareja
+  DÍA 7 / MES 5 [p.77]
+  Ciudad: Pasto
+  1 x Perro Caliente gr $10.000   $10.000
+  1 x Cafe               $4.000    $4.000
+  1 x Cerveza Bud        $3.500    $3.500
+  Pago: Pagado
+  TOTAL: $17.500
+
+----------------------------------------------------------------
+FECHA: 06/05/26
+----------------------------------------------------------------
+COMANDA: Señor chaqueta roja
+  Fecha: 6/05/26 [p.80]
+  2 x Herv               $7.000   $14.000
+  4 x Cerv Club          $4.000   $16.000
+  Pago: Pagado Efectivo
+  TOTAL: $30.000
+
+COMANDA: Chico de gafas azul
+  Fecha: 06/05/26 [p.83]
+  1 x Cerv Poker         $3.500    $3.500
+  Pago: Nequi
+  TOTAL: $3.500
+
+COMANDA: Señor de siempre
+  Fecha: 6/05/25 [p.86 - posible error año]
+  1 x Perro pequeño      $6.000    $6.000
+  1 x Coca               $3.000    $3.000
+  Pago: Pagado Efectivo
+  TOTAL: $9.000
+
+COMANDA: Erika
+  DÍA 6 / MES 5 [p.89]
+  2 x Perros pequeños    $6.000   $12.000
+  TOTAL: $12.000
+
+----------------------------------------------------------------
+FECHA: 04/05/26
+----------------------------------------------------------------
+COMANDA: Señor
+  Fecha: 04/05/25 [p.92 - posible error año]
+  1 x Perro gr          $11.000
+  1 x Hervido            $7.000
+  Descuento              -$2.000
+  Pago: Pagado Efectivo
+  TOTAL: $16.000
+
+----------------------------------------------------------------
+FECHA: 01/05/26
+----------------------------------------------------------------
+COMANDA: (múltiples - ver cierre de cuaderno)
+  Total ventas : $81.500
+  Total compras: (en blanco)
+  Operación David: 2:00pm - 10:00pm
+
+----------------------------------------------------------------
+FECHA: 30/04/26
+----------------------------------------------------------------
+COMANDA: Elegantes
+  Fecha: 30/04/26 [p.100]
+  2 x Cerveza B          $3.500    $3.500 [dato incompleto]
+  Pago: Pagado Efectivo
+  Total: (ilegible)
+
+COMANDA: Señor Ivan
+  Fecha: 30/04/26 [p.101]
+  1 x Perro pequeño      $7.000
+  Pago: Pagado Efectivo
+  TOTAL: $7.000
+
+----------------------------------------------------------------
+FECHA: 29/04/26
+----------------------------------------------------------------
+COMANDA: Chica buso gris
+  Fecha: 29/04/26 [p.110]
+  1 x Cerveza C          $4.000    $4.000
+  1 x Cerveza C          $4.000
+  1 x Cerveza C          $4.000
+  Nota: "Paga los dos, y polos"
+  TOTAL: ~$8.000 (dos personas)
+
+----------------------------------------------------------------
+FECHA: 28/04/26
+----------------------------------------------------------------
+  Comandas     : 5
+  Total ventas : $69.800
+  Total compras: $0
+  Operación David: 2:xx pm - 7:xx pm (lectura parcial)
+
+----------------------------------------------------------------
+FECHA: 07/04/26 / 02/04/26
+----------------------------------------------------------------
+COMANDA: Arandanos
+  Fecha: 07/04/26 [p.140]
+  2 x Hervidos           $7.000   $14.000
+  Pago: Pagado efectivo
+  TOTAL: $14.000
+
+----------------------------------------------------------------
+FECHA: 16/03/26
+----------------------------------------------------------------
+COMANDA: (general)
+  Fecha: 16/03/26 [p.149]
+  4 x Hervidos                    $28.000
+  4 x Poker                       $14.000
+  Pago: Pagado
+  TOTAL: $42.000
+
+----------------------------------------------------------------
+FECHA: 15/03/26 [aprox]
+----------------------------------------------------------------
+COMANDA: Hernesto [p.130]
+  Fecha: 15/0?/26
+  1 x Poker (tachado)              $3.500 -> $4.000 (Club)
+  1 x Soda                         $2.500
+  3 x Poker                       $10.500
+  Pago: Pagado
+  TOTAL: $16.500
+
+----------------------------------------------------------------
+FECHA: 14/03/26
+----------------------------------------------------------------
+COMANDA: Don Ivan [p.151]
+  Fecha: 14/03/26
+  2 x Hervido                      $7.000 (total $14.000)
+  1 x Cerveza                      $3.500
+  1 x Hervido                      $7.000
+  Pago: Pagado
+  TOTAL: ~$17.500 [correcciones]
+
+================================================================
+SECCIÓN 3: RESUMEN CONSOLIDADO DE CIERRES DIARIOS
+(Solo días con cierre de cuaderno registrado)
+================================================================
+
+FECHA       COMANDAS   TOTAL VENTAS   TOTAL COMPRAS   HORARIO DAVID
+----------  ---------  -------------  ---------------  ----------------
+04/03/26       2         $18.500         ?              -
+09/03/26       2         $18.500         ?              -
+16/03/26       2         $70.000         ?              -
+21/05/26       2        $172.000        $11.000         3pm-8pm
+01/05/26       2         $81.500         ?              2pm-10pm
+04/05/26       3         $57.000        $79.200         3pm-10pm
+11/05/26       2         $22.000         $0             3pm-11pm
+12/05/26       4         $91.000         $0             3pm-10pm
+13/05/26       2         $29.000       $286.800         3pm-8pm
+14/05/26       5         $68.000         $0             3pm-7pm
+15/05/26       3         $63.000        $48.000         3pm-10pm
+19/05/26       0              $0         $6.000         3pm-7:30pm
+20/05/26       5         $65.000          ?             3pm-7:30pm
+21/05/26       2        $172.000        $11.000         3pm-8pm
+22/05/26       4        $122.000         $0             3pm-11pm
+25/05/26       3        $117.000       $190.470         3pm-10pm
+26/05/26       1        $163.000         $0             3pm-11pm
+27/05/26       1        $141.000        $14.000         3pm-12am
+28/05/26       0              $0       $288.250         3pm-10pm
+29/05/26       4        $132.000         $8.500         3pm-12:50am
+01/06/26       4         $87.000       $306.400         3pm-7:30pm
+02/06/26      41        $187.000        $17.000         3pm-10pm
+28/04/26       5         $69.800         $0             2pm-7:30pm
+
+================================================================
+NOTAS FINALES
+================================================================
+- El negocio opera principalmente entre las 3pm y la medianoche.
+- El operador habitual se llama David.
+- Los productos mas vendidos: Perros calientes (pequeño/grande),
+  Hervidos, Cervezas (Poker, Club, Bud), Micheladas, Cigarrillos.
+- Las compras grandes ($288.250 del 28/05, $286.800 del 13/05,
+  $306.400 del 01/06) corresponden a reposicion de inventario.
+- El "Arandano Cafe" aparece como proveedor de frutas y suministros.
+- Algunas fechas pueden tener error de año (25 vs 26).
+- Valores entre parentesis () indican items tachados en el original.
+- [?] indica lectura incierta por letra ilegible.
+
+================================================================
+Fin del documento
+Transcrito de: CamScanner_6-7-26_21_03.pdf (166 paginas)
+================================================================

@@ -18,6 +18,8 @@ import { PlatformSalesModule } from './platform-sales/platform-sales.module';
 import { PlatformPurchasesModule } from './platform-purchases/platform-purchases.module';
 import { PlatformStaffModule } from './platform-staff/platform-staff.module';
 import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics.module';
+import { PlatformCashCloseModule } from './platform-cash-close/platform-cash-close.module';
+import { PublicShopModule } from './public-shop/public-shop.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics
     PlatformPurchasesModule,
     PlatformStaffModule,
     PlatformAnalyticsModule,
+    PlatformCashCloseModule,
+    PublicShopModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

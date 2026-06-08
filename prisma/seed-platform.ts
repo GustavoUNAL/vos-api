@@ -69,10 +69,15 @@ async function main() {
       where: { id: 'seed-arandano-cafe-bar' },
       create: {
         id: 'seed-arandano-cafe-bar',
-        name: 'Café Bar Demo',
+        name: 'Arándano Café Bar',
+        shopSlug: 'arandano',
         status: 'ACTIVE',
       },
-      update: { name: 'Café Bar Demo', status: 'ACTIVE' },
+      update: {
+        name: 'Arándano Café Bar',
+        shopSlug: 'arandano',
+        status: 'ACTIVE',
+      },
     });
 
     const legacyAdmin = await prisma.user.findUnique({

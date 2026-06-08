@@ -66,6 +66,10 @@ export class CreateSaleDto {
 
   @IsString()
   @IsOptional()
+  customerPhone?: string;
+
+  @IsString()
+  @IsOptional()
   notes?: string;
 
   @IsArray()
@@ -91,6 +95,10 @@ export class UpdateSaleDto {
   @IsString()
   @IsOptional()
   mesa?: string;
+
+  @IsString()
+  @IsOptional()
+  customerPhone?: string;
 
   @IsString()
   @IsOptional()

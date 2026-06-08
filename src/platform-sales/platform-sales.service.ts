@@ -12,6 +12,13 @@ import {
   SaleLineInputDto,
   UpdateSaleDto,
 } from './dto/sale.dto';
+import {
+  buildSaleInvoiceBusinessPdf,
+  buildSaleInvoiceClientPdf,
+  formatSaleReceiptText,
+  type SaleInvoiceCopy,
+} from './sale-invoice.pdf';
+import { WhatsappService } from './whatsapp.service';
 
 type ListParams = {
   page: number;
@@ -46,7 +53,10 @@ function decStr(v: Prisma.Decimal | null | undefined, digits = 2): string | null
 
 @Injectable()
 export class PlatformSalesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly whatsapp: WhatsappService,
+  ) {}
 
   private async nextSaleCode(companyId: string): Promise<string> {
     const count = await this.prisma.sale.count({ where: { companyId } });
@@ -112,6 +122,7 @@ export class PlatformSalesService {
       paymentMethod: sale.paymentMethod,
       source: sale.source,
       mesa: sale.mesa,
+      customerPhone: sale.customerPhone,
       notes: sale.notes,
       userId: sale.userId,
       displayPerson: sale.user?.name ?? '—',
@@ -309,6 +320,7 @@ export class PlatformSalesService {
           source: dto.source ?? SaleSource.MANUAL,
           userId: tenant.userId,
           mesa: dto.mesa?.trim() || null,
+          customerPhone: dto.customerPhone?.trim() || null,
           notes: dto.notes?.trim() || null,
         },
       });
@@ -353,7 +365,29 @@ export class PlatformSalesService {
       });
     });
 
-    return this.formatDetail(sale);
+    const detail = this.formatDetail(sale);
+    const phone = dto.customerPhone?.trim();
+    let whatsappSent = false;
+    if (phone) {
+      const company = await this.prisma.company.findUnique({
+        where: { id: tenant.companyId },
+        select: { name: true },
+      });
+      const receiptSale = {
+        ...sale,
+        company: { name: company?.name ?? 'Arándano Café Bar' },
+      };
+      whatsappSent = await this.whatsapp.sendSaleReceipt(
+        phone,
+        formatSaleReceiptText(receiptSale),
+      );
+    }
+
+    return {
+      ...detail,
+      whatsappSent,
+      whatsappConfigured: this.whatsapp.isConfigured(),
+    };
   }
 
   async update(tenant: TenantContext, id: string, dto: UpdateSaleDto) {
@@ -375,6 +409,9 @@ export class PlatformSalesService {
     }
     if (dto.source !== undefined) data.source = dto.source;
     if (dto.mesa !== undefined) data.mesa = dto.mesa?.trim() || null;
+    if (dto.customerPhone !== undefined) {
+      data.customerPhone = dto.customerPhone?.trim() || null;
+    }
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
 
     await this.prisma.sale.update({ where: { id }, data });
@@ -452,5 +489,29 @@ export class PlatformSalesService {
         .sort((a, b) => a.localeCompare(b, 'es')),
       paymentGateways: [],
     };
+  }
+
+  private async loadSaleForInvoice(tenant: TenantContext, id: string) {
+    const sale = await this.prisma.sale.findFirst({
+      where: { id, companyId: tenant.companyId },
+      include: {
+        lines: { orderBy: { productName: 'asc' } },
+        company: { select: { name: true } },
+        user: { select: { name: true, email: true } },
+      },
+    });
+    if (!sale) throw new NotFoundException('Venta no encontrada');
+    return sale;
+  }
+
+  async getInvoicePdf(
+    tenant: TenantContext,
+    id: string,
+    copy: SaleInvoiceCopy = 'client',
+  ): Promise<Buffer> {
+    const sale = await this.loadSaleForInvoice(tenant, id);
+    return copy === 'business'
+      ? buildSaleInvoiceBusinessPdf(sale)
+      : buildSaleInvoiceClientPdf(sale);
   }
 }
