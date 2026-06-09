@@ -60,14 +60,32 @@ export class PlatformCashCloseService {
       salesTotal += total;
       const method = s.paymentMethod?.trim() || 'Sin especificar';
       payments.set(method, (payments.get(method) ?? 0) + total);
+      const customerLabel =
+        s.customerPhone?.trim() ||
+        s.mesa?.trim() ||
+        s.notes?.trim() ||
+        s.code ||
+        'Venta';
       return {
         id: s.id,
         code: s.code,
-        customer: s.mesa ?? '—',
+        customer: customerLabel,
+        customerPhone: s.customerPhone,
+        mesa: s.mesa,
+        notes: s.notes,
+        source: s.source,
         saleDate: s.saleDate.toISOString(),
         total,
         paymentMethod: method,
         lineCount: s.lines.length,
+        lines: s.lines.map((ln) => ({
+          id: ln.id,
+          productName: ln.productName,
+          quantity: Number(ln.quantity),
+          unitPrice: Number(ln.unitPrice),
+          lineTotal: Number(ln.quantity) * Number(ln.unitPrice),
+          lineUnit: ln.lineUnit,
+        })),
       };
     });
 

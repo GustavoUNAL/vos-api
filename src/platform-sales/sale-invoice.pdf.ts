@@ -1,21 +1,36 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import PDFDocument from 'pdfkit';
 import type { Company, Sale, SaleLine, User } from '@prisma/client';
 
-export type SaleInvoiceCopy = 'client' | 'business';
-
 type SaleWithLines = Sale & {
   lines: SaleLine[];
-  company: Pick<Company, 'name'>;
+  company: Pick<Company, 'name'> &
+    Partial<Pick<Company, 'address' | 'phone' | 'email'>>;
   user?: Pick<User, 'name' | 'email'> | null;
 };
 
 const BRAND = {
-  berry: '#8b2942',
-  berryDark: '#6b1f33',
-  ink: '#1a1a2e',
-  muted: '#666666',
-  line: '#dddddd',
+  purple: '#6B1F4E',
+  purpleSoft: '#E8D5E4',
+  purpleLine: '#C9A8BE',
+  ink: '#1F1F28',
+  muted: '#6B6570',
+  paper: '#FFFFFF',
 };
+
+function resolveBrandingAsset(file: string): string | null {
+  const roots = [
+    path.join(process.cwd(), 'assets', 'branding'),
+    path.join(__dirname, '..', '..', '..', 'assets', 'branding'),
+    path.join(__dirname, '..', '..', 'assets', 'branding'),
+  ];
+  for (const root of roots) {
+    const full = path.join(root, file);
+    if (fs.existsSync(full)) return full;
+  }
+  return null;
+}
 
 function formatCOP(n: number): string {
   return new Intl.NumberFormat('es-CO', {
@@ -36,69 +51,92 @@ function saleNumber(sale: SaleWithLines): string {
   return sale.code ?? sale.id.slice(0, 8).toUpperCase();
 }
 
-function drawArandanoLogo(
-  doc: InstanceType<typeof PDFDocument>,
-  x: number,
-  y: number,
-): number {
-  const berryX = x + 14;
-  const berryY = y + 14;
-  doc.circle(berryX, berryY, 13).fill(BRAND.berry);
-  doc.circle(berryX - 4, berryY - 5, 4).fill('#ffffff33');
-  doc.circle(berryX + 5, berryY + 4, 2.5).fill(BRAND.berryDark);
-
-  const textX = x + 34;
-  doc.font('Helvetica-Bold').fontSize(17).fillColor(BRAND.berry);
-  doc.text('Arándano', textX, y + 2);
-  doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted);
-  doc.text('Café Bar · Pasto', textX, y + 22);
-  return y + 40;
+function customerLabel(sale: SaleWithLines): string {
+  return (
+    sale.customerPhone?.trim() ||
+    sale.mesa?.trim() ||
+    sale.notes?.trim() ||
+    'Cliente'
+  );
 }
 
-function drawSaleMeta(
+function drawBotanicalWatermark(
+  doc: InstanceType<typeof PDFDocument>,
+  pageWidth: number,
+  pageHeight: number,
+): void {
+  const botanical = resolveBrandingAsset('invoice-botanical.png');
+  if (!botanical) return;
+
+  const wmWidth = pageWidth * 0.52;
+  const wmHeight = pageHeight * 0.72;
+  const x = -pageWidth * 0.04;
+  const y = pageHeight * 0.12;
+
+  doc.save();
+  doc.opacity(0.14);
+  doc.image(botanical, x, y, {
+    width: wmWidth,
+    height: wmHeight,
+  });
+  doc.opacity(1);
+  doc.restore();
+}
+
+function drawHeader(
   doc: InstanceType<typeof PDFDocument>,
   sale: SaleWithLines,
   left: number,
   width: number,
   yStart: number,
-  extra?: { showInternal?: boolean },
 ): number {
   let y = yStart;
-  const saleNo = saleNumber(sale);
+  const businessName = sale.company.name?.trim() || 'VOS AI';
 
-  doc.font('Helvetica-Bold').fontSize(20).fillColor(BRAND.ink);
-  doc.text(`Nº ${saleNo}`, left, y);
-  y += 28;
+  doc.font('Helvetica-Bold').fontSize(22).fillColor(BRAND.purple);
+  doc.text(businessName, left, y, { width, align: 'center' });
+  y += 26;
 
-  if (extra?.showInternal) {
-    doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted);
-    doc.text(`ID interno: ${sale.id}`, left, y);
-    y += 14;
-  }
+  const contactLines = [
+    sale.company.address?.trim(),
+    sale.company.email?.trim(),
+    sale.company.phone?.trim(),
+  ].filter((line): line is string => Boolean(line));
 
-  const rows: [string, string][] = [
-    ['Fecha', formatDate(sale.saleDate)],
-    ['Cliente / comanda', sale.mesa?.trim() || '—'],
-    ['Medio de pago', sale.paymentMethod?.trim() || '—'],
-  ];
-
-  if (extra?.showInternal) {
-    rows.push(['Origen', sale.source]);
-    rows.push(['Registrado por', sale.user?.name ?? '—']);
-    if (sale.customerPhone?.trim()) {
-      rows.push(['Celular cliente', sale.customerPhone.trim()]);
+  if (contactLines.length) {
+    doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted);
+    for (const line of contactLines) {
+      doc.text(line, left, y, { width, align: 'center' });
+      y += 13;
     }
   }
 
-  for (const [label, value] of rows) {
+  doc.font('Helvetica').fontSize(10).fillColor(BRAND.muted);
+  doc.text('Comprobante de venta', left, y, { width, align: 'center' });
+  y += 22;
+
+  doc.moveTo(left, y).lineTo(left + width, y).strokeColor(BRAND.purpleLine).lineWidth(0.8).stroke();
+  y += 18;
+
+  doc.font('Helvetica-Bold').fontSize(18).fillColor(BRAND.purple);
+  doc.text(`Nº ${saleNumber(sale)}`, left, y);
+  y += 24;
+
+  const metaLeft: [string, string][] = [
+    ['Fecha', formatDate(sale.saleDate)],
+    ['Cliente', customerLabel(sale)],
+    ['Medio de pago', sale.paymentMethod?.trim() || '—'],
+  ];
+
+  for (const [label, value] of metaLeft) {
     doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted);
-    doc.text(`${label}:`, left, y, { width: 120 });
-    doc.font('Helvetica').fontSize(10).fillColor('#111111');
-    doc.text(value, left + 118, y, { width: width - 118 });
+    doc.text(`${label}`, left, y, { width: 90 });
+    doc.font('Helvetica').fontSize(10).fillColor(BRAND.ink);
+    doc.text(value, left + 92, y, { width: width - 92 });
     y += 16;
   }
 
-  return y + 6;
+  return y + 8;
 }
 
 function drawLinesTable(
@@ -107,182 +145,103 @@ function drawLinesTable(
   left: number,
   width: number,
   yStart: number,
-  mode: SaleInvoiceCopy,
 ): number {
   let y = yStart;
-  const isBusiness = mode === 'business';
-
   const colDesc = left;
-  const colQty = left + width * (isBusiness ? 0.38 : 0.55);
-  const colUnit = left + width * (isBusiness ? 0.48 : 0.68);
-  const colTotal = left + width * (isBusiness ? 0.62 : 0.82);
-  const colCost = left + width * 0.74;
-  const colProfit = left + width * 0.86;
+  const colQty = left + width * 0.58;
+  const colUnit = left + width * 0.72;
+  const colTotal = left + width * 0.84;
 
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(BRAND.muted);
-  doc.text('Descripción', colDesc, y);
-  doc.text('Cant.', colQty, y, { width: 36, align: 'right' });
-  if (isBusiness) {
-    doc.text('P. unit.', colUnit, y, { width: 52, align: 'right' });
-    doc.text('Subtotal', colTotal, y, { width: 58, align: 'right' });
-    doc.text('Costo', colCost, y, { width: 52, align: 'right' });
-    doc.text('Util.', colProfit, y, { width: 52, align: 'right' });
-  } else {
-    doc.text('Precio', colUnit, y, { width: 60, align: 'right' });
-    doc.text('Total', colTotal, y, { width: 70, align: 'right' });
-  }
-  y += 14;
-  doc.moveTo(left, y).lineTo(left + width, y).strokeColor(BRAND.line).stroke();
-  y += 8;
-
-  let totalCost = 0;
-  let totalProfit = 0;
+  doc.roundedRect(left, y, width, 18, 6).fill(BRAND.purpleSoft);
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(BRAND.purple);
+  doc.text('Producto', colDesc + 8, y + 5);
+  doc.text('Cant.', colQty, y + 5, { width: 36, align: 'right' });
+  doc.text('Precio', colUnit, y + 5, { width: 52, align: 'right' });
+  doc.text('Total', colTotal, y + 5, { width: 58, align: 'right' });
+  y += 24;
 
   for (const line of sale.lines) {
     const qty = Number(line.quantity);
     const unit = Number(line.unitPrice);
     const total = qty * unit;
-    const costUnit = line.costAtSale != null ? Number(line.costAtSale) : null;
-    const lineCost = costUnit != null ? costUnit * qty : null;
-    const lineProfit =
-      line.profit != null
-        ? Number(line.profit)
-        : lineCost != null
-          ? total - lineCost
-          : null;
 
-    if (lineCost != null) totalCost += lineCost;
-    if (lineProfit != null) totalProfit += lineProfit;
-
-    doc.font('Helvetica').fontSize(9).fillColor('#222222');
-    doc.text(line.productName, colDesc, y, { width: width * (isBusiness ? 0.35 : 0.5) });
+    doc.font('Helvetica').fontSize(9).fillColor(BRAND.ink);
+    doc.text(line.productName, colDesc, y, { width: width * 0.54 });
     doc.text(String(qty), colQty, y, { width: 36, align: 'right' });
-
-    if (isBusiness) {
-      doc.text(formatCOP(unit), colUnit, y, { width: 52, align: 'right' });
-      doc.text(formatCOP(total), colTotal, y, { width: 58, align: 'right' });
-      doc.text(lineCost != null ? formatCOP(lineCost) : '—', colCost, y, {
-        width: 52,
-        align: 'right',
-      });
-      doc.text(lineProfit != null ? formatCOP(lineProfit) : '—', colProfit, y, {
-        width: 52,
-        align: 'right',
-      });
-    } else {
-      doc.text(formatCOP(unit), colUnit, y, { width: 60, align: 'right' });
-      doc.text(formatCOP(total), colTotal, y, { width: 70, align: 'right' });
-    }
+    doc.text(formatCOP(unit), colUnit, y, { width: 52, align: 'right' });
+    doc.text(formatCOP(total), colTotal, y, { width: 58, align: 'right' });
     y += 18;
+
+    doc.moveTo(left, y - 4).lineTo(left + width, y - 4).strokeColor(BRAND.purpleLine).lineWidth(0.4).stroke();
   }
 
-  y += 4;
-  doc.moveTo(left, y).lineTo(left + width, y).strokeColor('#cccccc').stroke();
-  y += 12;
-
+  y += 10;
   const saleTotal = Number(sale.total);
-  doc.font('Helvetica-Bold').fontSize(12).fillColor(BRAND.ink);
-  doc.text('Total a pagar', left, y);
-  doc.text(formatCOP(saleTotal), colTotal, y, {
-    width: isBusiness ? 58 : 70,
+  const totalBoxW = 190;
+  const totalBoxH = 34;
+  const totalBoxX = left + width - totalBoxW;
+
+  doc.roundedRect(totalBoxX, y, totalBoxW, totalBoxH, 8).fill(BRAND.purple);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('#FFFFFF');
+  doc.text('Total', totalBoxX + 14, y + 8);
+  doc.font('Helvetica-Bold').fontSize(13).fillColor('#FFFFFF');
+  doc.text(formatCOP(saleTotal), totalBoxX + 14, y + 18, {
+    width: totalBoxW - 28,
     align: 'right',
   });
-  y += 22;
-
-  if (isBusiness) {
-    doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted);
-    doc.text(`Costo total estimado: ${formatCOP(totalCost)}`, left, y);
-    y += 14;
-    doc.text(`Utilidad bruta estimada: ${formatCOP(totalProfit)}`, left, y);
-    y += 14;
-    const margin =
-      saleTotal > 0 ? ((totalProfit / saleTotal) * 100).toFixed(1) : '0.0';
-    doc.text(`Margen bruto: ${margin}%`, left, y);
-    y += 16;
-    doc.text(`Líneas: ${sale.lines.length}`, left, y);
-    y += 14;
-  }
+  y += totalBoxH + 18;
 
   if (sale.notes?.trim()) {
     doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted);
     doc.text(`Notas: ${sale.notes.trim()}`, left, y, { width });
-    y += 18;
+    y += 16;
   }
 
-  doc.font('Helvetica').fontSize(7).fillColor('#999999');
+  doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted);
   doc.text(
-    mode === 'client'
-      ? 'Comprobante para el cliente. Conserve este documento. Gracias por su visita.'
-      : 'Copia interna del negocio. Incluye costos y utilidad estimada al momento de la venta.',
+    'Gracias por su visita. Conserve este comprobante.',
     left,
     y,
-    { width },
+    { width, align: 'center' },
   );
 
-  return y + 20;
+  return y + 24;
 }
 
-function buildPdf(
-  sale: SaleWithLines,
-  mode: SaleInvoiceCopy,
-): Promise<Buffer> {
+export function buildSaleInvoicePdf(sale: SaleWithLines): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 48 });
+    const doc = new PDFDocument({ size: 'A4', margin: 0 });
     const chunks: Buffer[] = [];
     doc.on('data', (c) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const left = 48;
-    const width = doc.page.width - left * 2;
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
+    const left = 56;
+    const width = pageWidth - left * 2;
+
+    doc.rect(0, 0, pageWidth, pageHeight).fill(BRAND.paper);
+    drawBotanicalWatermark(doc, pageWidth, pageHeight);
+
     let y = 48;
-
-    doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted);
-    doc.text(
-      mode === 'client' ? 'COMPROBANTE CLIENTE' : 'COMPROBANTE NEGOCIO',
-      left,
-      y,
-      { width, align: 'right' },
-    );
-    y += 12;
-
-    y = drawArandanoLogo(doc, left, y);
-    y += 4;
-
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND.ink);
-    doc.text(
-      mode === 'client' ? 'Factura de venta' : 'Detalle interno de venta',
-      left,
-      y,
-    );
-    y += 20;
-
-    doc.font('Helvetica').fontSize(10).fillColor(BRAND.muted);
-    doc.text(sale.company.name, left, y);
-    y += 16;
-
-    y = drawSaleMeta(doc, sale, left, width, y, {
-      showInternal: mode === 'business',
-    });
-    y = drawLinesTable(doc, sale, left, width, y, mode);
+    y = drawHeader(doc, sale, left, width, y);
+    drawLinesTable(doc, sale, left, width, y);
 
     doc.end();
   });
 }
 
+/** @deprecated Usar buildSaleInvoicePdf */
 export function buildSaleInvoiceClientPdf(sale: SaleWithLines): Promise<Buffer> {
-  return buildPdf(sale, 'client');
+  return buildSaleInvoicePdf(sale);
 }
 
+/** @deprecated Usar buildSaleInvoicePdf */
 export function buildSaleInvoiceBusinessPdf(
   sale: SaleWithLines,
 ): Promise<Buffer> {
-  return buildPdf(sale, 'business');
-}
-
-/** @deprecated Usar buildSaleInvoiceClientPdf */
-export function buildSaleInvoicePdf(sale: SaleWithLines): Promise<Buffer> {
-  return buildSaleInvoiceClientPdf(sale);
+  return buildSaleInvoicePdf(sale);
 }
 
 export function formatSaleReceiptText(sale: SaleWithLines): string {
@@ -294,11 +253,16 @@ export function formatSaleReceiptText(sale: SaleWithLines): string {
     })
     .join('\n');
 
+  const comment = sale.notes?.trim();
+  const phone = sale.customerPhone?.trim();
+
   return [
     `*${sale.company.name}*`,
-    `Factura Nº *${saleNumber(sale)}*`,
+    `Comprobante Nº *${saleNumber(sale)}*`,
     `Fecha: ${formatDate(sale.saleDate)}`,
-    sale.mesa?.trim() ? `Cliente: ${sale.mesa.trim()}` : null,
+    customerLabel(sale) !== 'Cliente' ? `Cliente: ${customerLabel(sale)}` : null,
+    phone && comment ? `Comentario: ${comment}` : null,
+    !phone && comment ? `Notas: ${comment}` : null,
     '',
     lines,
     '',

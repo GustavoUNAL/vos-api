@@ -110,7 +110,7 @@ async function main() {
 
     const products = await prisma.product.findMany({
       where: { companyId, status: 'ACTIVE' },
-      select: { id: true, name: true },
+      select: { id: true, name: true, cost: true },
     });
     const nameToId = new Map(
       products.map((p) => [
@@ -141,6 +141,7 @@ async function main() {
     for (const row of sales) {
       const n = (salesByDate.get(row.date) ?? 0) + 1;
       salesByDate.set(row.date, n);
+      const saleHour = 14 + ((n - 1) % 10);
       const code = saleCode(row.date, row.customer, n);
       const existing = await prisma.sale.findFirst({ where: { companyId, code } });
 
@@ -159,11 +160,28 @@ async function main() {
 
       const lineData = row.lines.map((l) => {
         const match = matchSaleLineToCatalog(l.label, nameToId);
+        const productId = match?.productId ?? null;
+        const productName = match?.productName ?? l.label;
+        const unitPrice = l.unitPrice;
+        const lineTotal = Math.round(l.lineTotal);
+        let costAtSale: Prisma.Decimal | null = null;
+        if (productId) {
+          const prod = products.find((p) => p.id === productId);
+          if (prod && 'cost' in prod) {
+            const cost = Number((prod as { cost?: unknown }).cost ?? 0);
+            if (cost > 0) costAtSale = new Prisma.Decimal(cost);
+          }
+        }
         return {
-          productId: match?.productId ?? null,
-          productName: match?.productName ?? l.label,
+          productId,
+          productName,
           quantity: new Prisma.Decimal(l.qty),
-          unitPrice: new Prisma.Decimal(l.unitPrice),
+          unitPrice: new Prisma.Decimal(unitPrice),
+          costAtSale,
+          profit:
+            costAtSale != null
+              ? new Prisma.Decimal(Math.round(lineTotal - Number(costAtSale) * l.qty))
+              : null,
         };
       });
 
@@ -178,7 +196,7 @@ async function main() {
           await tx.sale.update({
             where: { id: existing.id },
             data: {
-              saleDate: saleDateUtc(row.date),
+              saleDate: saleDateUtc(row.date, saleHour),
               total: new Prisma.Decimal(row.total),
               paymentMethod: row.paymentMethod,
               source: SaleSource.IMPORT,
@@ -196,7 +214,7 @@ async function main() {
           data: {
             companyId,
             code,
-            saleDate: saleDateUtc(row.date),
+            saleDate: saleDateUtc(row.date, saleHour),
             total: new Prisma.Decimal(row.total),
             paymentMethod: row.paymentMethod,
             source: SaleSource.IMPORT,

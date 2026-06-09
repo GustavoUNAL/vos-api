@@ -38,28 +38,84 @@ function parseMoney(raw: string): number | null {
 }
 
 function toIsoDate(d: string, m: string, y: string): string {
-  const year = y.length === 2 ? `20${y}` : y;
+  const yy = y.length === 2 ? y : y.slice(-2);
+  const year = yy.length === 2 ? `20${yy}` : y;
   return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
 }
 
+function yearFromContext(currentDate: string | null): string {
+  return currentDate?.slice(0, 4) ?? '2026';
+}
+
 function isStruck(line: string): boolean {
-  return /\[tachado\]/i.test(line) || /^\s*\(/.test(line);
+  return /\[tachado\]/i.test(line) || /\(\s*\$/.test(line);
+}
+
+function cleanLabel(label: string): string {
+  return label
+    .replace(/\s*\[.*$/g, '')
+    .replace(/\s*\([^)]*$/g, '')
+    .trim();
 }
 
 function parseLineItem(line: string): ParsedLine | null {
   if (isStruck(line)) return null;
-  const m = line.match(
-    /^\s*(\d+)\s+x\s+(.+?)\s+\$?\s*([\d.,]+)(?:\s+\$?\s*([\d.,]+))?/i,
+  const trimmed = line.trim();
+
+  const negMatch = trimmed.match(
+    /^(?:--\s*)?(?:descuento|falta de ripio)\s+-?\$?\s*([\d.,]+)/i,
+  );
+  if (negMatch) {
+    const amt = parseMoney(negMatch[1]!);
+    if (amt != null) {
+      const v = -amt;
+      return { qty: 1, label: 'Descuento', unitPrice: v, lineTotal: v };
+    }
+  }
+
+  const propina = trimmed.match(/^PROPINA\s+\$?\s*([\d.,]+)(?:\s+\$?\s*([\d.,]+))?/i);
+  if (propina) {
+    const amt = parseMoney(propina[2] ?? propina[1]!);
+    if (amt != null) {
+      return { qty: 1, label: 'Propina', unitPrice: amt, lineTotal: amt };
+    }
+  }
+
+  const m = trimmed.match(
+    /^\s*(\d+)\s+x\s+(.+?)\s+\$?\s*([\d.,]+)(?:\s*(?:c\/u|each)\s*)?(?:\$?\s*([\d.,]+))?/i,
   );
   if (!m) return null;
+
   const qty = Number(m[1]);
-  const label = m[2]!.trim();
-  const unitPrice = parseMoney(m[3]!);
-  const lineTotal = m[4] ? parseMoney(m[4]) : unitPrice != null ? unitPrice * qty : null;
-  if (!Number.isFinite(qty) || unitPrice == null || lineTotal == null) return null;
-  if (label.toLowerCase().includes('descuento') && lineTotal < 0) {
-    return { qty: 1, label, unitPrice: lineTotal, lineTotal };
+  const label = cleanLabel(m[2]!);
+  const p1 = parseMoney(m[3]!);
+  const p2 = m[4] ? parseMoney(m[4]) : null;
+  if (!Number.isFinite(qty) || qty <= 0 || p1 == null || !label) return null;
+
+  let unitPrice: number;
+  let lineTotal: number;
+
+  if (p2 != null) {
+    unitPrice = p1;
+    lineTotal = p2;
+    if (qty > 1 && p2 === p1) {
+      lineTotal = p1 * qty;
+    }
+  } else if (qty === 1) {
+    unitPrice = p1;
+    lineTotal = p1;
+  } else {
+    const asUnitTotal = p1 * qty;
+    const asLineUnit = p1 / qty;
+    if (Number.isInteger(asLineUnit) && asLineUnit >= 500) {
+      unitPrice = asLineUnit;
+      lineTotal = p1;
+    } else {
+      unitPrice = p1;
+      lineTotal = asUnitTotal;
+    }
   }
+
   return { qty, label, unitPrice, lineTotal };
 }
 
@@ -73,6 +129,13 @@ function normalizePayment(raw: string | null): string | null {
   return s.replace(/^pagado\s+/i, '').trim() || 'Efectivo';
 }
 
+function isSkippableCustomer(name: string): boolean {
+  return (
+    /^\(múltiples/i.test(name) ||
+    /ver cierre de cuaderno/i.test(name)
+  );
+}
+
 export function parseRegistroText(text: string): ParsedRegistro {
   const lines = text.split(/\r?\n/);
   const comandas: ParsedComanda[] = [];
@@ -84,14 +147,36 @@ export function parseRegistroText(text: string): ParsedRegistro {
   let currentPayment: string | null = null;
   let currentKind: 'sale' | 'purchase' = 'sale';
   let currentLines: ParsedLine[] = [];
+  let currentSubtotal: number | null = null;
   let closureDraft: Partial<DailyClosure> | null = null;
+
+  const resetComanda = () => {
+    currentCustomer = null;
+    currentCity = undefined;
+    currentPayment = null;
+    currentKind = 'sale';
+    currentLines = [];
+    currentSubtotal = null;
+  };
 
   const flushComanda = (totalRaw?: string) => {
     if (!currentDate || !currentCustomer) return;
-    let total = totalRaw ? parseMoney(totalRaw) : null;
-    if (total == null && currentLines.length > 0) {
-      total = currentLines.reduce((s, l) => s + l.lineTotal, 0);
+    if (isSkippableCustomer(currentCustomer) && currentLines.length === 0) {
+      resetComanda();
+      return;
     }
+
+    let total = totalRaw ? parseMoney(totalRaw) : null;
+    const linesSum = currentLines.reduce((s, l) => s + l.lineTotal, 0);
+
+    if (total == null && currentSubtotal != null) {
+      total = currentSubtotal;
+    }
+
+    if (total == null && currentLines.length > 0) {
+      total = linesSum;
+    }
+
     if (total == null || total <= 0) {
       if (currentKind === 'purchase' && total != null && total > 0) {
         /* ok */
@@ -100,34 +185,30 @@ export function parseRegistroText(text: string): ParsedRegistro {
         return;
       }
     }
+
+    const detailLines =
+      currentLines.length > 0
+        ? currentLines
+        : [
+            {
+              qty: 1,
+              label:
+                currentKind === 'purchase' ? 'Compra registrada' : 'Consumo',
+              unitPrice: total!,
+              lineTotal: total!,
+            },
+          ];
+
     comandas.push({
       date: currentDate,
       customer: currentCustomer,
       kind: currentKind,
       paymentMethod: currentKind === 'sale' ? currentPayment : null,
       total: total!,
-      lines:
-        currentLines.length > 0
-          ? currentLines
-          : [
-              {
-                qty: 1,
-                label: currentKind === 'purchase' ? 'Compra registrada' : 'Consumo',
-                unitPrice: total!,
-                lineTotal: total!,
-              },
-            ],
+      lines: detailLines,
       city: currentCity,
     });
     resetComanda();
-  };
-
-  const resetComanda = () => {
-    currentCustomer = null;
-    currentCity = undefined;
-    currentPayment = null;
-    currentKind = 'sale';
-    currentLines = [];
   };
 
   const flushClosure = () => {
@@ -142,8 +223,13 @@ export function parseRegistroText(text: string): ParsedRegistro {
     closureDraft = null;
   };
 
+  const applyInlineDate = (d: string, m: string, y: string) => {
+    currentDate = toIsoDate(d, m, y);
+  };
+
   for (const raw of lines) {
-    const line = raw.trimEnd();
+    const line = raw.trim();
+    if (!line) continue;
 
     const cierre = line.match(/^---\[\s*(\d{2})\/(\d{2})\/(\d{2})\s*\]---/);
     if (cierre) {
@@ -161,7 +247,9 @@ export function parseRegistroText(text: string): ParsedRegistro {
       if (!leavesClosure) {
         const com = line.match(/Comandas\s*:\s*(\d+)/i);
         if (com) closureDraft.comandas = Number(com[1]);
-        const ventas = line.match(/Total\s+(?:ventas|vendido)\s*:\s*\$?\s*([\d.,]+)/i);
+        const ventas = line.match(
+          /Total\s+(?:ventas|vendido)\s*:\s*\$?\s*([\d.,]+)/i,
+        );
         if (ventas) closureDraft.salesCOP = parseMoney(ventas[1]!);
         const compras = line.match(
           /Total\s+compras?(?:do)?\s*:\s*\$?\s*([\d.,]+)/i,
@@ -175,24 +263,41 @@ export function parseRegistroText(text: string): ParsedRegistro {
       flushClosure();
     }
 
-    const fecha = line.match(/^FECHA:\s*(\d{2})\/(\d{2})\/(\d{2})/i);
+    const fecha = line.match(/^FECHA:\s*(\d{2})\/(\d{2})\/(\d{2})/);
     if (fecha) {
       flushComanda();
-      currentDate = toIsoDate(fecha[1]!, fecha[2]!, fecha[3]!);
+      applyInlineDate(fecha[1]!, fecha[2]!, fecha[3]!);
       continue;
     }
 
-    const dia = line.match(/D[IÍ]A\s+(\d{1,2})\s*\/\s*MES\s+(\d{1,2})/i);
-    if (dia && currentDate == null) {
-      const [, d, m] = dia;
-      currentDate = toIsoDate(d!, m!, '26');
+    const innerFecha = line.match(
+      /^Fecha:\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i,
+    );
+    if (innerFecha && currentCustomer) {
+      applyInlineDate(
+        innerFecha[1]!,
+        innerFecha[2]!,
+        innerFecha[3]!.length <= 2
+          ? innerFecha[3]!
+          : innerFecha[3]!.slice(-2),
+      );
+      continue;
+    }
+
+    const diaMes = line.match(/D[IÍ]A\s+(\d{1,2})\s*\/\s*MES\s+(\d{1,2})/i);
+    if (diaMes) {
+      const y = yearFromContext(currentDate).slice(-2);
+      applyInlineDate(diaMes[1]!, diaMes[2]!, y);
+      continue;
     }
 
     const comanda = line.match(/^COMANDA:\s*(.+)/i);
     if (comanda) {
       flushComanda();
       currentCustomer = comanda[1]!.trim();
-      if (/^\(sin nombre\)/i.test(currentCustomer)) currentCustomer = 'Sin nombre';
+      if (/^\(sin nombre\)/i.test(currentCustomer)) {
+        currentCustomer = 'Sin nombre';
+      }
       continue;
     }
 
@@ -200,11 +305,45 @@ export function parseRegistroText(text: string): ParsedRegistro {
 
     if (/Tipo:\s*COMPRA/i.test(line)) currentKind = 'purchase';
 
-    const pago = line.match(/Pago:\s*(.+)/i);
-    if (pago) currentPayment = normalizePayment(pago[1]!);
+    const pagoInline = line.match(/Pago:\s*(.+)/i);
+    if (pagoInline) currentPayment = normalizePayment(pagoInline[1]!);
 
     const item = parseLineItem(line);
-    if (item && currentCustomer) currentLines.push(item);
+    if (item && currentCustomer && !isSkippableCustomer(currentCustomer)) {
+      currentLines.push(item);
+    }
+
+    const dashPrice = line.match(/^-\s*\$?\s*([\d.,]+)/);
+    if (
+      dashPrice &&
+      currentCustomer &&
+      !isSkippableCustomer(currentCustomer) &&
+      !item
+    ) {
+      const amt = parseMoney(dashPrice[1]!);
+      if (amt != null) {
+        currentLines.push({
+          qty: 1,
+          label: 'Ítem',
+          unitPrice: amt,
+          lineTotal: amt,
+        });
+      }
+    }
+
+    const subtotal = line.match(/^Subtotal(?:\s+\w+)?\s+\$?\s*([\d.,]+)/i);
+    if (subtotal) {
+      const amt = parseMoney(subtotal[1]!);
+      if (amt != null) currentSubtotal = amt;
+    }
+
+    if (
+      /^TOTAL:\s*\(ilegible\)/i.test(line) ||
+      /^Total:\s*\(ilegible\)/i.test(line)
+    ) {
+      if (currentCustomer) flushComanda();
+      continue;
+    }
 
     const total = line.match(/^TOTAL:\s*~?\$?\s*([\d.,]+)/i);
     if (total && currentCustomer) {
@@ -212,9 +351,12 @@ export function parseRegistroText(text: string): ParsedRegistro {
       continue;
     }
 
-    const totalSlash = line.match(/^TOTAL:\s*.*\$?\s*([\d.,]+)\s*\/\s*\$?\s*([\d.,]+)/i);
+    const totalSlash = line.match(
+      /^TOTAL:\s*.*\$?\s*([\d.,]+)\s*\/\s*\$?\s*([\d.,]+)/i,
+    );
     if (totalSlash && currentCustomer) {
       flushComanda(totalSlash[2]!);
+      continue;
     }
   }
 

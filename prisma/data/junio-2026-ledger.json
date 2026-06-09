@@ -1,0 +1,164 @@
+{
+  "sales": [
+    {
+      "code": "V-0106-001",
+      "date": "2026-06-01",
+      "customer": "Pantocho",
+      "paymentMethod": "Efectivo",
+      "total": 11000,
+      "lines": [
+        { "label": "Perro", "qty": 1, "unitPrice": 7000 },
+        { "label": "Coca-Cola", "qty": 1, "unitPrice": 4000 }
+      ]
+    },
+    {
+      "code": "V-0106-002",
+      "date": "2026-06-01",
+      "customer": "Chica gomela",
+      "paymentMethod": "Nequi",
+      "total": 12000,
+      "lines": [
+        { "label": "Perro grande", "qty": 1, "unitPrice": 11000 },
+        { "label": "Desechable", "qty": 1, "unitPrice": 1000 }
+      ]
+    },
+    {
+      "code": "V-0106-003",
+      "date": "2026-06-01",
+      "customer": "Sin nombre",
+      "paymentMethod": "Efectivo",
+      "total": 41000,
+      "lines": [
+        { "label": "Soda", "qty": 1, "unitPrice": 5000 },
+        { "label": "Michelada Club", "qty": 1, "unitPrice": 6000 },
+        { "label": "Michelada Bud", "qty": 1, "unitPrice": 8000 },
+        { "label": "Perro", "qty": 3, "unitPrice": 7000 }
+      ]
+    },
+    {
+      "code": "V-0106-004",
+      "date": "2026-06-01",
+      "customer": "Alex",
+      "paymentMethod": "Efectivo",
+      "total": 11000,
+      "lines": [
+        { "label": "Cerveza", "qty": 1, "unitPrice": 4000 },
+        { "label": "Perro", "qty": 1, "unitPrice": 7000 }
+      ]
+    },
+    {
+      "code": "V-0206-001",
+      "date": "2026-06-02",
+      "customer": "Ernesto",
+      "paymentMethod": "Efectivo",
+      "total": 35000,
+      "lines": [
+        { "label": "Poker", "qty": 1, "unitPrice": 5000 },
+        { "label": "Cigarro", "qty": 1, "unitPrice": 1000 },
+        { "label": "Perro", "qty": 1, "unitPrice": 7000 }
+      ]
+    },
+    {
+      "code": "V-0206-002",
+      "date": "2026-06-02",
+      "customer": "Amigos Ernesto",
+      "paymentMethod": "Efectivo",
+      "total": 22000,
+      "lines": [
+        { "label": "Poker", "qty": 4, "unitPrice": 5000 },
+        { "label": "Cigarro", "qty": 2, "unitPrice": 1000 }
+      ]
+    },
+    {
+      "code": "V-0206-003",
+      "date": "2026-06-02",
+      "customer": "Señores recomendadores",
+      "paymentMethod": "Efectivo",
+      "total": 14000,
+      "lines": [{ "label": "Hervido", "qty": 2, "unitPrice": 7000 }]
+    },
+    {
+      "code": "V-0206-004",
+      "date": "2026-06-02",
+      "customer": "Señor vecino",
+      "paymentMethod": "Efectivo",
+      "total": 18000,
+      "lines": [
+        { "label": "Perro grande", "qty": 1, "unitPrice": 11000 },
+        { "label": "Adición", "qty": 1, "unitPrice": 5000 },
+        { "label": "Michelada", "qty": 1, "unitPrice": 2000 }
+      ]
+    },
+    {
+      "code": "V-0206-005",
+      "date": "2026-06-02",
+      "customer": "Señor carro blanco",
+      "paymentMethod": "Efectivo",
+      "total": 42000,
+      "lines": [{ "label": "Perro grande", "qty": 3, "unitPrice": 14000 }]
+    },
+    {
+      "code": "V-0206-006",
+      "date": "2026-06-02",
+      "customer": "Sociología",
+      "paymentMethod": "Efectivo",
+      "total": 39000,
+      "lines": [
+        { "label": "Poker", "qty": 4, "unitPrice": 5000 },
+        { "label": "Cigarrillos", "qty": 2, "unitPrice": 1000 },
+        { "label": "Moscow Mule", "qty": 1, "unitPrice": 15000 },
+        { "label": "Hervido", "qty": 1, "unitPrice": 7000 },
+        { "label": "Descuento", "qty": 1, "unitPrice": -4000 }
+      ]
+    }
+  ],
+  "purchases": [
+    {
+      "code": "C-0106-001",
+      "date": "2026-06-01",
+      "name": "Reposición inventario 01/06",
+      "supplier": "Varios proveedores",
+      "total": 306400,
+      "lines": [
+        {
+          "label": "Reposición inventario (sin detalle en transcripción)",
+          "qty": 1,
+          "unitPrice": 306400
+        }
+      ]
+    },
+    {
+      "code": "C-0206-001",
+      "date": "2026-06-02",
+      "name": "Suministros Arándano",
+      "supplier": "Arandano",
+      "total": 17000,
+      "lines": [
+        { "label": "Cebollar", "qty": 4, "unitPrice": 0 },
+        { "label": "Caja icopor", "qty": 1, "unitPrice": 8500 },
+        { "label": "Caja icopor", "qty": 1, "unitPrice": 4500 },
+        {
+          "label": "Suministros no detallados en transcripción",
+          "qty": 1,
+          "unitPrice": 4000
+        }
+      ]
+    }
+  ],
+  "shifts": [
+    {
+      "date": "2026-06-01",
+      "schedule": "3:00pm - 7:30pm",
+      "comandas": 4,
+      "salesCOP": 87000,
+      "purchasesCOP": 306400
+    },
+    {
+      "date": "2026-06-02",
+      "schedule": "3:00pm - 10:00pm",
+      "comandas": 41,
+      "salesCOP": 187000,
+      "purchasesCOP": 17000
+    }
+  ]
+}

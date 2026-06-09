@@ -1,53 +1,51 @@
-# vos-api — vos.ai Platform API
+# vos.ai-api — Backend VOS AI (NestJS + Prisma)
 
-API NestJS + Prisma + PostgreSQL (Neon). Multi-empresa con módulo **Productos** activo.
+## Variables de entorno
 
-## Inicio rápido
+| Archivo | Uso |
+|---------|-----|
+| `.env.local` | Desarrollo en tu Mac (`npm run start:dev`) |
+| `.env.dev` | Servidor dev/staging (`VOS_ENV=dev`) |
 
 ```bash
-cp .env.example .env    # DATABASE_URL de Neon
+cp .env.local.example .env.local   # primera vez local
+cp .env.dev.example .env.dev       # primera vez servidor dev
+```
+
+`.env.local` y `.env.dev` no se commitean.
+
+## Desarrollo local
+
+```bash
 npm install
+cp .env.local.example .env.local   # editar DATABASE_URL (Neon)
 npm run db:migrate
 npm run db:seed-platform
-npm run start:dev       # http://localhost:3000
+npm run start:dev
 ```
 
-**Demo:** `admin@vos.ai` / `VosAi2026!` → **Café Bar Demo**
+API: http://localhost:3000/health
 
-## Scripts principales
-
-| Comando | Descripción |
-|---------|-------------|
-| `npm run start:dev` | API desarrollo |
-| `npm run build` | Compilar producción |
-| `npm run start:prod` | Ejecutar `dist/` |
-| `npm run db:migrate` | `prisma migrate deploy` |
-| `npm run db:seed-platform` | Empresa, admin, categorías, productos demo |
-| `npm run db:studio` | Prisma Studio |
-
-## Rutas API (plataforma v2)
-
-| Método | Ruta | Auth |
-|--------|------|------|
-| `POST` | `/auth/login` | No |
-| `GET` | `/auth/me` | JWT |
-| `POST` | `/auth/switch-company` | JWT |
-| `GET` | `/products` | JWT + `X-Company-Id` |
-| `POST/PATCH/DELETE` | `/products` | JWT + permisos RBAC |
-| `GET` | `/categories` | JWT + tenant |
-| `GET` | `/navigation` | No |
-| `GET` | `/health` | No |
-
-## VPS
+## Servidor dev
 
 ```bash
-docker compose -f docker-compose.vps.yml --profile full up -d --build
+cp .env.dev.example .env.dev         # editar dominio + Neon + JWT
+npm run build
+VOS_ENV=dev npm run db:migrate:env
+VOS_ENV=dev npm run start:prod:env
 ```
 
-Ver [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) y `../.env.vps.example`.
+## Docker (API + front + Postgres opcional)
 
-## Esquema
+Desde esta carpeta, con el front en `../vos.ai-front`:
 
-- Activo: `prisma/schema.prisma` (multi-tenant)
-- Legacy: `prisma/schema.legacy.prisma` (referencia v1)
-- Diseño: [../docs/database/VOS_PLATFORM_DESIGN.md](../docs/database/VOS_PLATFORM_DESIGN.md)
+```bash
+docker compose --profile full up -d --build
+```
+
+- API: http://localhost:3000  
+- App: http://localhost:8080  
+
+## Login demo
+
+`admin@vos.ai` / `VosAi2026!`

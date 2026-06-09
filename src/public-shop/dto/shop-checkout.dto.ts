@@ -45,6 +45,11 @@ export class ShopCheckoutDto {
   @IsOptional()
   customerName?: string;
 
+  @IsString()
+  @IsOptional()
+  customerNotes?: string;
+
   @IsEnum(ShopPaymentMethod)
-  paymentMethod!: ShopPaymentMethod;
+  @IsOptional()
+  paymentMethod?: ShopPaymentMethod;
 }

@@ -7,22 +7,19 @@ import { ConfigService } from '@nestjs/config';
 import {
   Prisma,
   ProductStatus,
-  SaleSource,
   ShopOrderStatus,
   ShopPaymentMethod,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { formatSaleReceiptText } from '../platform-sales/sale-invoice.pdf';
 import { WhatsappService } from '../platform-sales/whatsapp.service';
 import { ShopCheckoutDto } from './dto/shop-checkout.dto';
 import { PaymentLinkService } from './payment-link.service';
-
-type ShopCartLine = {
-  productId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-};
+import {
+  formatShopOrderInternalAlert,
+  settleShopOrderAsSale,
+  shopPaymentLabel,
+  type ShopCartLine,
+} from './shop-order-settlement';
 
 @Injectable()
 export class PublicShopService {
@@ -112,6 +109,7 @@ export class PublicShopService {
   async checkout(slug: string, dto: ShopCheckoutDto) {
     const company = await this.resolveCompany(slug);
     const phone = this.normalizePhone(dto.customerPhone);
+    const paymentMethod = dto.paymentMethod ?? ShopPaymentMethod.NEQUI;
 
     const productIds = [...new Set(dto.items.map((i) => i.productId))];
     const dbProducts = await this.prisma.product.findMany({
@@ -140,7 +138,9 @@ export class PublicShopService {
       total += lineTotal;
       lines.push({
         productId: item.productId,
-        productName: item.productName.trim() || dbProducts.find((p) => p.id === item.productId)!.name,
+        productName:
+          item.productName.trim() ||
+          dbProducts.find((p) => p.id === item.productId)!.name,
         quantity: item.quantity,
         unitPrice,
       });
@@ -148,24 +148,33 @@ export class PublicShopService {
 
     const orderCode = await this.nextOrderCode(company.id);
     const shopFront = this.config.get<string>('SHOP_FRONT_URL')?.trim();
-    const payment = this.paymentLinks.build(dto.paymentMethod, {
-      orderCode,
-      totalCOP: total,
-      customerPhone: phone,
-      shopFrontUrl: shopFront
-        ? `${shopFront.replace(/\/$/, '')}/#/tienda/pago/${orderCode}`
-        : undefined,
-    });
+    const payment =
+      paymentMethod === ShopPaymentMethod.CASH
+        ? {
+            paymentRef: null,
+            paymentLink: null,
+            paymentInstructions:
+              'Pagás en caja al recibir tu pedido (efectivo, Nequi o Bre-B).',
+          }
+        : this.paymentLinks.build(paymentMethod, {
+            orderCode,
+            totalCOP: total,
+            customerPhone: phone,
+            shopFrontUrl: shopFront
+              ? `${shopFront.replace(/\/$/, '')}/#/tienda/pedido/${orderCode}`
+              : undefined,
+          });
 
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
     const order = await this.prisma.shopOrder.create({
       data: {
         companyId: company.id,
         orderCode,
-        status: ShopOrderStatus.PENDING_PAYMENT,
-        paymentMethod: dto.paymentMethod,
+        status: ShopOrderStatus.PENDING,
+        paymentMethod,
         customerName: dto.customerName?.trim() || null,
         customerPhone: phone,
+        customerNotes: dto.customerNotes?.trim() || null,
         items: lines as unknown as Prisma.InputJsonValue,
         total: new Prisma.Decimal(Math.round(total)),
         paymentRef: payment.paymentRef,
@@ -174,6 +183,16 @@ export class PublicShopService {
         expiresAt,
       },
     });
+
+    await this.whatsapp.sendInternalNotification(
+      formatShopOrderInternalAlert({
+        orderCode: order.orderCode,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        total: order.total,
+        items: lines,
+      }),
+    );
 
     return this.formatOrder(order, company.name);
   }
@@ -196,12 +215,11 @@ export class PublicShopService {
     return this.formatOrder(order, company.name);
   }
 
+  /** @deprecated El cobro lo realiza el POS tras marcar entregado. */
   async confirmPayment(orderId: string) {
     const order = await this.prisma.shopOrder.findUnique({
       where: { id: orderId },
-      include: {
-        company: { select: { id: true, name: true } },
-      },
+      include: { company: { select: { id: true, name: true } } },
     });
     if (!order) throw new NotFoundException('Pedido no encontrado');
     if (order.status === ShopOrderStatus.PAID) {
@@ -210,104 +228,9 @@ export class PublicShopService {
         saleId: order.saleId,
       });
     }
-    if (order.status !== ShopOrderStatus.PENDING_PAYMENT) {
-      throw new BadRequestException('Este pedido ya no se puede pagar.');
-    }
-    if (order.expiresAt && order.expiresAt < new Date()) {
-      await this.prisma.shopOrder.update({
-        where: { id: order.id },
-        data: { status: ShopOrderStatus.EXPIRED },
-      });
-      throw new BadRequestException('El pedido expiró. Creá uno nuevo.');
-    }
-
-    const lines = order.items as unknown as ShopCartLine[];
-    const paymentLabel =
-      order.paymentMethod === ShopPaymentMethod.NEQUI ? 'Nequi' : 'Bre-B';
-
-    const result = await this.prisma.$transaction(async (tx) => {
-      const saleCount = await tx.sale.count({
-        where: { companyId: order.companyId },
-      });
-      const saleCode = `V${String(saleCount + 1).padStart(4, '0')}`;
-
-      const sale = await tx.sale.create({
-        data: {
-          companyId: order.companyId,
-          code: saleCode,
-          saleDate: new Date(),
-          total: order.total,
-          paymentMethod: paymentLabel,
-          source: SaleSource.SHOP,
-          mesa: order.customerName?.trim() || 'Tienda online',
-          customerPhone: order.customerPhone,
-          notes: `Pedido ${order.orderCode}`,
-        },
-      });
-
-      for (const line of lines) {
-        const product = await tx.product.findFirst({
-          where: { id: line.productId, companyId: order.companyId },
-          select: { cost: true },
-        });
-        const costAtSale = product?.cost ?? null;
-        const lineTotal = line.quantity * line.unitPrice;
-        const profit =
-          costAtSale != null
-            ? new Prisma.Decimal(
-                Math.round(lineTotal - Number(costAtSale) * line.quantity),
-              )
-            : null;
-
-        await tx.saleLine.create({
-          data: {
-            saleId: sale.id,
-            productId: line.productId,
-            productName: line.productName,
-            quantity: new Prisma.Decimal(line.quantity),
-            unitPrice: new Prisma.Decimal(line.unitPrice),
-            costAtSale,
-            profit,
-          },
-        });
-      }
-
-      const updated = await tx.shopOrder.update({
-        where: { id: order.id },
-        data: {
-          status: ShopOrderStatus.PAID,
-          paidAt: new Date(),
-          saleId: sale.id,
-        },
-        include: {
-          company: { select: { name: true } },
-        },
-      });
-
-      const saleFull = await tx.sale.findUniqueOrThrow({
-        where: { id: sale.id },
-        include: {
-          lines: { orderBy: { productName: 'asc' } },
-          company: { select: { name: true } },
-        },
-      });
-
-      return { updated, saleFull };
-    });
-
-    const whatsappSent = await this.whatsapp.sendSaleReceipt(
-      order.customerPhone,
-      formatSaleReceiptText({
-        ...result.saleFull,
-        notes: `${result.saleFull.notes ?? ''}\nPedido tienda online.`,
-      }),
+    throw new BadRequestException(
+      'El pago se confirma en caja cuando el pedido esté entregado.',
     );
-
-    return this.formatOrder(result.updated, result.updated.company.name, {
-      whatsappSent,
-      saleId: result.updated.saleId,
-      saleCode: result.saleFull.code,
-    });
   }
 
   private formatOrder(
@@ -324,18 +247,25 @@ export class PublicShopService {
       paymentLink: string | null;
       paymentInstructions: string | null;
       saleId: string | null;
+      preparingAt?: Date | null;
+      deliveredAt?: Date | null;
       createdAt: Date;
       paidAt: Date | null;
       expiresAt: Date | null;
     },
     companyName: string,
-    extra?: { whatsappSent?: boolean; saleId?: string | null; saleCode?: string | null },
+    extra?: {
+      whatsappSent?: boolean;
+      saleId?: string | null;
+      saleCode?: string | null;
+    },
   ) {
     return {
       id: order.id,
       orderCode: order.orderCode,
       status: order.status,
       paymentMethod: order.paymentMethod,
+      paymentMethodLabel: shopPaymentLabel(order.paymentMethod),
       customerName: order.customerName,
       customerPhone: order.customerPhone,
       items: order.items,
@@ -349,6 +279,8 @@ export class PublicShopService {
       companyName,
       createdAt: order.createdAt.toISOString(),
       paidAt: order.paidAt?.toISOString() ?? null,
+      preparingAt: order.preparingAt?.toISOString() ?? null,
+      deliveredAt: order.deliveredAt?.toISOString() ?? null,
       expiresAt: order.expiresAt?.toISOString() ?? null,
       whatsappSent: extra?.whatsappSent,
     };

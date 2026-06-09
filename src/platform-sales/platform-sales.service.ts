@@ -13,10 +13,8 @@ import {
   UpdateSaleDto,
 } from './dto/sale.dto';
 import {
-  buildSaleInvoiceBusinessPdf,
-  buildSaleInvoiceClientPdf,
+  buildSaleInvoicePdf,
   formatSaleReceiptText,
-  type SaleInvoiceCopy,
 } from './sale-invoice.pdf';
 import { WhatsappService } from './whatsapp.service';
 
@@ -263,12 +261,10 @@ export class PlatformSalesService {
     if (params.dateFrom?.trim() || params.dateTo?.trim()) {
       const saleDate: Prisma.DateTimeFilter = {};
       if (params.dateFrom?.trim()) {
-        saleDate.gte = new Date(params.dateFrom.trim());
+        saleDate.gte = new Date(`${params.dateFrom.trim()}T00:00:00.000Z`);
       }
       if (params.dateTo?.trim()) {
-        const end = new Date(params.dateTo.trim());
-        end.setHours(23, 59, 59, 999);
-        saleDate.lte = end;
+        saleDate.lte = new Date(`${params.dateTo.trim()}T23:59:59.999Z`);
       }
       where.saleDate = saleDate;
     }
@@ -375,11 +371,17 @@ export class PlatformSalesService {
       });
       const receiptSale = {
         ...sale,
-        company: { name: company?.name ?? 'Arándano Café Bar' },
+        company: { name: company?.name ?? 'Tu empresa' },
       };
       whatsappSent = await this.whatsapp.sendSaleReceipt(
         phone,
         formatSaleReceiptText(receiptSale),
+        {
+          saleDate: sale.saleDate,
+          total: Number(sale.total),
+          code: sale.code,
+          companyName: company?.name ?? 'Tu empresa',
+        },
       );
     }
 
@@ -496,7 +498,7 @@ export class PlatformSalesService {
       where: { id, companyId: tenant.companyId },
       include: {
         lines: { orderBy: { productName: 'asc' } },
-        company: { select: { name: true } },
+        company: { select: { name: true, address: true, phone: true, email: true } },
         user: { select: { name: true, email: true } },
       },
     });
@@ -504,14 +506,37 @@ export class PlatformSalesService {
     return sale;
   }
 
-  async getInvoicePdf(
-    tenant: TenantContext,
-    id: string,
-    copy: SaleInvoiceCopy = 'client',
-  ): Promise<Buffer> {
+  async getInvoicePdf(tenant: TenantContext, id: string): Promise<Buffer> {
     const sale = await this.loadSaleForInvoice(tenant, id);
-    return copy === 'business'
-      ? buildSaleInvoiceBusinessPdf(sale)
-      : buildSaleInvoiceClientPdf(sale);
+    return buildSaleInvoicePdf(sale);
+  }
+
+  async getInvoiceReceiptText(tenant: TenantContext, id: string): Promise<string> {
+    const sale = await this.loadSaleForInvoice(tenant, id);
+    return formatSaleReceiptText(sale);
+  }
+
+  async sendReceiptWhatsApp(tenant: TenantContext, id: string) {
+    const sale = await this.loadSaleForInvoice(tenant, id);
+    const phone = sale.customerPhone?.trim();
+    if (!phone) {
+      throw new BadRequestException(
+        'Agregá el celular del cliente en la venta para enviar WhatsApp.',
+      );
+    }
+    const whatsappSent = await this.whatsapp.sendSaleReceipt(
+      phone,
+      formatSaleReceiptText(sale),
+      {
+        saleDate: sale.saleDate,
+        total: Number(sale.total),
+        code: sale.code,
+        companyName: sale.company.name,
+      },
+    );
+    return {
+      whatsappSent,
+      whatsappConfigured: this.whatsapp.isConfigured(),
+    };
   }
 }

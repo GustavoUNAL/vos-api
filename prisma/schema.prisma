@@ -54,7 +54,9 @@ enum SaleSource {
 }
 
 enum ShopOrderStatus {
-  PENDING_PAYMENT
+  PENDING
+  PREPARING
+  DELIVERED
   PAID
   CANCELLED
   EXPIRED
@@ -63,6 +65,7 @@ enum ShopOrderStatus {
 enum ShopPaymentMethod {
   NEQUI
   BREB
+  CASH
 }
 
 enum StaffShiftStatus {
@@ -79,6 +82,12 @@ enum AuditAction {
   LOGOUT
   EXPORT
   IMPORT
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum AiMessageRole {
@@ -133,9 +142,10 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String   @map("password_hash")
-  name         String
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  name             String
+  active           Boolean  @default(true)
+  isPlatformAdmin  Boolean  @default(false) @map("is_platform_admin")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   memberships     CompanyMember[]
@@ -145,6 +155,22 @@ model User {
 
   @@index([active], map: "idx_users_active")
   @@map("users")
+}
+
+/// Solicitud de acceso desde la landing (el admin crea la cuenta manualmente).
+model AccessRequest {
+  id          String              @id @default(cuid())
+  companyName String              @map("company_name")
+  contactName String              @map("contact_name")
+  email       String
+  phone       String?
+  message     String?
+  status      AccessRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([status], map: "idx_access_requests_status")
+  @@index([email], map: "idx_access_requests_email")
+  @@map("access_requests")
 }
 
 /// Membership: user ↔ company (many-to-many).
@@ -471,10 +497,11 @@ model ShopOrder {
   companyId           String            @map("company_id")
   company             Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   orderCode           String            @map("order_code")
-  status              ShopOrderStatus   @default(PENDING_PAYMENT)
+  status              ShopOrderStatus   @default(PENDING)
   paymentMethod       ShopPaymentMethod @map("payment_method")
   customerName        String?           @map("customer_name")
   customerPhone       String            @map("customer_phone")
+  customerNotes       String?           @map("customer_notes")
   items               Json              @db.JsonB
   total               Decimal           @db.Decimal(14, 2)
   paymentRef          String?           @map("payment_ref")
@@ -482,6 +509,8 @@ model ShopOrder {
   paymentInstructions String?           @map("payment_instructions")
   saleId              String?           @map("sale_id")
   sale                Sale?             @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  preparingAt         DateTime?         @map("preparing_at") @db.Timestamptz(6)
+  deliveredAt         DateTime?         @map("delivered_at") @db.Timestamptz(6)
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   paidAt              DateTime?         @map("paid_at") @db.Timestamptz(6)
   expiresAt           DateTime?         @map("expires_at") @db.Timestamptz(6)

@@ -61,21 +61,36 @@ async function main() {
   const pool = new Pool(pgPoolConfig(url));
   const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
-  try {
-    const adminPassword = 'VosAi2026!';
-    const passwordHash = await bcrypt.hash(adminPassword, 10);
+  // Credenciales plataforma (solo admin global)
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? 'admin@vos.ai').trim().toLowerCase();
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'VosAi2026!';
+  const adminName = process.env.SEED_ADMIN_NAME ?? 'Administrador VOS AI';
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
 
+  // Credenciales tenant Arándano Café Bar
+  const arandanoEmail = (process.env.SEED_ARANDANO_EMAIL ?? 'owner@arandano.com').trim().toLowerCase();
+  const arandanoPassword = process.env.SEED_ARANDANO_PASSWORD ?? 'Arandano2026!';
+  const arandanoName = process.env.SEED_ARANDANO_NAME ?? 'Propietario Arándano';
+  const arandanoPasswordHash = await bcrypt.hash(arandanoPassword, 10);
+
+  try {
     const company = await prisma.company.upsert({
       where: { id: 'seed-arandano-cafe-bar' },
       create: {
         id: 'seed-arandano-cafe-bar',
         name: 'Arándano Café Bar',
         shopSlug: 'arandano',
+        address: 'Cra 24 #19-65, Pasto, Nariño',
+        email: 'hola@arandanocafebar.com',
+        phone: '320 245 6789',
         status: 'ACTIVE',
       },
       update: {
         name: 'Arándano Café Bar',
         shopSlug: 'arandano',
+        address: 'Cra 24 #19-65, Pasto, Nariño',
+        email: 'hola@arandanocafebar.com',
+        phone: '320 245 6789',
         status: 'ACTIVE',
       },
     });
@@ -83,39 +98,68 @@ async function main() {
     const legacyAdmin = await prisma.user.findUnique({
       where: { email: 'admin@arandano.com' },
     });
-    if (legacyAdmin) {
+    if (legacyAdmin && legacyAdmin.email !== arandanoEmail) {
       await prisma.user.update({
         where: { id: legacyAdmin.id },
         data: {
-          email: 'admin@vos.ai',
-          passwordHash,
-          name: 'Admin vos.ai',
+          email: arandanoEmail,
+          passwordHash: arandanoPasswordHash,
+          name: arandanoName,
           active: true,
+          isPlatformAdmin: false,
         },
       });
     }
 
     const adminUser = await prisma.user.upsert({
-      where: { email: 'admin@vos.ai' },
+      where: { email: adminEmail },
       create: {
-        email: 'admin@vos.ai',
-        passwordHash,
-        name: 'Admin vos.ai',
+        email: adminEmail,
+        passwordHash: adminPasswordHash,
+        name: adminName,
         active: true,
+        isPlatformAdmin: true,
       },
-      update: { passwordHash, name: 'Admin vos.ai', active: true },
+      update: {
+        passwordHash: adminPasswordHash,
+        name: adminName,
+        active: true,
+        isPlatformAdmin: true,
+      },
+    });
+
+    const arandanoUser = await prisma.user.upsert({
+      where: { email: arandanoEmail },
+      create: {
+        email: arandanoEmail,
+        passwordHash: arandanoPasswordHash,
+        name: arandanoName,
+        active: true,
+        isPlatformAdmin: false,
+      },
+      update: {
+        passwordHash: arandanoPasswordHash,
+        name: arandanoName,
+        active: true,
+        isPlatformAdmin: false,
+      },
+    });
+
+    // Quitar al admin de plataforma de membresías de tenant (solo gestiona desde /platform)
+    await prisma.companyMember.deleteMany({
+      where: { userId: adminUser.id },
     });
 
     const membership = await prisma.companyMember.upsert({
       where: {
         companyId_userId: {
           companyId: company.id,
-          userId: adminUser.id,
+          userId: arandanoUser.id,
         },
       },
       create: {
         companyId: company.id,
-        userId: adminUser.id,
+        userId: arandanoUser.id,
         status: 'ACTIVE',
       },
       update: { status: 'ACTIVE' },
@@ -850,8 +894,10 @@ async function main() {
     console.log('Platform seed OK:', {
       companyId: company.id,
       companyName: company.name,
-      adminEmail: adminUser.email,
-      adminPassword,
+      platformAdminEmail: adminUser.email,
+      platformAdminPassword: adminPassword,
+      arandanoOwnerEmail: arandanoUser.email,
+      arandanoOwnerPassword: arandanoPassword,
       enabledModules: enabledModuleRows.map((r) => r.module.slug),
       categories: menuCategories.map((c) => c.slug),
       products: menuProducts.length,

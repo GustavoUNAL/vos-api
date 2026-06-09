@@ -62,7 +62,7 @@ services:
   frontend:
     profiles: ['full']
     build:
-      context: ${FRONTEND_BUILD_CONTEXT:-./docker/placeholder-front}
+      context: ${FRONTEND_BUILD_CONTEXT:-../vos.ai-front}
       dockerfile: ${FRONTEND_DOCKERFILE:-Dockerfile}
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:${API_STACK_PORT:-3000}}

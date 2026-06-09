@@ -31,7 +31,9 @@ import { PlatformSalesService } from './platform-sales.service';
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('sales')
 export class PlatformSalesController {
-  constructor(private readonly platformSalesService: PlatformSalesService) {}
+  constructor(
+    private readonly platformSalesService: PlatformSalesService,
+  ) {}
 
   @Post()
   @RequirePermissions('sales.create')
@@ -39,9 +41,9 @@ export class PlatformSalesController {
     return this.platformSalesService.create(tenant, dto);
   }
 
-  @Get('meta/payment-methods')
+  @Get('payment-methods')
   @RequirePermissions('sales.view')
-  paymentMethodsMeta(@CurrentTenant() tenant: TenantContext) {
+  listPaymentMethods(@CurrentTenant() tenant: TenantContext) {
     return this.platformSalesService.listPaymentMethodsMeta(tenant);
   }
 
@@ -49,10 +51,8 @@ export class PlatformSalesController {
   @RequirePermissions('sales.view')
   calendar(
     @CurrentTenant() tenant: TenantContext,
-    @Query('year', new DefaultValuePipe(new Date().getUTCFullYear()), ParseIntPipe)
-    year: number,
-    @Query('month', new DefaultValuePipe(new Date().getUTCMonth() + 1), ParseIntPipe)
-    month: number,
+    @Query('year', ParseIntPipe) year: number,
+    @Query('month', ParseIntPipe) month: number,
   ) {
     return this.platformSalesService.getCalendar(tenant, year, month);
   }
@@ -105,48 +105,22 @@ export class PlatformSalesController {
     return this.platformSalesService.update(tenant, id, dto);
   }
 
-  @Get(':id/invoice/client.pdf')
+  @Get(':id/receipt.txt')
   @RequirePermissions('sales.view')
-  @Header('Content-Type', 'application/pdf')
-  async invoiceClientPdf(
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  async receiptTxt(
     @CurrentTenant() tenant: TenantContext,
     @Param('id') id: string,
     @Res() res: Response,
   ) {
     const sale = await this.platformSalesService.findOne(tenant, id);
-    const buf = await this.platformSalesService.getInvoicePdf(
-      tenant,
-      id,
-      'client',
-    );
+    const text = await this.platformSalesService.getInvoiceReceiptText(tenant, id);
     const code = sale.code ?? id.slice(0, 8);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="factura-cliente-${code}.pdf"`,
+      `attachment; filename="comprobante-${code}.txt"`,
     );
-    res.send(buf);
-  }
-
-  @Get(':id/invoice/business.pdf')
-  @RequirePermissions('sales.view')
-  @Header('Content-Type', 'application/pdf')
-  async invoiceBusinessPdf(
-    @CurrentTenant() tenant: TenantContext,
-    @Param('id') id: string,
-    @Res() res: Response,
-  ) {
-    const sale = await this.platformSalesService.findOne(tenant, id);
-    const buf = await this.platformSalesService.getInvoicePdf(
-      tenant,
-      id,
-      'business',
-    );
-    const code = sale.code ?? id.slice(0, 8);
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="factura-negocio-${code}.pdf"`,
-    );
-    res.send(buf);
+    res.send(text);
   }
 
   @Get(':id/invoice.pdf')
@@ -158,17 +132,46 @@ export class PlatformSalesController {
     @Res() res: Response,
   ) {
     const sale = await this.platformSalesService.findOne(tenant, id);
-    const buf = await this.platformSalesService.getInvoicePdf(
-      tenant,
-      id,
-      'client',
-    );
+    const buf = await this.platformSalesService.getInvoicePdf(tenant, id);
     const code = sale.code ?? id.slice(0, 8);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="factura-cliente-${code}.pdf"`,
+      `attachment; filename="comprobante-${code}.pdf"`,
     );
     res.send(buf);
+  }
+
+  /** Compatibilidad: misma factura unificada. */
+  @Get(':id/invoice/client.pdf')
+  @RequirePermissions('sales.view')
+  @Header('Content-Type', 'application/pdf')
+  async invoiceClientPdf(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    return this.invoicePdf(tenant, id, res);
+  }
+
+  /** Compatibilidad: misma factura unificada. */
+  @Get(':id/invoice/business.pdf')
+  @RequirePermissions('sales.view')
+  @Header('Content-Type', 'application/pdf')
+  async invoiceBusinessPdf(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    return this.invoicePdf(tenant, id, res);
+  }
+
+  @Post(':id/send-receipt')
+  @RequirePermissions('sales.update')
+  sendReceipt(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+  ) {
+    return this.platformSalesService.sendReceiptWhatsApp(tenant, id);
   }
 
   @Get(':id')

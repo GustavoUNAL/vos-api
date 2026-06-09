@@ -1,5 +1,5 @@
-/** Carga vos.ai-api/.env antes de cualquier validación que lea process.env. */
-import 'dotenv/config';
+/** Variables desde .env.local o .env.dev (ver src/load-env.ts). */
+import './load-env';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { WsAdapter } from '@nestjs/platform-ws';

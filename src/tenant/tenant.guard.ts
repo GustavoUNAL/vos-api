@@ -57,6 +57,32 @@ export class TenantGuard implements CanActivate {
     });
 
     if (!membership || membership.company.status !== 'ACTIVE') {
+      if (
+        jwtUser.isPlatformAdmin &&
+        jwtUser.companyId === companyId &&
+        !jwtUser.platformView
+      ) {
+        const company = await this.prisma.company.findFirst({
+          where: { id: companyId, status: 'ACTIVE' },
+          select: { id: true, name: true, status: true },
+        });
+        if (!company) {
+          throw new ForbiddenException('Sin acceso a esta empresa');
+        }
+        const allPermissions = await this.prisma.permission.findMany({
+          select: { slug: true },
+        });
+        req.tenant = {
+          userId: jwtUser.sub,
+          email: jwtUser.email,
+          name: jwtUser.name,
+          companyId: company.id,
+          companyName: company.name,
+          permissions: allPermissions.map((p) => p.slug),
+          role: 'platform-admin',
+        };
+        return true;
+      }
       throw new ForbiddenException('Sin acceso a esta empresa');
     }
 

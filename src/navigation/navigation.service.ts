@@ -102,6 +102,17 @@ export class NavigationService {
               title: 'Ventas',
               items: [
                 {
+                  id: 'shop',
+                  label: 'Tienda en línea',
+                  status: hasSales ? 'ready' : 'soon',
+                  endpoints: {
+                    settings: 'GET /shop-settings',
+                    update: 'PATCH /shop-settings',
+                    publicCatalog: 'GET /public/shop/:slug/catalog',
+                  },
+                  tables: ['companies', 'shop_orders', 'products'],
+                },
+                {
                   id: 'sales',
                   label: 'Ventas',
                   status: hasSales ? 'ready' : 'soon',
