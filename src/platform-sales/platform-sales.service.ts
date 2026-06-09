@@ -364,6 +364,7 @@ export class PlatformSalesService {
     const detail = this.formatDetail(sale);
     const phone = dto.customerPhone?.trim();
     let whatsappSent = false;
+    let internalNotified = false;
     if (phone) {
       const company = await this.prisma.company.findUnique({
         where: { id: tenant.companyId },
@@ -373,9 +374,10 @@ export class PlatformSalesService {
         ...sale,
         company: { name: company?.name ?? 'Tu empresa' },
       };
+      const receiptBody = formatSaleReceiptText(receiptSale);
       whatsappSent = await this.whatsapp.sendSaleReceipt(
         phone,
-        formatSaleReceiptText(receiptSale),
+        receiptBody,
         {
           saleDate: sale.saleDate,
           total: Number(sale.total),
@@ -383,12 +385,32 @@ export class PlatformSalesService {
           companyName: company?.name ?? 'Tu empresa',
         },
       );
+      internalNotified = await this.whatsapp.sendInternalNotification(
+        [
+          '*Venta registrada*',
+          `Comprobante Nº ${sale.code ?? sale.id.slice(0, 8)}`,
+          dto.mesa?.trim() ? `Mesa: ${dto.mesa.trim()}` : null,
+          dto.source === SaleSource.POS ? 'Origen: POS' : null,
+          `Cliente: ${phone}`,
+          dto.notes?.trim() ? `Comentario: ${dto.notes.trim()}` : null,
+          `Total: ${Number(sale.total).toLocaleString('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            maximumFractionDigits: 0,
+          })}`,
+          '',
+          receiptBody.replace(/\*/g, ''),
+        ]
+          .filter((line): line is string => line != null)
+          .join('\n'),
+      );
     }
 
     return {
       ...detail,
       whatsappSent,
       whatsappConfigured: this.whatsapp.isConfigured(),
+      internalNotified,
     };
   }
 

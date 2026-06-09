@@ -96,6 +96,15 @@ export class WhatsappService {
     return `${body.slice(0, max - 18).trimEnd()}\n...(recortado)`;
   }
 
+  private sanitizeContentVariable(value: string, max = 200): string {
+    return value
+      .replace(/\*/g, '')
+      .replace(/[\r\n]+/g, ' · ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, max);
+  }
+
   private buildTwilioContentVariables(
     message: string,
     meta?: SaleReceiptMeta,
@@ -104,19 +113,33 @@ export class WhatsappService {
     if (rawOverride) {
       try {
         const parsed = JSON.parse(rawOverride) as Record<string, string>;
-        return parsed;
+        return Object.fromEntries(
+          Object.entries(parsed).map(([k, v]) => [
+            k,
+            this.sanitizeContentVariable(String(v)),
+          ]),
+        );
       } catch {
         this.logger.warn('TWILIO_CONTENT_VARIABLES inválido; usando valores automáticos.');
       }
     }
 
-    const summary = this.truncateBody(message.replace(/\*/g, ''), 420);
+    const summary = this.sanitizeContentVariable(
+      this.truncateBody(message.replace(/\*/g, ''), 420),
+      320,
+    );
     const vars: Record<string, string> = {
-      '1': this.formatShortDate(meta?.saleDate) || meta?.companyName?.slice(0, 40) || 'Venta',
-      '2':
+      '1': this.sanitizeContentVariable(
+        this.formatShortDate(meta?.saleDate) ||
+          meta?.companyName?.slice(0, 40) ||
+          'Venta',
+      ),
+      '2': this.sanitizeContentVariable(
         meta?.total != null
           ? `${this.formatCop(meta.total)}${meta.code ? ` · ${meta.code}` : ''}`
           : summary,
+        320,
+      ),
     };
     const extraKeys = this.config.get<string>('TWILIO_CONTENT_EXTRA_KEYS')?.trim();
     if (extraKeys?.includes('3')) {
@@ -129,6 +152,7 @@ export class WhatsappService {
     toE164: string,
     body: string,
     meta?: SaleReceiptMeta,
+    options?: { plainBody?: boolean },
   ): Promise<void> {
     const from =
       this.config.get<string>('TWILIO_WHATSAPP_FROM')?.trim() ??
@@ -138,7 +162,7 @@ export class WhatsappService {
     const to = this.toWhatsappAddress(toE164);
     const fromAddr = from.startsWith('whatsapp:') ? from : `whatsapp:${from}`;
 
-    if (contentSid) {
+    if (contentSid && !options?.plainBody) {
       await client.messages.create({
         from: fromAddr,
         to,
@@ -193,10 +217,11 @@ export class WhatsappService {
     toE164: string,
     body: string,
     meta?: SaleReceiptMeta,
+    options?: { plainBody?: boolean },
   ): Promise<void> {
     const provider = this.getProvider();
     if (provider === 'twilio') {
-      await this.sendViaTwilio(toE164, body, meta);
+      await this.sendViaTwilio(toE164, body, meta, options);
       return;
     }
     if (provider === 'meta') {
@@ -221,7 +246,8 @@ export class WhatsappService {
     const e164 = digits.startsWith('57') ? digits : `57${digits}`;
     if (!this.isConfigured()) return false;
     try {
-      await this.sendText(e164, body);
+      await this.sendText(e164, body, undefined, { plainBody: true });
+      this.logger.log(`WhatsApp interno enviado (${this.getProvider()}) a +${e164}`);
       return true;
     } catch (err) {
       this.logger.error(
