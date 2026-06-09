@@ -34,6 +34,12 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_ORIGIN:?Definí CORS_ORIGIN con la URL del front}
       RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-true}
+      HTTP_BODY_LIMIT: ${HTTP_BODY_LIMIT:-12mb}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_CHAT_ID: ${TELEGRAM_ADMIN_CHAT_ID:-}
+      TELEGRAM_BOT_ENABLED: ${TELEGRAM_BOT_ENABLED:-false}
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/health']
       interval: 30s
@@ -48,6 +54,7 @@ services:
       dockerfile: ${FRONTEND_DOCKERFILE:-Dockerfile}
       args:
         VITE_API_URL: ${VITE_API_URL:?Definí VITE_API_URL (URL pública del API)}
+        VITE_LANDING_WHATSAPP_URL: ${VITE_LANDING_WHATSAPP_URL:-}
         VITE_PLATFORM_MODE: ${VITE_PLATFORM_MODE:-true}
     image: vos-frontend:latest
     container_name: vos-frontend-vps

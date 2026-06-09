@@ -31,6 +31,9 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       # true solo con una instancia o primera subida
       RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-false}
+      HTTP_BODY_LIMIT: ${HTTP_BODY_LIMIT:-12mb}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o}
     healthcheck:
       test:
         [
