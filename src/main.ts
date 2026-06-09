@@ -3,6 +3,7 @@ import './load-env';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { WsAdapter } from '@nestjs/platform-ws';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { JsonSerializeInterceptor } from './common/json-serialize.interceptor';
@@ -64,7 +65,11 @@ function assertJwtSecret(): void {
 
 async function bootstrap() {
   assertJwtSecret();
-  const app = await NestFactory.create(AppModule);
+  /** Comprobantes POS (data URL base64) superan el límite por defecto de 100kb. */
+  const bodyLimit = process.env.HTTP_BODY_LIMIT?.trim() || '12mb';
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(json({ limit: bodyLimit }));
+  app.use(urlencoded({ extended: true, limit: bodyLimit }));
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new JsonSerializeInterceptor());
