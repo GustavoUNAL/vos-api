@@ -16,7 +16,11 @@ export class AssistantController {
     @CurrentTenant() tenant: TenantContext,
     @Body() dto: AskAssistantDto,
   ) {
-    const answer = await this.assistant.answer(dto.question, tenant.companyId);
+    const answer = await this.assistant.answer(
+      dto.question,
+      tenant.companyId,
+      dto.history,
+    );
     return { answer };
   }
 }
