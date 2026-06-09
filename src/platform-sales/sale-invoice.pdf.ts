@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import PDFDocument from 'pdfkit';
 import type { Company, Sale, SaleLine, User } from '@prisma/client';
+import { resolveInvoiceContact } from './invoice-branding';
 
 type SaleWithLines = Sale & {
   lines: SaleLine[];
@@ -91,17 +92,13 @@ function drawHeader(
   yStart: number,
 ): number {
   let y = yStart;
-  const businessName = sale.company.name?.trim() || 'VOS AI';
+  const contact = resolveInvoiceContact(sale.company);
 
   doc.font('Helvetica-Bold').fontSize(22).fillColor(BRAND.purple);
-  doc.text(businessName, left, y, { width, align: 'center' });
+  doc.text(contact.name, left, y, { width, align: 'center' });
   y += 26;
 
-  const contactLines = [
-    sale.company.address?.trim(),
-    sale.company.email?.trim(),
-    sale.company.phone?.trim(),
-  ].filter((line): line is string => Boolean(line));
+  const contactLines = [contact.address, contact.email, contact.phone];
 
   if (contactLines.length) {
     doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted);
@@ -191,12 +188,6 @@ function drawLinesTable(
   });
   y += totalBoxH + 18;
 
-  if (sale.notes?.trim()) {
-    doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted);
-    doc.text(`Notas: ${sale.notes.trim()}`, left, y, { width });
-    y += 16;
-  }
-
   doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted);
   doc.text(
     'Gracias por su visita. Conserve este comprobante.',
@@ -245,6 +236,7 @@ export function buildSaleInvoiceBusinessPdf(
 }
 
 export function formatSaleReceiptText(sale: SaleWithLines): string {
+  const contact = resolveInvoiceContact(sale.company);
   const lines = sale.lines
     .map((ln) => {
       const qty = Number(ln.quantity);
@@ -253,16 +245,14 @@ export function formatSaleReceiptText(sale: SaleWithLines): string {
     })
     .join('\n');
 
-  const comment = sale.notes?.trim();
-  const phone = sale.customerPhone?.trim();
-
   return [
-    `*${sale.company.name}*`,
+    `*${contact.name}*`,
+    contact.address,
+    contact.email,
+    contact.phone,
     `Comprobante Nº *${saleNumber(sale)}*`,
     `Fecha: ${formatDate(sale.saleDate)}`,
     customerLabel(sale) !== 'Cliente' ? `Cliente: ${customerLabel(sale)}` : null,
-    phone && comment ? `Comentario: ${comment}` : null,
-    !phone && comment ? `Notas: ${comment}` : null,
     '',
     lines,
     '',

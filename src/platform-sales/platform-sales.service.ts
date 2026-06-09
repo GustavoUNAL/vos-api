@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SaleSource } from '@prisma/client';
+import { Prisma, SaleLine, SaleSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
 import {
@@ -16,7 +16,7 @@ import {
   buildSaleInvoicePdf,
   formatSaleReceiptText,
 } from './sale-invoice.pdf';
-import { WhatsappService } from './whatsapp.service';
+import { TelegramService } from '../telegram/telegram.service';
 
 type ListParams = {
   page: number;
@@ -53,7 +53,7 @@ function decStr(v: Prisma.Decimal | null | undefined, digits = 2): string | null
 export class PlatformSalesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly whatsapp: WhatsappService,
+    private readonly telegram: TelegramService,
   ) {}
 
   private async nextSaleCode(companyId: string): Promise<string> {
@@ -365,21 +365,30 @@ export class PlatformSalesService {
     const phone = dto.customerPhone?.trim();
     let whatsappSent = false;
     let internalNotified = false;
-    if (phone) {
-      const company = await this.prisma.company.findUnique({
-        where: { id: tenant.companyId },
-        select: { name: true },
-      });
-      const receiptSale = {
-        ...sale,
-        company: { name: company?.name ?? 'Tu empresa' },
-      };
-      const receiptBody = formatSaleReceiptText(receiptSale);
-      const notify = await this.deliverSaleWhatsApp(receiptSale, phone, receiptBody, {
-        mesa: dto.mesa,
-        notes: dto.notes,
-        source: dto.source ?? sale.source,
-      });
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: tenant.companyId },
+      select: { name: true },
+    });
+    const receiptSale = {
+      ...sale,
+      company: { name: company?.name ?? 'Tu empresa' },
+    };
+    const receiptBody = formatSaleReceiptText(receiptSale);
+    const receiptOpts = {
+      mesa: dto.mesa,
+      notes: dto.notes,
+      source: dto.source ?? sale.source,
+    };
+
+    if (phone || this.telegram.isConfigured()) {
+      const notify = await this.deliverSaleTelegram(
+        receiptSale,
+        phone ?? '',
+        receiptBody,
+        receiptOpts,
+        dto.receiptImageDataUrl,
+      );
       whatsappSent = notify.whatsappSent;
       internalNotified = notify.internalNotified;
     }
@@ -387,7 +396,7 @@ export class PlatformSalesService {
     return {
       ...detail,
       whatsappSent,
-      whatsappConfigured: this.whatsapp.isConfigured(),
+      whatsappConfigured: this.telegram.isConfigured(),
       internalNotified,
     };
   }
@@ -516,23 +525,37 @@ export class PlatformSalesService {
     return formatSaleReceiptText(sale);
   }
 
-  async sendReceiptWhatsApp(tenant: TenantContext, id: string) {
+  async sendReceiptWhatsApp(
+    tenant: TenantContext,
+    id: string,
+    customerPhone?: string,
+  ) {
     const sale = await this.loadSaleForInvoice(tenant, id);
-    const phone = sale.customerPhone?.trim();
-    if (!phone) {
-      throw new BadRequestException(
-        'Agregá el celular del cliente en la venta para enviar WhatsApp.',
-      );
+    const phone = customerPhone?.trim() || sale.customerPhone?.trim();
+    if (
+      customerPhone?.trim() &&
+      customerPhone.trim() !== (sale.customerPhone?.trim() ?? '')
+    ) {
+      await this.prisma.sale.update({
+        where: { id, companyId: tenant.companyId },
+        data: { customerPhone: customerPhone.trim() },
+      });
     }
     const receiptBody = formatSaleReceiptText(sale);
-    const notify = await this.deliverSaleWhatsApp(sale, phone, receiptBody, {
-      mesa: sale.mesa,
-      notes: sale.notes,
-      source: sale.source,
-    });
+    const notify = await this.deliverSaleTelegram(
+      sale,
+      phone ?? '',
+      receiptBody,
+      {
+        mesa: sale.mesa,
+        notes: sale.notes,
+        source: sale.source,
+      },
+      null,
+    );
     return {
       whatsappSent: notify.whatsappSent,
-      whatsappConfigured: this.whatsapp.isConfigured(),
+      whatsappConfigured: this.telegram.isConfigured(),
       internalNotified: notify.internalNotified,
     };
   }
@@ -553,7 +576,7 @@ export class PlatformSalesService {
       `Comprobante Nº ${sale.code ?? sale.id.slice(0, 8)}`,
       opts.mesa?.trim() ? `Cliente / mesa: ${opts.mesa.trim()}` : null,
       opts.source === SaleSource.POS ? 'Origen: POS' : null,
-      `Cel. cliente: ${customerPhone}`,
+      customerPhone.trim() ? `Cel. cliente: ${customerPhone.trim()}` : null,
       opts.notes?.trim() ? `Comentario: ${opts.notes.trim()}` : null,
       `Total: ${Number(sale.total).toLocaleString('es-CO', {
         style: 'currency',
@@ -567,7 +590,7 @@ export class PlatformSalesService {
       .join('\n');
   }
 
-  private async deliverSaleWhatsApp(
+  private async deliverSaleTelegram(
     sale: {
       saleDate: Date;
       total: Prisma.Decimal;
@@ -575,24 +598,38 @@ export class PlatformSalesService {
       id: string;
       source: SaleSource;
       company: { name: string };
+      lines: SaleLine[];
+      mesa?: string | null;
+      customerPhone?: string | null;
+      paymentMethod?: string | null;
+      notes?: string | null;
     },
     customerPhone: string,
     receiptBody: string,
     opts: { mesa?: string | null; notes?: string | null; source?: SaleSource },
+    receiptImageDataUrl?: string | null,
   ): Promise<{ whatsappSent: boolean; internalNotified: boolean }> {
-    const whatsappSent = await this.whatsapp.sendSaleReceipt(
+    const body = this.formatInternalSaleAlert(
+      sale,
       customerPhone,
+      opts,
       receiptBody,
-      {
-        saleDate: sale.saleDate,
-        total: Number(sale.total),
-        code: sale.code,
-        companyName: sale.company.name,
-      },
     );
-    const internalNotified = await this.whatsapp.sendInternalNotification(
-      this.formatInternalSaleAlert(sale, customerPhone, opts, receiptBody),
-    );
-    return { whatsappSent, internalNotified };
+    const code = sale.code ?? sale.id.slice(0, 8);
+    let invoicePdf: Buffer | undefined;
+    try {
+      invoicePdf = await buildSaleInvoicePdf(sale as Parameters<
+        typeof buildSaleInvoicePdf
+      >[0]);
+    } catch {
+      invoicePdf = undefined;
+    }
+    const internalNotified = await this.telegram.sendSaleCompletion({
+      text: body,
+      invoicePdf,
+      invoiceFilename: `comprobante-${code}.pdf`,
+      receiptImageDataUrl: receiptImageDataUrl?.trim() || null,
+    });
+    return { whatsappSent: internalNotified, internalNotified };
   }
 }

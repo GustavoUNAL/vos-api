@@ -10,14 +10,16 @@ import {
   settleShopOrderAsSale,
   shopPaymentLabel,
 } from '../public-shop/shop-order-settlement';
-import { WhatsappService } from '../platform-sales/whatsapp.service';
+import { TelegramService } from '../telegram/telegram.service';
+import { ShopOrdersRealtimeService } from './shop-orders-realtime.service';
 import type { CollectShopOrderPaymentDto } from './dto/shop-order.dto';
 
 @Injectable()
 export class PlatformShopOrdersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly whatsapp: WhatsappService,
+    private readonly telegram: TelegramService,
+    private readonly realtime: ShopOrdersRealtimeService,
   ) {}
 
   async list(tenant: TenantContext, status?: string) {
@@ -63,7 +65,9 @@ export class PlatformShopOrdersService {
           preparingAt: order.preparingAt ?? new Date(),
         },
       });
-      return this.format(updated);
+      const formatted = this.format(updated);
+      this.realtime.emitUpdated(tenant.companyId, formatted);
+      return formatted;
     }
 
     if (
@@ -81,7 +85,9 @@ export class PlatformShopOrdersService {
         preparingAt: order.preparingAt ?? new Date(),
       },
     });
-    return this.format(updated);
+    const formatted = this.format(updated);
+    this.realtime.emitUpdated(tenant.companyId, formatted);
+    return formatted;
   }
 
   async collectPayment(
@@ -109,7 +115,7 @@ export class PlatformShopOrdersService {
 
     const settlement = await settleShopOrderAsSale(
       this.prisma,
-      this.whatsapp,
+      this.telegram,
       {
         ...order,
         paymentMethod: dto.paymentMethod,
@@ -120,13 +126,15 @@ export class PlatformShopOrdersService {
       where: { id: order.id },
     });
 
-    return {
+    const formatted = {
       ...this.format(refreshed),
       whatsappSent: settlement.whatsappSent,
       internalNotified: settlement.internalNotified,
       saleCode: settlement.saleCode,
       paymentMethodLabel: shopPaymentLabel(dto.paymentMethod),
     };
+    this.realtime.emitUpdated(tenant.companyId, formatted);
+    return formatted;
   }
 
   private format(order: {

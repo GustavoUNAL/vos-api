@@ -24,6 +24,7 @@ import { PlatformShopSettingsModule } from './platform-shop-settings/platform-sh
 import { PublicShopModule } from './public-shop/public-shop.module';
 import { AccessRequestsModule } from './access-requests/access-requests.module';
 import { PlatformAdminModule } from './platform-admin/platform-admin.module';
+import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PlatformAdminModule } from './platform-admin/platform-admin.module';
       skipIf: () => process.env.NODE_ENV !== 'production',
     }),
     PrismaModule,
+    TelegramModule,
     TenantModule,
     AuthModule,
     NavigationModule,

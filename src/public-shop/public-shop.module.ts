@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { PaymentLinkService } from './payment-link.service';
 import { PublicShopController } from './public-shop.controller';
 import { PublicShopService } from './public-shop.service';
-import { WhatsappService } from '../platform-sales/whatsapp.service';
+import { PlatformShopOrdersModule } from '../platform-shop-orders/platform-shop-orders.module';
 
 @Module({
+  imports: [PlatformShopOrdersModule],
   controllers: [PublicShopController],
-  providers: [PublicShopService, PaymentLinkService, WhatsappService],
+  providers: [PublicShopService, PaymentLinkService],
 })
 export class PublicShopModule {}

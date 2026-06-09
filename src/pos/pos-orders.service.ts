@@ -123,13 +123,21 @@ export class PosOrdersService {
           where: { id: orderId },
           data: {
             status: next,
-            ...(next === PosOrderStatus.CLOSING ? { closedAt: new Date() } : {}),
+            ...(next === PosOrderStatus.CLOSING || next === PosOrderStatus.CLOSED
+              ? { closedAt: new Date() }
+              : {}),
           },
         });
         if (next === PosOrderStatus.CLOSING) {
           await tx.posTable.update({
             where: { id: order.tableId },
             data: { status: PosTableStatus.CLOSING },
+          });
+        }
+        if (next === PosOrderStatus.CLOSED) {
+          await tx.posTable.update({
+            where: { id: order.tableId },
+            data: { status: PosTableStatus.FREE, guestCount: null },
           });
         }
       }
@@ -212,6 +220,9 @@ export class PosOrdersService {
     });
 
     await this.events.broadcastOrder(orderId);
+    if (dto.status === 'closed' || dto.status === 'closing') {
+      await this.events.broadcastTables();
+    }
     return mapPosOrder(updated!);
   }
 

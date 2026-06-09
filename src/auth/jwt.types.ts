@@ -19,6 +19,11 @@ export type CompanySummary = {
   modules: string[];
 };
 
+export type SystemSettings = {
+  inaugurationDate: string | null;
+};
+
 export type AuthUserResponse = JwtPayload & {
   companies: CompanySummary[];
+  systemSettings?: SystemSettings;
 };

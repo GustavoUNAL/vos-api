@@ -23,6 +23,7 @@ import { CurrentTenant } from '../tenant/tenant.decorator';
 import type { TenantContext } from '../tenant/tenant.types';
 import {
   CreateSaleDto,
+  SendSaleReceiptDto,
   ReplaceSaleLinesDto,
   UpdateSaleDto,
 } from './dto/sale.dto';
@@ -170,8 +171,13 @@ export class PlatformSalesController {
   sendReceipt(
     @CurrentTenant() tenant: TenantContext,
     @Param('id') id: string,
+    @Body() dto: SendSaleReceiptDto,
   ) {
-    return this.platformSalesService.sendReceiptWhatsApp(tenant, id);
+    return this.platformSalesService.sendReceiptWhatsApp(
+      tenant,
+      id,
+      dto.customerPhone,
+    );
   }
 
   @Get(':id')

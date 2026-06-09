@@ -72,6 +72,11 @@ export class CreateSaleDto {
   @IsOptional()
   notes?: string;
 
+  /** Foto del comprobante (data URL base64 desde POS). */
+  @IsString()
+  @IsOptional()
+  receiptImageDataUrl?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
@@ -103,6 +108,12 @@ export class UpdateSaleDto {
   @IsString()
   @IsOptional()
   notes?: string;
+}
+
+export class SendSaleReceiptDto {
+  @IsString()
+  @IsOptional()
+  customerPhone?: string;
 }
 
 export class ReplaceSaleLinesDto {

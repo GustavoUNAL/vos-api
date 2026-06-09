@@ -2,29 +2,27 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   OnGatewayConnection,
-  OnGatewayDisconnect,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { IncomingMessage } from 'http';
 import type { Server, WebSocket } from 'ws';
 import { JwtPayload } from '../auth/jwt.types';
-import type { PosOrderJson, PosTableJson } from './pos-mappers';
 
-type PosWsClient = WebSocket & {
+type ShopWsClient = WebSocket & {
   user?: JwtPayload;
   companyId?: string | null;
 };
 
-@WebSocketGateway({ path: '/pos/ws' })
+@WebSocketGateway({ path: '/shop/ws' })
 @Injectable()
-export class PosGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ShopOrdersGateway implements OnGatewayConnection {
   @WebSocketServer()
   server!: Server;
 
   constructor(private readonly jwt: JwtService) {}
 
-  handleConnection(client: PosWsClient, request: IncomingMessage): void {
+  handleConnection(client: ShopWsClient, request: IncomingMessage): void {
     const token = this.extractToken(request.url, client);
     if (!token) {
       client.close(4401, 'Token requerido');
@@ -37,10 +35,6 @@ export class PosGateway implements OnGatewayConnection, OnGatewayDisconnect {
     } catch {
       client.close(4401, 'Token inválido');
     }
-  }
-
-  handleDisconnect(): void {
-    /* noop */
   }
 
   private extractToken(url: string | undefined, client: WebSocket): string | null {
@@ -60,27 +54,18 @@ export class PosGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return null;
   }
 
-  private sendAll(payload: Record<string, unknown>): void {
-    const raw = JSON.stringify(payload);
+  emitShopOrderEvent(
+    companyId: string,
+    type: 'shop-order.created' | 'shop-order.updated',
+    order: Record<string, unknown>,
+  ): void {
+    const raw = JSON.stringify({ type, order });
     this.server?.clients.forEach((c) => {
-      if (c.readyState === c.OPEN) c.send(raw);
-    });
-  }
-
-  emitTablesUpdated(tables: PosTableJson[]): void {
-    this.sendAll({ type: 'tables.updated', tables });
-  }
-
-  emitOrderUpdated(order: PosOrderJson): void {
-    this.sendAll({ type: 'order.updated', order });
-  }
-
-  emitOrderClosed(orderId: string, tableId: string, order?: PosOrderJson): void {
-    this.sendAll({
-      type: 'order.closed',
-      orderId,
-      tableId,
-      ...(order ? { order } : {}),
+      const client = c as ShopWsClient;
+      if (client.readyState !== client.OPEN) return;
+      if (!client.companyId || client.companyId === companyId) {
+        client.send(raw);
+      }
     });
   }
 }

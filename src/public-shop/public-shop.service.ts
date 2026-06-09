@@ -11,7 +11,8 @@ import {
   ShopPaymentMethod,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { WhatsappService } from '../platform-sales/whatsapp.service';
+import { TelegramService } from '../telegram/telegram.service';
+import { ShopOrdersRealtimeService } from '../platform-shop-orders/shop-orders-realtime.service';
 import { ShopCheckoutDto } from './dto/shop-checkout.dto';
 import { PaymentLinkService } from './payment-link.service';
 import {
@@ -26,8 +27,9 @@ export class PublicShopService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentLinks: PaymentLinkService,
-    private readonly whatsapp: WhatsappService,
+    private readonly telegram: TelegramService,
     private readonly config: ConfigService,
+    private readonly shopRealtime: ShopOrdersRealtimeService,
   ) {}
 
   private async resolveCompany(slug: string) {
@@ -184,7 +186,7 @@ export class PublicShopService {
       },
     });
 
-    await this.whatsapp.sendInternalNotification(
+    await this.telegram.sendInternalNotification(
       formatShopOrderInternalAlert({
         orderCode: order.orderCode,
         customerName: order.customerName,
@@ -194,7 +196,9 @@ export class PublicShopService {
       }),
     );
 
-    return this.formatOrder(order, company.name);
+    const formatted = this.formatOrder(order, company.name);
+    this.shopRealtime.emitCreated(company.id, formatted);
+    return formatted;
   }
 
   async getOrder(orderId: string) {

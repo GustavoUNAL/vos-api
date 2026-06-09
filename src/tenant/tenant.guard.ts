@@ -57,11 +57,7 @@ export class TenantGuard implements CanActivate {
     });
 
     if (!membership || membership.company.status !== 'ACTIVE') {
-      if (
-        jwtUser.isPlatformAdmin &&
-        jwtUser.companyId === companyId &&
-        !jwtUser.platformView
-      ) {
+      if (jwtUser.isPlatformAdmin && !jwtUser.platformView) {
         const company = await this.prisma.company.findFirst({
           where: { id: companyId, status: 'ACTIVE' },
           select: { id: true, name: true, status: true },

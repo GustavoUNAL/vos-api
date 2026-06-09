@@ -1,7 +1,10 @@
 import { Prisma, SaleSource, ShopOrderStatus, ShopPaymentMethod } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
-import { formatSaleReceiptText } from '../platform-sales/sale-invoice.pdf';
-import type { WhatsappService } from '../platform-sales/whatsapp.service';
+import {
+  buildSaleInvoicePdf,
+  formatSaleReceiptText,
+} from '../platform-sales/sale-invoice.pdf';
+import type { TelegramService } from '../telegram/telegram.service';
 
 export type ShopCartLine = {
   productId: string;
@@ -18,7 +21,7 @@ export function shopPaymentLabel(method: ShopPaymentMethod): string {
 
 export async function settleShopOrderAsSale(
   prisma: PrismaService,
-  whatsapp: WhatsappService,
+  telegram: TelegramService,
   order: {
     id: string;
     companyId: string;
@@ -115,33 +118,37 @@ export async function settleShopOrderAsSale(
     notes: `${result.notes ?? ''}\nPedido tienda online.`,
   });
 
-  const whatsappSent = await whatsapp.sendSaleReceipt(
-    order.customerPhone,
-    receiptBody,
-    {
-      saleDate: result.saleDate,
-      total: Number(result.total),
-      code: result.code,
-      companyName: result.company.name,
-    },
-  );
+  const alertText = [
+    `Nuevo cobro tienda`,
+    `Pedido: ${order.orderCode}`,
+    `Cliente: ${order.customerName?.trim() || order.customerPhone}`,
+    `Pago: ${paymentLabel}`,
+    `Total: ${Number(order.total).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })}`,
+    '',
+    receiptBody.replace(/\*/g, ''),
+  ].join('\n');
 
-  const internalNotified = await whatsapp.sendInternalNotification(
-    [
-      `*Nuevo cobro tienda*`,
-      `Pedido: ${order.orderCode}`,
-      `Cliente: ${order.customerName?.trim() || order.customerPhone}`,
-      `Pago: ${paymentLabel}`,
-      `Total: ${Number(order.total).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })}`,
-      '',
-      receiptBody.replace(/\*/g, ''),
-    ].join('\n'),
-  );
+  const code = result.code ?? result.id.slice(0, 8);
+  let invoicePdf: Buffer | undefined;
+  try {
+    invoicePdf = await buildSaleInvoicePdf({
+      ...result,
+      notes: `${result.notes ?? ''}\nPedido tienda online.`,
+    });
+  } catch {
+    invoicePdf = undefined;
+  }
+
+  const internalNotified = await telegram.sendSaleCompletion({
+    text: alertText,
+    invoicePdf,
+    invoiceFilename: `comprobante-${code}.pdf`,
+  });
 
   return {
     saleId: result.id,
     saleCode: result.code ?? result.id.slice(0, 8),
-    whatsappSent,
+    whatsappSent: internalNotified,
     internalNotified,
   };
 }

@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveCompanySystemSettings } from '../config/system-settings';
 import type { AuthUserResponse, CompanySummary, JwtPayload } from './jwt.types';
 import { slugifyCompanyLabel, uniqueShopSlug } from './company-slug';
 
@@ -20,6 +21,19 @@ export class AuthService {
 
   private companySlugFromName(name: string, shopSlug: string | null): string {
     return shopSlug?.trim() || slugifyCompanyLabel(name);
+  }
+
+  private withSystemSettings(user: AuthUserResponse): AuthUserResponse {
+    if (!user.companyId?.trim() || user.platformView) {
+      return { ...user, systemSettings: { inaugurationDate: null } };
+    }
+    return {
+      ...user,
+      systemSettings: resolveCompanySystemSettings(
+        user.companyId,
+        user.companySlug,
+      ),
+    };
   }
 
   private async loadAllPermissions(): Promise<string[]> {
@@ -155,7 +169,7 @@ export class AuthService {
       .map((m) => this.membershipToSummary(m));
     return {
       accessToken,
-      user: { ...payload, companies } satisfies AuthUserResponse,
+      user: this.withSystemSettings({ ...payload, companies }),
     };
   }
 
@@ -170,7 +184,7 @@ export class AuthService {
       .map((m) => this.membershipToSummary(m));
     return {
       accessToken,
-      user: { ...payload, companies } satisfies AuthUserResponse,
+      user: this.withSystemSettings({ ...payload, companies }),
     };
   }
 
@@ -198,7 +212,7 @@ export class AuthService {
       .map((m) => this.membershipToSummary(m));
     return {
       accessToken,
-      user: { ...payload, companies } satisfies AuthUserResponse,
+      user: this.withSystemSettings({ ...payload, companies }),
     };
   }
 
@@ -433,14 +447,14 @@ export class AuthService {
       .map((m) => this.membershipToSummary(m));
 
     if (dbUser?.isPlatformAdmin && jwt.platformView) {
-      return {
+      return this.withSystemSettings({
         ...this.buildPlatformPayload({
           id: jwt.sub,
           email: jwt.email,
           name: jwt.name,
         }),
         companies,
-      };
+      });
     }
 
     const current =
@@ -457,19 +471,30 @@ export class AuthService {
         current,
       );
       if (dbUser?.isPlatformAdmin && !jwt.platformView) {
-        return {
+        return this.withSystemSettings({
           ...payload,
           isPlatformAdmin: true,
           platformView: false,
           role: 'platform-admin',
           permissions: await this.loadAllPermissions(),
           companies,
-        };
+        });
       }
-      return { ...payload, companies };
+      return this.withSystemSettings({ ...payload, companies });
     }
 
-    return { ...jwt, companies };
+    if (dbUser?.isPlatformAdmin) {
+      return this.withSystemSettings({
+        ...this.buildPlatformPayload({
+          id: jwt.sub,
+          email: jwt.email,
+          name: jwt.name,
+        }),
+        companies,
+      });
+    }
+
+    return this.withSystemSettings({ ...jwt, companies });
   }
 
   async switchCompany(userId: string, companyId: string) {

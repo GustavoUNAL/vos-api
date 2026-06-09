@@ -47,16 +47,12 @@ export class PosTablesService implements OnModuleInit {
     if (count > 0) return;
 
     await this.prisma.posTable.createMany({
-      data: Array.from({ length: 12 }, (_, i) => {
-        const number = i + 1;
-        return {
-          number,
-          name: `Mesa ${number}`,
-          status: PosTableStatus.FREE,
-          capacity: 4,
-          section: number <= 6 ? 'Salón' : 'Terraza',
-        };
-      }),
+      data: [
+        { number: 1, name: 'Barra', status: PosTableStatus.FREE, capacity: 4, section: 'Salón' },
+        { number: 2, name: 'Mesa 2', status: PosTableStatus.FREE, capacity: 4, section: 'Salón' },
+        { number: 3, name: 'Mesa 3', status: PosTableStatus.FREE, capacity: 4, section: 'Salón' },
+        { number: 4, name: 'Mesa 4', status: PosTableStatus.FREE, capacity: 4, section: 'Salón' },
+      ],
     });
   }
 
