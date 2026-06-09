@@ -6,7 +6,7 @@
 #   JWT_SECRET=...   (≥32 chars, openssl rand -base64 48)
 #   CORS_ORIGIN=http://TU_IP:8080,https://tu-dominio.com
 #   VITE_API_URL=http://TU_IP:3000
-#   FRONTEND_BUILD_CONTEXT=../vos.ai-front
+#   FRONTEND_BUILD_CONTEXT=../vos-front
 #   RUN_MIGRATIONS_ON_START=true
 #
 # Levantar:
@@ -50,7 +50,7 @@ services:
   frontend:
     profiles: ['full']
     build:
-      context: ${FRONTEND_BUILD_CONTEXT:-../vos.ai-front}
+      context: ${FRONTEND_BUILD_CONTEXT:-../vos-front}
       dockerfile: ${FRONTEND_DOCKERFILE:-Dockerfile}
       args:
         VITE_API_URL: ${VITE_API_URL:?Definí VITE_API_URL (URL pública del API)}

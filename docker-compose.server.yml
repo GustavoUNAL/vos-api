@@ -72,7 +72,7 @@ services:
   frontend:
     profiles: ['full']
     build:
-      context: ${FRONTEND_BUILD_CONTEXT:-../vos.ai-front}
+      context: ${FRONTEND_BUILD_CONTEXT:-../vos-front}
       dockerfile: ${FRONTEND_DOCKERFILE:-../vos.ai-api/docker/front-build/Dockerfile}
       args:
         # Default solo para que `docker compose up -d` (sin perfil full) no falle al parsear.

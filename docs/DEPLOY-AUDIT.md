@@ -38,7 +38,9 @@ Definir en **build time** (Docker `args` o `.env.production`):
 ## 4. Comandos de despliegue (VPS)
 
 ```bash
-# En vos-api, con .env configurado:
+# En vos-api, con .env (copiar desde .env.production.example):
+cp .env.production.example .env   # editar valores reales
+./scripts/deploy-vps.sh           # o manualmente:
 docker compose -f docker-compose.vps.yml --profile full up -d --build
 
 # Migraciones (si RUN_MIGRATIONS_ON_START=false):
