@@ -375,35 +375,13 @@ export class PlatformSalesService {
         company: { name: company?.name ?? 'Tu empresa' },
       };
       const receiptBody = formatSaleReceiptText(receiptSale);
-      whatsappSent = await this.whatsapp.sendSaleReceipt(
-        phone,
-        receiptBody,
-        {
-          saleDate: sale.saleDate,
-          total: Number(sale.total),
-          code: sale.code,
-          companyName: company?.name ?? 'Tu empresa',
-        },
-      );
-      internalNotified = await this.whatsapp.sendInternalNotification(
-        [
-          '*Venta registrada*',
-          `Comprobante Nº ${sale.code ?? sale.id.slice(0, 8)}`,
-          dto.mesa?.trim() ? `Mesa: ${dto.mesa.trim()}` : null,
-          dto.source === SaleSource.POS ? 'Origen: POS' : null,
-          `Cliente: ${phone}`,
-          dto.notes?.trim() ? `Comentario: ${dto.notes.trim()}` : null,
-          `Total: ${Number(sale.total).toLocaleString('es-CO', {
-            style: 'currency',
-            currency: 'COP',
-            maximumFractionDigits: 0,
-          })}`,
-          '',
-          receiptBody.replace(/\*/g, ''),
-        ]
-          .filter((line): line is string => line != null)
-          .join('\n'),
-      );
+      const notify = await this.deliverSaleWhatsApp(receiptSale, phone, receiptBody, {
+        mesa: dto.mesa,
+        notes: dto.notes,
+        source: dto.source ?? sale.source,
+      });
+      whatsappSent = notify.whatsappSent;
+      internalNotified = notify.internalNotified;
     }
 
     return {
@@ -546,9 +524,65 @@ export class PlatformSalesService {
         'Agregá el celular del cliente en la venta para enviar WhatsApp.',
       );
     }
+    const receiptBody = formatSaleReceiptText(sale);
+    const notify = await this.deliverSaleWhatsApp(sale, phone, receiptBody, {
+      mesa: sale.mesa,
+      notes: sale.notes,
+      source: sale.source,
+    });
+    return {
+      whatsappSent: notify.whatsappSent,
+      whatsappConfigured: this.whatsapp.isConfigured(),
+      internalNotified: notify.internalNotified,
+    };
+  }
+
+  private formatInternalSaleAlert(
+    sale: {
+      code: string | null;
+      id: string;
+      total: Prisma.Decimal;
+      source: SaleSource;
+    },
+    customerPhone: string,
+    opts: { mesa?: string | null; notes?: string | null; source?: SaleSource },
+    receiptBody: string,
+  ): string {
+    return [
+      '*Venta registrada*',
+      `Comprobante Nº ${sale.code ?? sale.id.slice(0, 8)}`,
+      opts.mesa?.trim() ? `Cliente / mesa: ${opts.mesa.trim()}` : null,
+      opts.source === SaleSource.POS ? 'Origen: POS' : null,
+      `Cel. cliente: ${customerPhone}`,
+      opts.notes?.trim() ? `Comentario: ${opts.notes.trim()}` : null,
+      `Total: ${Number(sale.total).toLocaleString('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0,
+      })}`,
+      '',
+      receiptBody.replace(/\*/g, ''),
+    ]
+      .filter((line): line is string => line != null)
+      .join('\n');
+  }
+
+  private async deliverSaleWhatsApp(
+    sale: {
+      saleDate: Date;
+      total: Prisma.Decimal;
+      code: string | null;
+      id: string;
+      source: SaleSource;
+      company: { name: string };
+    },
+    customerPhone: string,
+    receiptBody: string,
+    opts: { mesa?: string | null; notes?: string | null; source?: SaleSource },
+  ): Promise<{ whatsappSent: boolean; internalNotified: boolean }> {
     const whatsappSent = await this.whatsapp.sendSaleReceipt(
-      phone,
-      formatSaleReceiptText(sale),
+      customerPhone,
+      receiptBody,
       {
         saleDate: sale.saleDate,
         total: Number(sale.total),
@@ -556,9 +590,9 @@ export class PlatformSalesService {
         companyName: sale.company.name,
       },
     );
-    return {
-      whatsappSent,
-      whatsappConfigured: this.whatsapp.isConfigured(),
-    };
+    const internalNotified = await this.whatsapp.sendInternalNotification(
+      this.formatInternalSaleAlert(sale, customerPhone, opts, receiptBody),
+    );
+    return { whatsappSent, internalNotified };
   }
 }
