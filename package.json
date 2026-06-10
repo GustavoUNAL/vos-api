@@ -37,6 +37,7 @@
     "db:migrate:env": "VOS_ENV=dev node scripts/with-env.mjs npx prisma migrate deploy",
     "db:neon-init": "npm run db:migrate && npm run db:seed-platform",
     "db:seed-platform": "node scripts/with-env.mjs npx ts-node --transpile-only prisma/seed-platform.ts",
+    "db:create-david-user": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-david-user.ts",
     "db:backfill-product-costs": "ts-node --transpile-only scripts/backfill-product-production-costs.ts",
     "db:railway-sync": "prisma migrate deploy",
     "db:tcp-check": "node scripts/with-env.mjs node scripts/db-tcp-check.cjs",

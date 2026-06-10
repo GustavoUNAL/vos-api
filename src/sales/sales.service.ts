@@ -4,6 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PaymentStatus, Prisma, SaleSource } from '@prisma/client';
+import {
+  bogotaDateKey,
+  bogotaDayBounds,
+  bogotaMonthBounds,
+} from '../common/bogota-time';
 import { mapCategoryRelation } from '../common/category-display-name';
 import { nextHumanCodeTx } from '../common/human-code';
 import { PrismaService } from '../prisma/prisma.service';
@@ -146,8 +151,8 @@ export class SalesService {
       clientName: sale.client?.name ?? null,
       /** ISO 8601 (UTC). Misma semántica que antes con Prisma `Date` serializado a JSON. */
       saleDate: iso(sale.saleDate),
-      /** Solo fecha `YYYY-MM-DD` (UTC) para columnas tipo “día de venta”. */
-      saleDateOnly: sale.saleDate.toISOString().slice(0, 10),
+      /** Solo fecha `YYYY-MM-DD` (Colombia) para columnas tipo “día de venta”. */
+      saleDateOnly: bogotaDateKey(sale.saleDate),
       createdAt: iso(sale.createdAt),
       updatedAt: iso(sale.updatedAt),
       /**
@@ -272,7 +277,7 @@ export class SalesService {
       id: sale.id,
       code: sale.code ?? sale.id,
       saleDate: iso(sale.saleDate),
-      saleDateOnly: sale.saleDate.toISOString().slice(0, 10),
+      saleDateOnly: bogotaDateKey(sale.saleDate),
       createdAt: iso(sale.createdAt),
       updatedAt: iso(sale.updatedAt),
       total: totalNum,
@@ -491,8 +496,7 @@ export class SalesService {
     ) {
       throw new BadRequestException('year/month fuera de rango.');
     }
-    const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-    const end = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+    const { from: start, to: end } = bogotaMonthBounds(year, month);
 
     const rows = await this.prisma.sale.findMany({
       where: { saleDate: { gte: start, lt: end } },
@@ -501,7 +505,7 @@ export class SalesService {
 
     const byDay = new Map<string, { count: number; total: Prisma.Decimal }>();
     for (const r of rows) {
-      const day = r.saleDate.toISOString().slice(0, 10);
+      const day = bogotaDateKey(r.saleDate);
       const prev = byDay.get(day);
       const amount = r.total ?? new Prisma.Decimal(0);
       if (prev) {
@@ -574,12 +578,10 @@ export class SalesService {
 
     const saleDate: Prisma.DateTimeFilter = {};
     if (params.dateFrom?.trim()) {
-      saleDate.gte = new Date(params.dateFrom.trim());
+      saleDate.gte = bogotaDayBounds(params.dateFrom.trim()).from;
     }
     if (params.dateTo?.trim()) {
-      const end = new Date(params.dateTo.trim());
-      end.setHours(23, 59, 59, 999);
-      saleDate.lte = end;
+      saleDate.lte = bogotaDayBounds(params.dateTo.trim()).to;
     }
     if (Object.keys(saleDate).length > 0) {
       and.push({ saleDate });

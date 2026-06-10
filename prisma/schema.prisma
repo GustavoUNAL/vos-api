@@ -131,6 +131,7 @@ model Company {
   staffMembers     StaffMember[]
   staffShifts      StaffShift[]
   shopOrders       ShopOrder[]
+  tasks            CompanyTask[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -152,6 +153,8 @@ model User {
   aiConversations AiConversation[]
   auditLogs       AuditLog[]
   salesRecorded   Sale[]           @relation("SaleRecordedBy")
+  tasksCreated    CompanyTask[]    @relation("TaskCreatedBy")
+  tasksAssigned   CompanyTask[]    @relation("TaskAssignedTo")
 
   @@index([active], map: "idx_users_active")
   @@map("users")
@@ -680,6 +683,32 @@ model StaffShift {
   @@index([companyId, shiftDate], map: "idx_staff_shifts_company_shift_date")
   @@index([shiftDate], map: "idx_staff_shifts_shift_date")
   @@map("staff_shifts")
+}
+
+// ---------------------------------------------------------------------------
+// Tasks — actividades diarias por empresa
+// ---------------------------------------------------------------------------
+
+model CompanyTask {
+  id           String    @id @default(cuid())
+  companyId    String    @map("company_id")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskDate     String    @map("task_date")
+  title        String
+  description  String?
+  completed    Boolean   @default(false)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  sortOrder    Int       @default(0) @map("sort_order")
+  createdById  String?   @map("created_by_id")
+  createdBy    User?     @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  assignedToId String?   @map("assigned_to_id")
+  assignedTo   User?     @relation("TaskAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([companyId, taskDate], map: "idx_company_tasks_company_date")
+  @@index([taskDate], map: "idx_company_tasks_task_date")
+  @@map("company_tasks")
 }
 
 // ---------------------------------------------------------------------------

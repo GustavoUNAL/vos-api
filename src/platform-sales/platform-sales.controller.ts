@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   DefaultValuePipe,
+  Delete,
   Get,
   Header,
   Param,
@@ -178,6 +179,12 @@ export class PlatformSalesController {
       id,
       dto.customerPhone,
     );
+  }
+
+  @Delete(':id')
+  @RequirePermissions('sales.delete')
+  remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.platformSalesService.remove(tenant, id);
   }
 
   @Get(':id')

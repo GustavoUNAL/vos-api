@@ -16,6 +16,11 @@ import {
   buildSaleInvoicePdf,
   formatSaleReceiptText,
 } from './sale-invoice.pdf';
+import {
+  bogotaDateKey,
+  bogotaDayBounds,
+  bogotaMonthBounds,
+} from '../common/bogota-time';
 import { TelegramService } from '../telegram/telegram.service';
 
 type ListParams = {
@@ -112,7 +117,7 @@ export class PlatformSalesService {
       id: sale.id,
       code: sale.code ?? sale.id,
       saleDate: sale.saleDate.toISOString(),
-      saleDateOnly: sale.saleDate.toISOString().slice(0, 10),
+      saleDateOnly: bogotaDateKey(sale.saleDate),
       createdAt: sale.createdAt.toISOString(),
       updatedAt: sale.updatedAt.toISOString(),
       total: totalNum,
@@ -194,8 +199,7 @@ export class PlatformSalesService {
     ) {
       throw new BadRequestException('year/month fuera de rango.');
     }
-    const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-    const end = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+    const { from: start, to: end } = bogotaMonthBounds(year, month);
 
     const rows = await this.prisma.sale.findMany({
       where: {
@@ -207,7 +211,7 @@ export class PlatformSalesService {
 
     const byDay = new Map<string, { count: number; total: Prisma.Decimal }>();
     for (const r of rows) {
-      const day = r.saleDate.toISOString().slice(0, 10);
+      const day = bogotaDateKey(r.saleDate);
       const prev = byDay.get(day);
       if (prev) {
         prev.count += 1;
@@ -261,10 +265,10 @@ export class PlatformSalesService {
     if (params.dateFrom?.trim() || params.dateTo?.trim()) {
       const saleDate: Prisma.DateTimeFilter = {};
       if (params.dateFrom?.trim()) {
-        saleDate.gte = new Date(`${params.dateFrom.trim()}T00:00:00.000Z`);
+        saleDate.gte = bogotaDayBounds(params.dateFrom.trim()).from;
       }
       if (params.dateTo?.trim()) {
-        saleDate.lte = new Date(`${params.dateTo.trim()}T23:59:59.999Z`);
+        saleDate.lte = bogotaDayBounds(params.dateTo.trim()).to;
       }
       where.saleDate = saleDate;
     }
@@ -631,5 +635,24 @@ export class PlatformSalesService {
       receiptImageDataUrl: receiptImageDataUrl?.trim() || null,
     });
     return { whatsappSent: internalNotified, internalNotified };
+  }
+
+  async remove(tenant: TenantContext, id: string) {
+    const sale = await this.prisma.sale.findFirst({
+      where: { id, companyId: tenant.companyId },
+      select: { id: true, code: true },
+    });
+    if (!sale) throw new NotFoundException('Venta no encontrada');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.shopOrder.updateMany({
+        where: { saleId: id, companyId: tenant.companyId },
+        data: { saleId: null },
+      });
+      await tx.saleLine.deleteMany({ where: { saleId: id } });
+      await tx.sale.delete({ where: { id } });
+    });
+
+    return { ok: true, id, code: sale.code };
   }
 }

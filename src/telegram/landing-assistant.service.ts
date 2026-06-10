@@ -40,13 +40,37 @@ export class LandingAssistantService {
     const advisorSuggested = this.wantsAdvisor(text);
     const ai = await this.askOpenAi(text, history);
     if (ai) {
-      return { answer: ai, advisorSuggested: advisorSuggested || this.wantsAdvisor(ai) };
+      return {
+        answer: this.formatAnswer(ai),
+        advisorSuggested: advisorSuggested || this.wantsAdvisor(ai),
+      };
     }
 
     return {
-      answer: this.fallbackAnswer(text),
+      answer: this.formatAnswer(this.fallbackAnswer(text)),
       advisorSuggested,
     };
+  }
+
+  /** Normaliza saltos, viñetas y espaciado para el chat de la landing. */
+  private formatAnswer(raw: string): string {
+    let text = raw
+      .replace(/\r\n/g, '\n')
+      .replace(/^\s+|\s+$/g, '')
+      .replace(/\n{3,}/g, '\n\n');
+
+    text = text
+      .split('\n')
+      .map((line) => {
+        const t = line.trim();
+        if (!t) return '';
+        if (/^[-*]\s+/.test(t)) return `• ${t.replace(/^[-*]\s+/, '')}`;
+        return t;
+      })
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n');
+
+    return text;
   }
 
   private wantsAdvisor(text: string): boolean {
@@ -66,15 +90,66 @@ export class LandingAssistantService {
       .replace(/\p{M}/gu, '');
 
     if (this.wantsAdvisor(n)) {
-      return 'Con gusto te conectamos con un asesor. Usá el botón **Hablar con un asesor** debajo del chat y te atendemos por WhatsApp.';
+      return `Perfecto — un asesor puede mostrarte el producto en vivo y armar la demo según tu negocio.
+
+• Te guía por POS, inventario y panel
+• Responde dudas de planes y activación
+• Sin compromiso
+
+Usá el botón **Hablar con un asesor** debajo del chat.`;
     }
-    if (/que es|vos ai/.test(n)) {
-      return '**VOS AI** es un gerente digital para empresas: ventas, inventario, compras y finanzas con un asistente IA que responde con tus datos reales.';
+    if (/que es|vos ai|para que sirve/.test(n)) {
+      return `**VOS AI** es tu gerente digital: centraliza operación y te responde con datos reales del negocio.
+
+• Ventas (POS + tienda web), inventario y compras
+• Finanzas, personal y clientes en un solo panel
+• Asistente IA 24/7 en lenguaje natural
+
+¿Te cuento cómo funciona el día a día o preferís ver planes?`;
     }
-    if (/precio|plan|cuanto cuesta/.test(n)) {
-      return 'Planes desde **$49.000/mes** (Starter) hasta **$199.000/mes** (Premium). El plan Business ($99.000) incluye más IA y WhatsApp.';
+    if (/como funciona|como es|como se usa/.test(n)) {
+      return `Funciona en tres pasos simples:
+
+• **Registrás** ventas desde POS o tienda web
+• **VOS AI analiza** stock, márgenes y tendencias en tiempo real
+• **Preguntás** lo que necesites: qué comprar, utilidad del mes, clientes inactivos…
+
+Todo queda en la nube, con acceso web y móvil. ¿Querés que profundice en POS o en el asistente?`;
     }
-    return 'Puedo explicarte qué es VOS AI, cómo funciona, precios o industrias. Si necesitás un asesor, usá el botón verde del chat.';
+    if (/industria|restaur|cafeter|bar|tienda|ferreter|negocio/.test(n)) {
+      return `Está pensado para negocios con operación diaria y rotación de productos.
+
+• Cafeterías, bares y restaurantes
+• Tiendas y ferreterías
+• Servicios con ventas recurrentes
+
+Si me contás tu rubro, te digo qué módulos te convienen más.`;
+    }
+    if (/precio|plan|cuanto cuesta|valor|tarifa/.test(n)) {
+      return `Planes mensuales en pesos colombianos (referencia):
+
+• **Starter** — $49.000 · operación esencial + IA
+• **Business** — $99.000 · más IA + WhatsApp (el más elegido)
+• **Premium** — $199.000 · automatizaciones avanzadas
+
+¿Querés comparar qué incluye cada plan o hablar con un asesor?`;
+    }
+    if (/demo|prueba|probar|empezar|comenzar/.test(n)) {
+      return `Podés empezar de dos formas:
+
+• **Solicitar una prueba** en la página — te enviamos credenciales de demo
+• **Hablar con un asesor** — demo guiada por WhatsApp
+
+¿Cuál te resulta más cómoda?`;
+    }
+    return `Puedo ayudarte con:
+
+• Qué es VOS AI y cómo funciona
+• Planes y precios
+• Industrias y casos de uso
+• Cómo pedir demo o hablar con un asesor
+
+¿Qué te gustaría saber primero?`;
   }
 
   private async askOpenAi(
@@ -87,15 +162,25 @@ export class LandingAssistantService {
     const model =
       this.config.get<string>('OPENAI_CHAT_MODEL')?.trim() || 'gpt-4o';
 
-    const system = `Eres el asistente comercial de VOS AI en la landing web. Tono profesional, cercano, español colombiano.
+    const system = `Eres el asistente comercial de VOS AI en la landing web (visitante antes de registrarse). Tono profesional, cálido y claro — español colombiano (tuteo respetuoso: "tu", "podés").
 
 REGLAS ESTRICTAS:
-- Responde solo sobre VOS AI, sus beneficios, planes, industrias y cómo empezar.
-- NO inventes cifras de clientes ni casos de éxito falsos.
-- NO des números de teléfono, WhatsApp ni emails de contacto en el texto.
-- Si piden asesor, demo personalizada o contacto humano, indica usar el botón "Hablar con un asesor" del chat o "Solicitar demo" en la página.
-- Máximo 10 líneas. Usa viñetas • cuando listes. Puedes usar **negrita** para énfasis.
-- No menciones que eres GPT ni OpenAI.
+- Responde SOLO sobre VOS AI: beneficios, módulos, planes, industrias, demo y cómo empezar.
+- NO inventes clientes, testimonios ni métricas falsas.
+- NO des teléfonos, WhatsApp, emails ni enlaces wa.me en el texto.
+- Si piden asesor o demo humana → indica el botón "Hablar con un asesor" o "Solicitar demo" en la página.
+- No digas que eres GPT, OpenAI ni un modelo de lenguaje.
+- Máximo 12 líneas. Respuestas escaneables, nunca un bloque denso.
+
+FORMATO OBLIGATORIO (respeta saltos de línea):
+1) Primera línea: respuesta directa (1–2 frases). Resalta el concepto clave con **negrita**.
+2) Línea en blanco.
+3) Detalle en 2–4 viñetas con "• " (frases cortas, beneficio concreto).
+4) Línea en blanco.
+5) Cierre: una pregunta de seguimiento útil (no repetitiva) O el siguiente paso lógico.
+
+Si la pregunta es ambigua, inferí la intención más probable y respondé; al final ofrecé aclarar.
+Si ya respondiste algo similar en el historial, profundizá un ángulo distinto (ej. POS, IA, finanzas).
 
 CONTEXTO DEL PRODUCTO:
 ${PRODUCT_CONTEXT}`;
@@ -118,8 +203,8 @@ ${PRODUCT_CONTEXT}`;
         },
         body: JSON.stringify({
           model,
-          temperature: 0.35,
-          max_tokens: 500,
+          temperature: 0.4,
+          max_tokens: 650,
           messages,
         }),
       });

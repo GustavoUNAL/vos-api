@@ -17,6 +17,7 @@ import { PlatformRecipesModule } from './platform-recipes/platform-recipes.modul
 import { PlatformSalesModule } from './platform-sales/platform-sales.module';
 import { PlatformPurchasesModule } from './platform-purchases/platform-purchases.module';
 import { PlatformStaffModule } from './platform-staff/platform-staff.module';
+import { PlatformTasksModule } from './platform-tasks/platform-tasks.module';
 import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics.module';
 import { PlatformCashCloseModule } from './platform-cash-close/platform-cash-close.module';
 import { PlatformShopOrdersModule } from './platform-shop-orders/platform-shop-orders.module';
@@ -47,6 +48,7 @@ import { TelegramModule } from './telegram/telegram.module';
     PlatformSalesModule,
     PlatformPurchasesModule,
     PlatformStaffModule,
+    PlatformTasksModule,
     PlatformAnalyticsModule,
     PlatformCashCloseModule,
     PlatformShopOrdersModule,

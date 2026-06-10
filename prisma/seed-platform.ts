@@ -11,6 +11,7 @@ const MODULES = [
   { slug: 'inventory', name: 'Inventario', description: 'Stock y movimientos', sortOrder: 20 },
   { slug: 'sales', name: 'Ventas', description: 'POS y facturación', sortOrder: 30 },
   { slug: 'purchases', name: 'Compras', description: 'Lotes y proveedores', sortOrder: 35 },
+  { slug: 'tasks', name: 'Tareas', description: 'Actividades diarias del equipo', sortOrder: 36 },
   { slug: 'staff', name: 'Personal', description: 'Turnos y nómina por hora', sortOrder: 38 },
   { slug: 'finance', name: 'Finanzas', description: 'Análisis y reportes', sortOrder: 42 },
   { slug: 'crm', name: 'CRM', description: 'Clientes y relaciones', sortOrder: 40 },
@@ -28,6 +29,37 @@ const SALES_PERMISSIONS = [
   { slug: 'sales.view', name: 'Ver ventas' },
   { slug: 'sales.create', name: 'Registrar ventas' },
   { slug: 'sales.update', name: 'Editar ventas' },
+  { slug: 'sales.delete', name: 'Eliminar ventas' },
+] as const;
+
+const TASKS_PERMISSIONS = [
+  { slug: 'tasks.view', name: 'Ver tareas' },
+  { slug: 'tasks.create', name: 'Crear tareas' },
+  { slug: 'tasks.update', name: 'Editar tareas' },
+  { slug: 'tasks.delete', name: 'Eliminar tareas' },
+] as const;
+
+/** Operaciones diarias sin finanzas ni borrar ventas. */
+const MANAGER_PERMISSION_SLUGS = [
+  'products.view',
+  'products.create',
+  'products.update',
+  'inventory.view',
+  'inventory.create',
+  'inventory.update',
+  'sales.view',
+  'sales.create',
+  'sales.update',
+  'purchases.view',
+  'purchases.create',
+  'purchases.update',
+  'staff.view',
+  'staff.create',
+  'staff.update',
+  'tasks.view',
+  'tasks.create',
+  'tasks.update',
+  'tasks.delete',
 ] as const;
 
 const INVENTORY_PERMISSIONS = [
@@ -72,6 +104,13 @@ async function main() {
   const arandanoPassword = process.env.SEED_ARANDANO_PASSWORD ?? 'Arandano2026!';
   const arandanoName = process.env.SEED_ARANDANO_NAME ?? 'Propietario Arándano';
   const arandanoPasswordHash = await bcrypt.hash(arandanoPassword, 10);
+
+  const davidEmail = (process.env.SEED_DAVID_EMAIL ?? 'david@arandano.com')
+    .trim()
+    .toLowerCase();
+  const davidPassword = process.env.SEED_DAVID_PASSWORD ?? 'David@Arandano2026!';
+  const davidName = process.env.SEED_DAVID_NAME ?? 'David Herrera';
+  const davidPasswordHash = await bcrypt.hash(davidPassword, 10);
 
   try {
     const company = await prisma.company.upsert({
@@ -205,12 +244,16 @@ async function main() {
     const financeModule = await prisma.module.findUniqueOrThrow({
       where: { slug: 'finance' },
     });
+    const tasksModule = await prisma.module.findUniqueOrThrow({
+      where: { slug: 'tasks' },
+    });
 
     for (const mod of [
       productsModule,
       inventoryModule,
       salesModule,
       purchasesModule,
+      tasksModule,
       staffModule,
       financeModule,
     ]) {
@@ -236,6 +279,7 @@ async function main() {
       ...SALES_PERMISSIONS,
       ...PURCHASES_PERMISSIONS,
       ...STAFF_PERMISSIONS,
+      ...TASKS_PERMISSIONS,
       ...FINANCE_PERMISSIONS,
     ]) {
       await prisma.permission.upsert({
@@ -252,7 +296,15 @@ async function main() {
     const permissions = await prisma.permission.findMany({
       where: {
         moduleSlug: {
-          in: ['products', 'inventory', 'sales', 'purchases', 'staff', 'finance'],
+          in: [
+            'products',
+            'inventory',
+            'sales',
+            'purchases',
+            'tasks',
+            'staff',
+            'finance',
+          ],
         },
       },
     });
@@ -285,6 +337,84 @@ async function main() {
         roleId: ownerRole.id,
       },
       update: {},
+    });
+
+    const managerRole = await prisma.role.upsert({
+      where: {
+        companyId_slug: { companyId: company.id, slug: 'manager' },
+      },
+      create: {
+        companyId: company.id,
+        slug: 'manager',
+        name: 'Operaciones',
+        description: 'Operación diaria sin análisis financiero ni borrar ventas',
+        isSystem: true,
+      },
+      update: {
+        name: 'Operaciones',
+        description: 'Operación diaria sin análisis financiero ni borrar ventas',
+      },
+    });
+
+    const managerPerms = await prisma.permission.findMany({
+      where: { slug: { in: [...MANAGER_PERMISSION_SLUGS] } },
+    });
+    for (const permission of managerPerms) {
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: managerRole.id,
+            permissionId: permission.id,
+          },
+        },
+        create: {
+          roleId: managerRole.id,
+          permissionId: permission.id,
+        },
+        update: {},
+      });
+    }
+
+    const davidUser = await prisma.user.upsert({
+      where: { email: davidEmail },
+      create: {
+        email: davidEmail,
+        passwordHash: davidPasswordHash,
+        name: davidName,
+        active: true,
+        isPlatformAdmin: false,
+      },
+      update: {
+        passwordHash: davidPasswordHash,
+        name: davidName,
+        active: true,
+        isPlatformAdmin: false,
+      },
+    });
+
+    const davidMembership = await prisma.companyMember.upsert({
+      where: {
+        companyId_userId: {
+          companyId: company.id,
+          userId: davidUser.id,
+        },
+      },
+      create: {
+        companyId: company.id,
+        userId: davidUser.id,
+        status: 'ACTIVE',
+      },
+      update: { status: 'ACTIVE' },
+    });
+
+    await prisma.companyMemberRole.deleteMany({
+      where: { companyMemberId: davidMembership.id },
+    });
+    await prisma.companyMemberRole.create({
+      data: {
+        companyMemberId: davidMembership.id,
+        roleId: managerRole.id,
+      },
     });
 
     const menuCategories = [
@@ -898,6 +1028,9 @@ async function main() {
       platformAdminPassword: adminPassword,
       arandanoOwnerEmail: arandanoUser.email,
       arandanoOwnerPassword: arandanoPassword,
+      davidEmail: davidUser.email,
+      davidPassword,
+      davidRole: managerRole.slug,
       enabledModules: enabledModuleRows.map((r) => r.module.slug),
       categories: menuCategories.map((c) => c.slug),
       products: menuProducts.length,
