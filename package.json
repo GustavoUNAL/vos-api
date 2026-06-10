@@ -10,7 +10,7 @@
   },
   "scripts": {
     "postinstall": "prisma generate",
-    "build": "nest build",
+    "build": "prisma generate && nest build",
     "docker:build": "docker build -t vos-api:latest .",
     "docker:stack": "docker compose --profile full up -d --build",
     "docker:stack:down": "bash -lc 'docker compose stop api frontend 2>/dev/null || true; docker compose rm -f api frontend 2>/dev/null || true'",

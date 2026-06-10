@@ -1,0 +1,57 @@
+# Nginx — VOS AI en arandano.shop
+# Copiar: sudo cp deploy/nginx-vos-ai.conf.example /etc/nginx/sites-available/vos-ai.arandano.shop
+#         sudo ln -sf /etc/nginx/sites-available/vos-ai.arandano.shop /etc/nginx/sites-enabled/
+#         sudo nginx -t && sudo systemctl reload nginx
+#         sudo certbot --nginx -d vos-ai.arandano.shop
+#
+# Requiere: vos-front en :5174 (PM2), vos-api en :3001 (PM2).
+# El puerto :3000 lo usa otra app (Next.js arandano) — no tocar.
+
+# --- Front: vos-ai.arandano.shop ---
+server {
+  listen 80;
+  server_name vos-ai.arandano.shop;
+
+  # API bajo /backend/ (sin DNS api.arandano.shop)
+  location /backend/ {
+    proxy_pass http://127.0.0.1:3001/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # WebSocket (POS / tienda) — si usás ws en el mismo host
+  location /ws {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+  }
+
+  # Front Vite (PM2 :5174)
+  location / {
+    proxy_pass http://127.0.0.1:5174;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+}
+
+# --- API dedicado (opcional, cuando crees DNS api.arandano.shop) ---
+# server {
+#   listen 80;
+#   server_name api.arandano.shop;
+#   location / {
+#     proxy_pass http://127.0.0.1:3001;
+#     proxy_http_version 1.1;
+#     proxy_set_header Host $host;
+#     proxy_set_header X-Real-IP $remote_addr;
+#     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#     proxy_set_header X-Forwarded-Proto $scheme;
+#   }
+# }
