@@ -21,6 +21,11 @@ import {
   sumLineTotalsCOP,
 } from '../common/purchase-lot-line-math';
 import { isMissingPurchaseLotLinesTableError } from '../common/prisma-purchase-lot-line-table';
+import {
+  bogotaDateKey,
+  bogotaDayBounds,
+  bogotaMonthBounds,
+} from '../common/bogota-time';
 import { formatPurchaseLotShortName } from '../common/purchase-lot-display-name';
 import {
   inventoryStockValueForLotCode,
@@ -859,8 +864,7 @@ export class PurchaseLotsService {
     ) {
       throw new BadRequestException('year/month fuera de rango.');
     }
-    const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-    const end = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+    const { from: start, to: end } = bogotaMonthBounds(year, month);
 
     const rows = await this.prisma.purchaseLot.findMany({
       where: { purchaseDate: { gte: start, lt: end } },
@@ -869,7 +873,7 @@ export class PurchaseLotsService {
 
     const byDay = new Map<string, { count: number; total: Prisma.Decimal }>();
     for (const r of rows) {
-      const day = r.purchaseDate.toISOString().slice(0, 10);
+      const day = bogotaDateKey(r.purchaseDate);
       const prev = byDay.get(day);
       const amount = r.totalValue ?? zeroDecimal();
       if (prev) {
@@ -1003,12 +1007,10 @@ export class PurchaseLotsService {
 
     const purchaseDate: Prisma.DateTimeFilter = {};
     if (params.dateFrom?.trim()) {
-      purchaseDate.gte = new Date(params.dateFrom.trim());
+      purchaseDate.gte = bogotaDayBounds(params.dateFrom.trim()).from;
     }
     if (params.dateTo?.trim()) {
-      const end = new Date(params.dateTo.trim());
-      end.setHours(23, 59, 59, 999);
-      purchaseDate.lte = end;
+      purchaseDate.lte = bogotaDayBounds(params.dateTo.trim()).to;
     }
     if (Object.keys(purchaseDate).length > 0) {
       and.push({ purchaseDate });

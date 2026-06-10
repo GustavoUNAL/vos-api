@@ -3,20 +3,18 @@ import { ConfigService } from '@nestjs/config';
 import type { AssistantHistoryItem } from './business-assistant.service';
 
 const PRODUCT_CONTEXT = `
-VOS AI es el primer gerente digital para empresas en Colombia.
+VOS AI es un sistema operativo inteligente para negocios en Colombia.
 - Centraliza ventas, inventario, compras, finanzas, personal y clientes.
 - Asistente IA 24/7: responde en lenguaje natural con datos reales del negocio.
-- Canales: app web, POS móvil y mensajería (WhatsApp/Telegram según plan).
+- Canales: app web, POS móvil y mensajería (WhatsApp/Telegram según activación).
 - No es solo un POS: detecta qué comprar, productos rentables, clientes inactivos, alertas.
 
-Planes (COP/mes, referencia):
-- Starter $49.000: operación esencial + asistente IA.
-- Business $99.000: más IA + WhatsApp (recomendado).
-- Premium $199.000: automatizaciones avanzadas.
+Fase actual: etapa de validación con usuarios reales (cafeterías, bares, restaurantes, tiendas).
+- Sin costo durante la validación; cupos limitados.
+- El visitante solicita acceso con "Quiero VOS AI en mi negocio" en la página.
+- Si ya tiene credenciales, usa "Iniciar sesión" / "Ir a mi negocio".
 
-Industrias: cafeterías, bares, restaurantes, tiendas, ferreterías, servicios.
-
-Para demo o asesor humano: el visitante debe usar el botón "Hablar con un asesor" en el chat o "Solicitar demo" en la página. NUNCA des números de teléfono ni enlaces wa.me en el texto.
+Para hablar con un asesor humano: el visitante debe pedirlo en este chat (ej. "hablar con un asesor"); entonces aparece el botón para continuar por WhatsApp. NUNCA des números de teléfono ni enlaces wa.me en el texto.
 `.trim();
 
 @Injectable()
@@ -33,7 +31,7 @@ export class LandingAssistantService {
     if (!text) {
       return {
         answer:
-          'Preguntame qué es VOS AI, cómo funciona, para qué empresas sirve o cuánto cuesta.',
+          'Preguntame qué es VOS AI, cómo empezar con tu negocio, para qué rubros sirve o qué incluye el acceso.',
       };
     }
 
@@ -96,16 +94,16 @@ export class LandingAssistantService {
 • Responde dudas de planes y activación
 • Sin compromiso
 
-Usá el botón **Hablar con un asesor** debajo del chat.`;
+En un momento te aparece el botón **Continuar por WhatsApp** para seguir con un asesor.`;
     }
     if (/que es|vos ai|para que sirve/.test(n)) {
-      return `**VOS AI** es tu gerente digital: centraliza operación y te responde con datos reales del negocio.
+      return `**VOS AI** centraliza tu operación y te responde con datos reales del negocio.
 
 • Ventas (POS + tienda web), inventario y compras
 • Finanzas, personal y clientes en un solo panel
 • Asistente IA 24/7 en lenguaje natural
 
-¿Te cuento cómo funciona el día a día o preferís ver planes?`;
+Estamos en etapa de validación con usuarios reales. ¿Te cuento cómo empezar con tu negocio?`;
     }
     if (/como funciona|como es|como se usa/.test(n)) {
       return `Funciona en tres pasos simples:
@@ -126,28 +124,28 @@ Todo queda en la nube, con acceso web y móvil. ¿Querés que profundice en POS 
 Si me contás tu rubro, te digo qué módulos te convienen más.`;
     }
     if (/precio|plan|cuanto cuesta|valor|tarifa/.test(n)) {
-      return `Planes mensuales en pesos colombianos (referencia):
+      return `Hoy estamos en **etapa de validación con usuarios reales**.
 
-• **Starter** — $49.000 · operación esencial + IA
-• **Business** — $99.000 · más IA + WhatsApp (el más elegido)
-• **Premium** — $199.000 · automatizaciones avanzadas
+• Acceso **sin costo** mientras validamos la herramienta
+• Cupos limitados y onboarding guiado
+• Tu experiencia define qué construimos después
 
-¿Querés comparar qué incluye cada plan o hablar con un asesor?`;
+¿Querés que te explique cómo solicitar acceso?`;
     }
-    if (/demo|prueba|probar|empezar|comenzar/.test(n)) {
-      return `Podés empezar de dos formas:
+    if (/demo|prueba|probar|empezar|comenzar|piloto|validar|inscrib|usar vos/.test(n)) {
+      return `Podés empezar así:
 
-• **Solicitar una prueba** en la página — te enviamos credenciales de demo
-• **Hablar con un asesor** — demo guiada por WhatsApp
+• **Quiero VOS AI en mi negocio** en la página — revisamos tu operación y activamos credenciales
+• **Hablar con un asesor** en este chat si preferís una conversación antes
 
 ¿Cuál te resulta más cómoda?`;
     }
     return `Puedo ayudarte con:
 
 • Qué es VOS AI y cómo funciona
-• Planes y precios
+• Cómo usar la plataforma con tu negocio
 • Industrias y casos de uso
-• Cómo pedir demo o hablar con un asesor
+• Qué incluye el acceso en esta etapa
 
 ¿Qué te gustaría saber primero?`;
   }
@@ -165,10 +163,11 @@ Si me contás tu rubro, te digo qué módulos te convienen más.`;
     const system = `Eres el asistente comercial de VOS AI en la landing web (visitante antes de registrarse). Tono profesional, cálido y claro — español colombiano (tuteo respetuoso: "tu", "podés").
 
 REGLAS ESTRICTAS:
-- Responde SOLO sobre VOS AI: beneficios, módulos, planes, industrias, demo y cómo empezar.
+- Responde SOLO sobre VOS AI: beneficios, módulos, etapa de validación con usuarios reales, industrias y cómo solicitar acceso.
+- NO menciones planes de precios ni suscripciones: estamos en etapa de validación con usuarios reales.
 - NO inventes clientes, testimonios ni métricas falsas.
 - NO des teléfonos, WhatsApp, emails ni enlaces wa.me en el texto.
-- Si piden asesor o demo humana → indica el botón "Hablar con un asesor" o "Solicitar demo" en la página.
+- Si piden asesor o demo humana → indica que escriban "hablar con un asesor" en este chat (aparecerá WhatsApp) o usen "Quiero VOS AI en mi negocio" en la página.
 - No digas que eres GPT, OpenAI ni un modelo de lenguaje.
 - Máximo 12 líneas. Respuestas escaneables, nunca un bloque denso.
 

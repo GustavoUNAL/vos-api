@@ -4,6 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import {
+  bogotaDateKey,
+  bogotaDayBounds,
+  bogotaMonthBounds,
+} from '../common/bogota-time';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
 import {
@@ -152,8 +157,7 @@ export class PlatformPurchasesService {
     ) {
       throw new BadRequestException('year/month fuera de rango.');
     }
-    const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-    const end = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+    const { from: start, to: end } = bogotaMonthBounds(year, month);
 
     const rows = await this.prisma.purchaseLot.findMany({
       where: {
@@ -165,7 +169,7 @@ export class PlatformPurchasesService {
 
     const byDay = new Map<string, { count: number; total: Prisma.Decimal }>();
     for (const r of rows) {
-      const day = r.purchaseDate.toISOString().slice(0, 10);
+      const day = bogotaDateKey(r.purchaseDate);
       const amount = r.totalValue ?? new Prisma.Decimal(0);
       const prev = byDay.get(day);
       if (prev) {
@@ -219,12 +223,10 @@ export class PlatformPurchasesService {
     if (params.dateFrom?.trim() || params.dateTo?.trim()) {
       const purchaseDate: Prisma.DateTimeFilter = {};
       if (params.dateFrom?.trim()) {
-        purchaseDate.gte = new Date(params.dateFrom.trim());
+        purchaseDate.gte = bogotaDayBounds(params.dateFrom.trim()).from;
       }
       if (params.dateTo?.trim()) {
-        const end = new Date(params.dateTo.trim());
-        end.setHours(23, 59, 59, 999);
-        purchaseDate.lte = end;
+        purchaseDate.lte = bogotaDayBounds(params.dateTo.trim()).to;
       }
       where.purchaseDate = purchaseDate;
     }

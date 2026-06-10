@@ -1,3 +1,4 @@
+import { bogotaDayBounds } from '../src/common/bogota-time';
 import { createScriptDb, closeScriptDb } from './lib/script-db';
 
 const dateArg = process.argv[2];
@@ -9,12 +10,10 @@ if (!dateArg || !/^\d{4}-\d{2}-\d{2}$/.test(dateArg)) {
 async function main() {
   const db = await createScriptDb();
   try {
-    const gte = new Date(`${dateArg}T00:00:00.000Z`);
-    const lt = new Date(gte);
-    lt.setUTCDate(lt.getUTCDate() + 1);
+    const { from: gte, to: lte } = bogotaDayBounds(dateArg);
 
     const sales = await db.prisma.sale.findMany({
-      where: { saleDate: { gte, lt } },
+      where: { saleDate: { gte, lte } },
       select: {
         id: true,
         code: true,
@@ -24,7 +23,7 @@ async function main() {
       },
     });
 
-    console.log(`Ventas ${dateArg}:`, sales.length);
+    console.log(`Ventas ${dateArg} (día Bogotá):`, sales.length);
     for (const s of sales) {
       console.log(
         ` - ${s.code ?? s.id.slice(0, 8)} · ${s.company.name} · ${Number(s.total)}`,

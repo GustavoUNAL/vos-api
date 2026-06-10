@@ -537,10 +537,54 @@ export class BusinessInsightsService {
       '• Productos más rentables',
       '• Clientes que no han vuelto',
       '• Pedidos de la tienda online',
+      '• Tareas y pendientes del día',
       '• Resumen financiero del negocio',
       '',
-      'Ejemplos: "¿Cómo va hoy?", "¿Qué compro?", "¿Cuánto llevo en compras?"',
+      'También podés saludarme o contarme en tus palabras qué te preocupa.',
     ].join('\n');
+  }
+
+  async tasksTodaySummary(companyId?: string): Promise<string> {
+    const cid = companyId ?? this.defaultCompanyId();
+    const name = await this.companyName(cid);
+    const todayKey = bogotaDateKey();
+    const tasks = await this.prisma.companyTask.findMany({
+      where: { companyId: cid, taskDate: todayKey },
+      orderBy: [{ completed: 'asc' }, { sortOrder: 'asc' }],
+      select: { title: true, completed: true, description: true },
+      take: 20,
+    });
+
+    if (!tasks.length) {
+      return [
+        `📋 Tareas de hoy (${todayKey}) — ${name}`,
+        '',
+        'No hay tareas cargadas para hoy.',
+        'Podés crearlas en el módulo Tareas del panel.',
+      ].join('\n');
+    }
+
+    const pending = tasks.filter((t) => !t.completed);
+    const done = tasks.filter((t) => t.completed);
+    const lines = [
+      `📋 Tareas de hoy — ${name}`,
+      `• Pendientes: ${pending.length} · Hechas: ${done.length}`,
+      '',
+    ];
+
+    if (pending.length) {
+      lines.push('Pendientes:');
+      for (const t of pending.slice(0, 8)) {
+        lines.push(`• ${t.title}`);
+      }
+      if (pending.length > 8) {
+        lines.push(`• … y ${pending.length - 8} más`);
+      }
+    } else {
+      lines.push('✅ ¡Todas las tareas de hoy están completadas!');
+    }
+
+    return lines.join('\n');
   }
 
   async buildStructuredContext(companyId?: string): Promise<Record<string, unknown>> {
@@ -560,6 +604,7 @@ export class BusinessInsightsService {
       lowInventory,
       shopGroups,
       pendingShop,
+      todayTasks,
     ] = await Promise.all([
       this.companyName(cid),
       this.salesDayStats(cid, todayKey),
@@ -607,6 +652,12 @@ export class BusinessInsightsService {
         },
         select: { orderCode: true, status: true, total: true },
         take: 10,
+      }),
+      this.prisma.companyTask.findMany({
+        where: { companyId: cid, taskDate: todayKey },
+        orderBy: [{ completed: 'asc' }, { sortOrder: 'asc' }],
+        select: { title: true, completed: true },
+        take: 12,
       }),
     ]);
 
@@ -679,6 +730,15 @@ export class BusinessInsightsService {
           estado: o.status,
           totalCOP: Math.round(Number(o.total)),
         })),
+      },
+      tareasHoy: {
+        total: todayTasks.length,
+        pendientes: todayTasks.filter((t) => !t.completed).length,
+        completadas: todayTasks.filter((t) => t.completed).length,
+        pendientesTitulos: todayTasks
+          .filter((t) => !t.completed)
+          .slice(0, 6)
+          .map((t) => t.title),
       },
     };
   }
