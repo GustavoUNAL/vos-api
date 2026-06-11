@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { bogotaDayBounds } from '../common/bogota-time';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
 
@@ -6,11 +7,8 @@ function dayBounds(dateKey: string): { from: Date; to: Date; shiftDate: Date } {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
     throw new BadRequestException('date debe ser YYYY-MM-DD');
   }
-  return {
-    from: new Date(`${dateKey}T00:00:00.000Z`),
-    to: new Date(`${dateKey}T23:59:59.999Z`),
-    shiftDate: new Date(`${dateKey}T00:00:00.000Z`),
-  };
+  const { from, to } = bogotaDayBounds(dateKey);
+  return { from, to, shiftDate: from };
 }
 
 @Injectable()
