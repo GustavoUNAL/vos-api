@@ -1,6 +1,6 @@
 # Credenciales VOS AI — copiá estos valores en local Y en el servidor
 
-Usá **exactamente los mismos** en `.env.local` (Mac) y `.env.dev` (VPS) para que el login no cambie al desplegar.
+Usá **exactamente los mismos** en `.env.local` (Mac) y en `.env` del VPS (producción) para que el login no cambie al desplegar.
 
 ## 1. Administrador de plataforma (solo vos)
 

@@ -77,6 +77,15 @@ export class CreateSaleDto {
   @IsOptional()
   receiptImageDataUrl?: string;
 
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  discountCOP?: number;
+
+  @IsString()
+  @IsOptional()
+  discountReason?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

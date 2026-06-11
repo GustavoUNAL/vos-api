@@ -95,6 +95,7 @@ export class PlatformPurchasesService {
       purchaseDate: lot.purchaseDate.toISOString(),
       supplier: lot.supplier,
       notes: lot.notes,
+      hasReceiptImage: Boolean(lot.receiptImageDataUrl?.trim()),
       itemCount: lot.itemCount,
       totalValue: lot.totalValue?.toString() ?? null,
       createdAt: lot.createdAt.toISOString(),
@@ -141,6 +142,7 @@ export class PlatformPurchasesService {
 
     return {
       ...this.formatListRow(lot),
+      receiptImageDataUrl: lot.receiptImageDataUrl?.trim() || null,
       purchaseLines,
       items,
     };
@@ -334,6 +336,7 @@ export class PlatformPurchasesService {
     const name = supplier
       ? `${supplier} · ${purchaseDate.toISOString().slice(0, 10)}`
       : null;
+    const receiptImage = dto.receiptImageDataUrl?.trim() || null;
 
     const lot = await this.prisma.$transaction(async (tx) => {
       const row = await tx.purchaseLot.create({
@@ -344,6 +347,7 @@ export class PlatformPurchasesService {
           purchaseDate,
           supplier,
           notes: dto.notes?.trim() || null,
+          receiptImageDataUrl: receiptImage,
         },
       });
 
@@ -396,6 +400,9 @@ export class PlatformPurchasesService {
     if (dto.comment !== undefined) data.notes = dto.comment?.trim() || null;
     if (dto.totalValue !== undefined) {
       data.totalValue = new Prisma.Decimal(dto.totalValue);
+    }
+    if (dto.receiptImageDataUrl !== undefined) {
+      data.receiptImageDataUrl = dto.receiptImageDataUrl?.trim() || null;
     }
 
     await this.prisma.purchaseLot.update({ where: { id }, data });

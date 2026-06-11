@@ -74,6 +74,29 @@ export class PlatformSalesService {
     return new Prisma.Decimal(Math.round(sum));
   }
 
+  private applyDiscount(
+    grossTotal: Prisma.Decimal,
+    discountCOP?: number,
+    discountReason?: string,
+  ): {
+    total: Prisma.Decimal;
+    discountCop: Prisma.Decimal | null;
+    discountReason: string | null;
+  } {
+    const raw = new Prisma.Decimal(Math.max(0, discountCOP ?? 0));
+    const discount = Prisma.Decimal.min(raw, grossTotal);
+    if (discount.gt(0) && !discountReason?.trim()) {
+      throw new BadRequestException(
+        'Justificá el descuento antes de registrar la venta.',
+      );
+    }
+    return {
+      total: grossTotal.sub(discount),
+      discountCop: discount.gt(0) ? discount : null,
+      discountReason: discount.gt(0) ? discountReason!.trim() : null,
+    };
+  }
+
   private async validateProductIds(
     tenant: TenantContext,
     lines: SaleLineInputDto[],
@@ -127,6 +150,9 @@ export class PlatformSalesService {
       mesa: sale.mesa,
       customerPhone: sale.customerPhone,
       notes: sale.notes,
+      discountCOP: sale.discountCop != null ? Number(sale.discountCop.toString()) : null,
+      discountReason: sale.discountReason,
+      hasReceiptImage: Boolean(sale.receiptImageDataUrl?.trim()),
       userId: sale.userId,
       displayPerson: sale.user?.name ?? '—',
       recordedByUserId: sale.userId,
@@ -307,7 +333,13 @@ export class PlatformSalesService {
       throw new BadRequestException('Fecha de venta inválida');
     }
     const code = await this.nextSaleCode(tenant.companyId);
-    const total = this.computeTotal(dto.lines);
+    const grossTotal = this.computeTotal(dto.lines);
+    const { total, discountCop, discountReason } = this.applyDiscount(
+      grossTotal,
+      dto.discountCOP,
+      dto.discountReason,
+    );
+    const receiptImage = dto.receiptImageDataUrl?.trim() || null;
 
     const sale = await this.prisma.$transaction(async (tx) => {
       const row = await tx.sale.create({
@@ -322,6 +354,9 @@ export class PlatformSalesService {
           mesa: dto.mesa?.trim() || null,
           customerPhone: dto.customerPhone?.trim() || null,
           notes: dto.notes?.trim() || null,
+          discountCop,
+          discountReason,
+          receiptImageDataUrl: receiptImage,
         },
       });
 
@@ -391,7 +426,7 @@ export class PlatformSalesService {
         phone ?? '',
         receiptBody,
         receiptOpts,
-        dto.receiptImageDataUrl,
+        dto.receiptImageDataUrl ?? receiptImage,
       );
       whatsappSent = notify.whatsappSent;
       internalNotified = notify.internalNotified;

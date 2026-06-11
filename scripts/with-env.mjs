@@ -1,23 +1,36 @@
 #!/usr/bin/env node
 /**
- * Ejecuta un comando con variables de .env.local o .env.dev (VOS_ENV=dev).
- * Uso: node scripts/with-env.mjs prisma migrate deploy
+ * Ejecuta un comando cargando las mismas variables que src/load-env.ts.
+ *
+ *   Local:  .env + .env.local
+ *   Staging: VOS_ENV=dev → .env + .env.dev
+ *   Prod:   NODE_ENV=production → solo .env
  */
 import { config } from 'dotenv';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { spawnSync } from 'child_process';
 
-const mode = process.env.VOS_ENV?.trim() || 'local';
-const candidates =
-  mode === 'dev' ? ['.env.dev', '.env'] : ['.env.local', '.env'];
+const cwd = process.cwd();
+const vosEnv = process.env.VOS_ENV?.trim();
+const isProduction =
+  process.env.NODE_ENV === 'production' || vosEnv === 'production';
 
-for (const name of candidates) {
-  const path = resolve(process.cwd(), name);
+function loadEnvFile(name, override) {
+  const path = resolve(cwd, name);
   if (existsSync(path)) {
-    config({ path });
-    break;
+    config({ path, override });
   }
+}
+
+loadEnvFile('.env', false);
+
+if (isProduction) {
+  /* solo .env */
+} else if (vosEnv === 'dev') {
+  loadEnvFile('.env.dev', true);
+} else {
+  loadEnvFile('.env.local', true);
 }
 
 const args = process.argv.slice(2);

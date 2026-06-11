@@ -1,19 +1,17 @@
 /**
- * PM2 — VOS AI en VPS (API :3001 + front Vite :5174).
+ * PM2 — VOS AI en VPS (API :3001 + front estático vía Nginx o preview).
  *
  * Uso en el servidor:
  *   cd ~/projects/vos-ai/vos-api
- *   cp .env.vps.example .env && nano .env
- *   rm -f .env.local          # importante: no pisar .env en producción
- *   npm ci && npx prisma generate && npm run build
- *   npm run db:migrate
+ *   cp .env.production.example .env && nano .env
+ *   rm -f .env.local
  *
  *   cd ../vos-front
- *   cp .env.vps.example .env.local && nano .env.local
+ *   cp .env.production.example .env && nano .env
+ *   rm -f .env.local
  *
  *   cd ../vos-api
- *   pm2 start ecosystem.vps.config.cjs
- *   pm2 save
+ *   ./scripts/deploy-pm2-vps.sh
  */
 module.exports = {
   apps: [
@@ -33,7 +31,7 @@ module.exports = {
       name: 'vos-front',
       cwd: `${__dirname}/../vos-front`,
       script: 'npm',
-      args: 'run dev -- --host 0.0.0.0 --port 5174',
+      args: 'run preview -- --host 0.0.0.0 --port 5174',
       instances: 1,
       autorestart: true,
       env: {

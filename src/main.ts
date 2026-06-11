@@ -1,4 +1,4 @@
-/** Variables desde .env.local o .env.dev (ver src/load-env.ts). */
+/** Variables desde .env (prod) o .env.local (local). Ver src/load-env.ts. */
 import './load-env';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';

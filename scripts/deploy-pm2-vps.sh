@@ -8,29 +8,34 @@ echo "==> VOS AI — deploy PM2 (VPS)"
 cd "$ROOT"
 
 if [[ ! -f .env ]]; then
-  echo "Falta .env. Copiá: cp .env.vps.example .env && nano .env"
+  echo "Falta vos-api/.env. Copiá: cp .env.production.example .env && nano .env"
   exit 1
 fi
 
 if [[ -f .env.local ]]; then
-  echo "⚠️  Encontré .env.local en vos-api. En producción puede pisar CORS/PORT."
+  echo "⚠️  Encontré vos-api/.env.local. En producción pisa CORS/PORT."
   echo "    Recomendado: mv .env.local .env.local.bak"
 fi
 
 echo "==> API: install, prisma, build, migrate"
 npm ci
 npx prisma generate
-npm run build
-npm run db:migrate
+NODE_ENV=production npm run build
+NODE_ENV=production npm run db:migrate
 
 if [[ -d "$FRONT" ]]; then
-  echo "==> Front: dependencias"
+  echo "==> Front: dependencias + build"
   cd "$FRONT"
-  if [[ ! -f .env.local ]]; then
-    echo "Falta vos-front/.env.local. Copiá: cp .env.vps.example .env.local"
+  if [[ ! -f .env ]]; then
+    echo "Falta vos-front/.env. Copiá: cp .env.production.example .env"
     exit 1
   fi
+  if [[ -f .env.local ]]; then
+    echo "⚠️  Encontré vos-front/.env.local. En producción pisa VITE_* al compilar."
+    echo "    Recomendado: mv .env.local .env.local.bak"
+  fi
   npm ci
+  npm run build
   cd "$ROOT"
 else
   echo "⚠️  No encontré ${FRONT}"
@@ -38,7 +43,7 @@ fi
 
 echo "==> PM2"
 if pm2 describe vos-api &>/dev/null; then
-  pm2 restart ecosystem.vps.config.cjs
+  pm2 restart ecosystem.vps.config.cjs --update-env
 else
   pm2 start ecosystem.vps.config.cjs
 fi
@@ -48,6 +53,6 @@ sleep 2
 echo ""
 echo "==> Verificación"
 curl -fsS "http://127.0.0.1:3001/health" && echo ""
-curl -sI -H "Origin: http://51.222.24.228:5174" "http://127.0.0.1:3001/health" | grep -i access-control || true
+curl -sI -H "Origin: https://vos-ai.arandano.shop" "http://127.0.0.1:3001/health" | grep -i access-control || true
 echo ""
-echo "Listo. Front: http://51.222.24.228:5174  |  API: http://51.222.24.228:3001"
+echo "Listo. Front: https://vos-ai.arandano.shop  |  API: https://vos-ai.arandano.shop/backend"

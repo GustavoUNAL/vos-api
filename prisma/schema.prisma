@@ -463,6 +463,9 @@ model Sale {
   mesa           String?
   customerPhone  String?    @map("customer_phone")
   notes          String?
+  discountCop    Decimal?   @map("discount_cop") @db.Decimal(14, 2)
+  discountReason String?    @map("discount_reason")
+  receiptImageDataUrl String? @map("receipt_image_data_url") @db.Text
   createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -533,6 +536,7 @@ model PurchaseLot {
   purchaseDate DateTime @map("purchase_date") @db.Timestamptz(6)
   supplier     String?
   notes        String?
+  receiptImageDataUrl String? @map("receipt_image_data_url") @db.Text
   itemCount    Int      @default(0) @map("item_count")
   totalValue   Decimal? @map("total_value") @db.Decimal(14, 2)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

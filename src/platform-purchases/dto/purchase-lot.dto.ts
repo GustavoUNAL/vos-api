@@ -72,6 +72,11 @@ export class CreatePurchaseLotDto {
   @IsNumber()
   @Min(0)
   totalValue?: number;
+
+  /** Foto del comprobante de compra (data URL base64). */
+  @IsOptional()
+  @IsString()
+  receiptImageDataUrl?: string;
 }
 
 export class UpdatePurchaseLotDto {
@@ -101,6 +106,11 @@ export class UpdatePurchaseLotDto {
   @IsOptional()
   @Min(0)
   totalValue?: number;
+
+  /** Foto del comprobante de compra (data URL base64). */
+  @IsOptional()
+  @IsString()
+  receiptImageDataUrl?: string;
 }
 
 export class ReplacePurchaseLotLinesDto {
