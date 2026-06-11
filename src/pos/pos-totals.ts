@@ -30,6 +30,30 @@ export function computeTotals(
   return { subtotalCOP, taxCOP, totalCOP };
 }
 
+export function applyDiscountCOP(
+  totals: { subtotalCOP: Prisma.Decimal; taxCOP: Prisma.Decimal; totalCOP: Prisma.Decimal },
+  discountCOP: number | Prisma.Decimal,
+): {
+  subtotalCOP: Prisma.Decimal;
+  taxCOP: Prisma.Decimal;
+  discountCOP: Prisma.Decimal;
+  totalCOP: Prisma.Decimal;
+} {
+  const gross = totals.totalCOP;
+  const raw =
+    discountCOP instanceof Prisma.Decimal
+      ? discountCOP
+      : new Prisma.Decimal(discountCOP);
+  const discount = copInt(Prisma.Decimal.min(Prisma.Decimal.max(raw, 0), gross));
+  const totalCOP = copInt(gross.sub(discount));
+  return {
+    subtotalCOP: totals.subtotalCOP,
+    taxCOP: totals.taxCOP,
+    discountCOP: discount,
+    totalCOP,
+  };
+}
+
 export function toCopNumber(d: Prisma.Decimal): number {
   return Number(d.toFixed(0));
 }

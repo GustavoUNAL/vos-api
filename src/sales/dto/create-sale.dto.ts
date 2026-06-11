@@ -4,8 +4,10 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { SaleLineInputDto } from './sale-line-input.dto';
@@ -37,6 +39,12 @@ export class CreateSaleDto {
   @IsString()
   @IsOptional()
   clientId?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  discountCOP?: number;
 
   @IsArray()
   @ValidateNested({ each: true })

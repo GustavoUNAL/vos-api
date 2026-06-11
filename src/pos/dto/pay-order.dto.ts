@@ -5,6 +5,7 @@ import {
   IsIn,
   IsInt,
   IsOptional,
+  IsString,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -26,7 +27,7 @@ export class PaymentSplitDto {
 
   @Type(() => Number)
   @IsInt()
-  @Min(1)
+  @Min(0)
   amountCOP!: number;
 }
 
@@ -41,6 +42,16 @@ export class PayOrderDto {
   @Min(0)
   @IsOptional()
   tipCOP?: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  discountCOP?: number;
+
+  @IsString()
+  @IsOptional()
+  discountReason?: string;
 
   @IsBoolean()
   @IsOptional()

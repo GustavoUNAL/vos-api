@@ -10,6 +10,7 @@ import { PosEventsService } from './pos-events.service';
 import { posBadRequest, posConflict, posNotFound } from './pos-exceptions';
 import { mapPosOrder } from './pos-mappers';
 import {
+  applyDiscountCOP,
   computeTotals,
   copInt,
   DEFAULT_POS_TAX_RATE,
@@ -249,7 +250,16 @@ export class PosOrdersService {
         }
 
         const totals = computeTotals(order.lines, order.taxRate);
-        const required = copInt(totals.totalCOP.add(tipCOP));
+        const discountCOP = copInt(dto.discountCOP ?? 0);
+        const discountReason = dto.discountReason?.trim() ?? '';
+        if (discountCOP.gt(0) && !discountReason) {
+          throw posBadRequest(
+            'Indicá el motivo del descuento.',
+            'Agregá una justificación en el POS antes de cobrar.',
+          );
+        }
+        const adjusted = applyDiscountCOP(totals, discountCOP);
+        const required = copInt(adjusted.totalCOP.add(tipCOP));
         const paid = copInt(
           dto.splits.reduce((acc, s) => acc.add(s.amountCOP), new Prisma.Decimal(0)),
         );
@@ -257,6 +267,12 @@ export class PosOrdersService {
           throw posBadRequest(
             `Pago insuficiente: recibido $${paid.toFixed(0)}, requerido $${required.toFixed(0)}`,
             'Suma los medios de pago hasta cubrir total + propina.',
+          );
+        }
+        if (paid.gt(required)) {
+          throw posBadRequest(
+            `Pago excedente: recibido $${paid.toFixed(0)}, requerido $${required.toFixed(0)}`,
+            'El monto cobrado debe coincidir con el total con descuento.',
           );
         }
 
@@ -278,15 +294,24 @@ export class PosOrdersService {
             : dto.splits.map((s) => `${s.method}:${s.amountCOP}`).join(' + ');
 
         const saleCode = await nextHumanCodeTx(tx, 'sale', 'V');
+        const saleNotes = [
+          dto.printReceipt ? 'POS printReceipt' : null,
+          adjusted.discountCOP.gt(0)
+            ? `Descuento: $${adjusted.discountCOP.toFixed(0)} — ${discountReason}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+
         const sale = await tx.sale.create({
           data: {
             code: saleCode,
             saleDate: new Date(),
-            total: totals.totalCOP,
+            total: adjusted.totalCOP,
             paymentMethod,
             source: SaleSource.CART,
             mesa: order.table.name,
-            notes: dto.printReceipt ? 'POS printReceipt' : null,
+            notes: saleNotes || null,
             userId: userId ?? order.userId ?? null,
           },
         });
@@ -310,9 +335,9 @@ export class PosOrdersService {
           where: { id: orderId },
           data: {
             status: PosOrderStatus.PAID,
-            subtotalCOP: totals.subtotalCOP,
-            taxCOP: totals.taxCOP,
-            totalCOP: totals.totalCOP,
+            subtotalCOP: adjusted.subtotalCOP,
+            taxCOP: adjusted.taxCOP,
+            totalCOP: adjusted.totalCOP,
             paidAt,
             closedAt: order.closedAt ?? paidAt,
             saleId: sale.id,

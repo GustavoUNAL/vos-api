@@ -435,7 +435,10 @@ export class SalesService {
       throw new BadRequestException('La venta debe tener al menos una línea');
     }
     await this.validateProductIds(dto.lines);
-    const total = this.computeTotal(dto.lines);
+    const grossTotal = this.computeTotal(dto.lines);
+    const discount = new Prisma.Decimal(Math.max(0, dto.discountCOP ?? 0));
+    const cappedDiscount = Prisma.Decimal.min(discount, grossTotal);
+    const total = grossTotal.sub(cappedDiscount);
 
     return this.prisma.$transaction(async (tx) => {
       const saleCode = await nextHumanCodeTx(tx, 'sale', 'V');

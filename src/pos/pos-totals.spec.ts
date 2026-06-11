@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { computeTotals, copInt, lineAmountCOP } from './pos-totals';
+import { applyDiscountCOP, computeTotals, copInt, lineAmountCOP } from './pos-totals';
 
 describe('pos-totals', () => {
   it('calcula subtotal de línea en COP enteros', () => {
@@ -20,5 +20,15 @@ describe('pos-totals', () => {
 
   it('redondea COP sin decimales', () => {
     expect(copInt('12.6').toFixed(0)).toBe('13');
+  });
+
+  it('aplica descuento al total', () => {
+    const totals = computeTotals(
+      [{ quantity: new Prisma.Decimal('1'), unitPrice: new Prisma.Decimal('10000') }],
+      0,
+    );
+    const adjusted = applyDiscountCOP(totals, 2500);
+    expect(adjusted.discountCOP.toFixed(0)).toBe('2500');
+    expect(adjusted.totalCOP.toFixed(0)).toBe('7500');
   });
 });
