@@ -116,9 +116,21 @@ export class PlatformPurchasesService {
       unit: ln.unit,
       purchaseUnitCostCOP: ln.purchaseUnitCostCOP.toString(),
       lineTotalCOP: ln.lineTotalCOP.toString(),
+      linePurchaseTotalCOP: ln.lineTotalCOP.toString(),
       lineComment: ln.lineComment,
       sortOrder: ln.sortOrder,
     }));
+
+    const linesPurchaseTotalCOP = lot.lines.reduce(
+      (sum, ln) => sum + Number(ln.lineTotalCOP),
+      0,
+    );
+    const purchasedValueCOP =
+      linesPurchaseTotalCOP > 0
+        ? linesPurchaseTotalCOP
+        : lot.totalValue != null
+          ? Number(lot.totalValue)
+          : 0;
 
     const items = lot.inventoryItems.map((inv) => {
       const line = lot.lines.find((l) => l.inventoryItemId === inv.id);
@@ -145,6 +157,13 @@ export class PlatformPurchasesService {
       receiptImageDataUrl: lot.receiptImageDataUrl?.trim() || null,
       purchaseLines,
       items,
+      purchaseTotals: {
+        linesPurchaseTotalCOP: String(Math.round(linesPurchaseTotalCOP)),
+      },
+      inventoryMetrics: {
+        purchasedValueCOP: String(Math.round(purchasedValueCOP)),
+        productsCount: items.length,
+      },
     };
   }
 
@@ -351,7 +370,7 @@ export class PlatformPurchasesService {
         },
       });
 
-      let totalValue = dto.totalValue ?? 0;
+      let totalValue = 0;
       if (dto.lines?.length) {
         totalValue = await this.persistLines(
           tx,
@@ -360,6 +379,9 @@ export class PlatformPurchasesService {
           code,
           dto.lines,
         );
+      }
+      if (dto.totalValue != null) {
+        totalValue = dto.totalValue;
       }
 
       const itemCount = dto.lines?.length ?? 0;

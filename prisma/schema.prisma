@@ -132,6 +132,7 @@ model Company {
   staffShifts      StaffShift[]
   shopOrders       ShopOrder[]
   tasks            CompanyTask[]
+  cashCloses       CashClose[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -155,6 +156,7 @@ model User {
   salesRecorded   Sale[]           @relation("SaleRecordedBy")
   tasksCreated    CompanyTask[]    @relation("TaskCreatedBy")
   tasksAssigned   CompanyTask[]    @relation("TaskAssignedTo")
+  cashClosesClosed CashClose[]     @relation("CashCloseClosedBy")
 
   @@index([active], map: "idx_users_active")
   @@map("users")
@@ -689,9 +691,36 @@ model StaffShift {
   @@map("staff_shifts")
 }
 
-// ---------------------------------------------------------------------------
-// Tasks — actividades diarias por empresa
-// ---------------------------------------------------------------------------
+enum CashCloseStatus {
+  DRAFT
+  CLOSED
+}
+
+model CashClose {
+  id                String          @id @default(cuid())
+  companyId         String          @map("company_id")
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  closeDate         DateTime        @map("close_date") @db.Date
+  status            CashCloseStatus @default(DRAFT)
+  salesTotalCOP     Decimal         @default(0) @map("sales_total_cop") @db.Decimal(14, 2)
+  purchasesTotalCOP Decimal         @default(0) @map("purchases_total_cop") @db.Decimal(14, 2)
+  laborTotalCOP     Decimal?        @map("labor_total_cop") @db.Decimal(14, 2)
+  expectedCashCOP   Decimal?        @map("expected_cash_cop") @db.Decimal(14, 2)
+  openingFloatCOP   Decimal?        @map("opening_float_cop") @db.Decimal(14, 2)
+  countedCashCOP    Decimal?        @map("counted_cash_cop") @db.Decimal(14, 2)
+  varianceCOP       Decimal?        @map("variance_cop") @db.Decimal(14, 2)
+  notes             String?
+  closedByUserId    String?         @map("closed_by_user_id")
+  closedByUser      User?           @relation("CashCloseClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
+  closedAt          DateTime?       @map("closed_at") @db.Timestamptz(6)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([companyId, closeDate], map: "cash_closes_company_close_date_key")
+  @@index([companyId], map: "idx_cash_closes_company_id")
+  @@index([companyId, closeDate], map: "idx_cash_closes_company_close_date")
+  @@map("cash_closes")
+}
 
 model CompanyTask {
   id           String    @id @default(cuid())
