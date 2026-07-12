@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { bogotaDayBounds } from '../common/bogota-time';
+import { splitPaymentChannels } from '../common/payment-channels';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
 import {
@@ -37,11 +39,11 @@ export class PlatformAnalyticsService {
         where: {
           companyId: tenant.companyId,
           saleDate: { gte: from, lte: to },
-          code: { startsWith: 'LEDGER-SALE-' },
         },
         select: {
           saleDate: true,
           total: true,
+          paymentMethod: true,
           lines: { select: { profit: true } },
         },
       }),
@@ -56,8 +58,8 @@ export class PlatformAnalyticsService {
         where: {
           companyId: tenant.companyId,
           shiftDate: {
-            gte: new Date(`${fromKey}T00:00:00.000Z`),
-            lte: new Date(`${toKey}T00:00:00.000Z`),
+            gte: bogotaDayBounds(fromKey).from,
+            lte: bogotaDayBounds(toKey).from,
           },
         },
         select: {
@@ -68,12 +70,33 @@ export class PlatformAnalyticsService {
       }),
     ]);
 
-    const salesBuckets = new Map<string, { count: number; totalCOP: number; profitCOP?: number; hours?: number }>();
-    const purchaseBuckets = new Map<string, { count: number; totalCOP: number; profitCOP?: number; hours?: number }>();
-    const staffBuckets = new Map<string, { count: number; totalCOP: number; profitCOP?: number; hours?: number }>();
+    const salesBuckets = new Map<
+      string,
+      {
+        count: number;
+        totalCOP: number;
+        profitCOP?: number;
+        hours?: number;
+        cashCOP?: number;
+        nequiCOP?: number;
+        otherCOP?: number;
+      }
+    >();
+    const purchaseBuckets = new Map<
+      string,
+      { count: number; totalCOP: number; profitCOP?: number; hours?: number }
+    >();
+    const staffBuckets = new Map<
+      string,
+      { count: number; totalCOP: number; profitCOP?: number; hours?: number }
+    >();
 
     let salesTotal = 0;
     let salesProfit = 0;
+    let cashTotal = 0;
+    let nequiTotal = 0;
+    let otherPayTotal = 0;
+
     for (const row of sales) {
       const key = periodKey(row.saleDate, granularity);
       const total = Number(row.total);
@@ -81,12 +104,19 @@ export class PlatformAnalyticsService {
       for (const line of row.lines) {
         if (line.profit != null) lineProfit += Number(line.profit);
       }
+      const channels = splitPaymentChannels(row.paymentMethod ?? '', total);
       salesTotal += total;
       salesProfit += lineProfit;
+      cashTotal += channels.cashCOP;
+      nequiTotal += channels.nequiCOP;
+      otherPayTotal += channels.otherCOP;
       mergeIntoBuckets(salesBuckets, key, {
         count: 1,
         totalCOP: total,
         profitCOP: lineProfit,
+        cashCOP: channels.cashCOP,
+        nequiCOP: channels.nequiCOP,
+        otherCOP: channels.otherCOP,
       });
     }
 
@@ -137,6 +167,9 @@ export class PlatformAnalyticsService {
           grossProfitCOP: Math.round(salesCOP - purchasesCOP),
           purchasesCount: p?.count ?? 0,
           purchasesCOP: Math.round(purchasesCOP),
+          cashCOP: Math.round(s?.cashCOP ?? 0),
+          nequiCOP: Math.round(s?.nequiCOP ?? 0),
+          otherPayCOP: Math.round(s?.otherCOP ?? 0),
           staffShifts: st?.count ?? 0,
           staffHours: Math.round((st?.hours ?? 0) * 100) / 100,
           staffPayCOP: Math.round(staffCOP),
@@ -154,6 +187,9 @@ export class PlatformAnalyticsService {
           count: sales.length,
           totalCOP: Math.round(salesTotal),
           profitCOP: Math.round(salesProfit),
+          cashCOP: Math.round(cashTotal),
+          nequiCOP: Math.round(nequiTotal),
+          otherPayCOP: Math.round(otherPayTotal),
         },
       },
       purchases: {
@@ -177,6 +213,9 @@ export class PlatformAnalyticsService {
         salesProfitCOP: Math.round(salesProfit),
         grossProfitCOP: Math.round(salesTotal - purchasesTotal),
         purchasesCOP: Math.round(purchasesTotal),
+        cashCOP: Math.round(cashTotal),
+        nequiCOP: Math.round(nequiTotal),
+        otherPayCOP: Math.round(otherPayTotal),
         staffPayCOP: Math.round(staffPayTotal),
         netCOP: Math.round(salesTotal - purchasesTotal - staffPayTotal),
       },

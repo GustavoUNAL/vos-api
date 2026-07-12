@@ -1,17 +1,24 @@
 import {
   BadRequestException,
   Injectable,
-  NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   bogotaDateKey,
   bogotaDayBounds,
   bogotaMonthBounds,
+  isPastAutoCloseTime,
 } from '../common/bogota-time';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
 import type { UpsertCashCloseDto } from './dto/cash-close.dto';
+import { buildCashClosePdf } from './cash-close.pdf';
+import {
+  cashAmountFromPaymentMethod,
+  splitPaymentChannels,
+} from '../common/payment-channels';
 
 function dayBounds(dateKey: string): { from: Date; to: Date; shiftDate: Date } {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
@@ -19,25 +26,6 @@ function dayBounds(dateKey: string): { from: Date; to: Date; shiftDate: Date } {
   }
   const { from, to } = bogotaDayBounds(dateKey);
   return { from, to, shiftDate: from };
-}
-
-function parseCopToken(raw: string): number {
-  const digits = raw.replace(/[^\d]/g, '');
-  const n = Number(digits);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function cashAmountFromPaymentMethod(method: string, saleTotal: number): number {
-  const trimmed = method.trim();
-  if (!trimmed) return 0;
-  const lower = trimmed.toLowerCase();
-  if (lower === 'efectivo' || lower === 'cash') return saleTotal;
-  const segmentMatch = trimmed.match(/efectivo[^0-9]*([\d.,]+)/i);
-  if (segmentMatch?.[1]) return parseCopToken(segmentMatch[1]);
-  if (lower.includes('efectivo') && !lower.includes('·') && !lower.includes('|')) {
-    return saleTotal;
-  }
-  return 0;
 }
 
 function formatRecord(row: {
@@ -75,8 +63,56 @@ function formatRecord(row: {
 }
 
 @Injectable()
-export class PlatformCashCloseService {
+export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
+  private autoCloseTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(private readonly prisma: PrismaService) {}
+
+  onModuleInit() {
+    void this.runAutoCloseSweep();
+    this.autoCloseTimer = setInterval(() => {
+      void this.runAutoCloseSweep();
+    }, 60_000);
+  }
+
+  onModuleDestroy() {
+    if (this.autoCloseTimer) clearInterval(this.autoCloseTimer);
+  }
+
+  private async runAutoCloseSweep() {
+    const todayKey = bogotaDateKey(new Date());
+    if (!isPastAutoCloseTime(todayKey)) return;
+
+    const companies = await this.prisma.company.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const company of companies) {
+      try {
+        await this.autoFinalizeIfDue(company.id, todayKey);
+      } catch {
+        /* ignore per-company failures during sweep */
+      }
+    }
+
+    const staleDrafts = await this.prisma.cashClose.findMany({
+      where: {
+        status: 'DRAFT',
+        closeDate: { lt: bogotaDayBounds(todayKey).from },
+      },
+      select: { companyId: true, closeDate: true },
+    });
+    for (const row of staleDrafts) {
+      try {
+        await this.autoFinalizeIfDue(
+          row.companyId,
+          bogotaDateKey(row.closeDate),
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   private computeExpectedCash(
     payments: { method: string; totalCOP: number }[],
@@ -87,16 +123,21 @@ export class PlatformCashCloseService {
   }
 
   async getDailyClose(tenant: TenantContext, dateKey: string) {
+    await this.autoFinalizeIfDue(tenant.companyId, dateKey);
+    return this.buildDailyClose(tenant.companyId, dateKey);
+  }
+
+  private async buildDailyClose(companyId: string, dateKey: string) {
     const { from, to, shiftDate } = dayBounds(dateKey);
 
     const [company, sales, purchases, shifts, record] = await Promise.all([
       this.prisma.company.findUnique({
-        where: { id: tenant.companyId },
+        where: { id: companyId },
         select: { name: true },
       }),
       this.prisma.sale.findMany({
         where: {
-          companyId: tenant.companyId,
+          companyId,
           saleDate: { gte: from, lte: to },
         },
         include: {
@@ -106,7 +147,7 @@ export class PlatformCashCloseService {
       }),
       this.prisma.purchaseLot.findMany({
         where: {
-          companyId: tenant.companyId,
+          companyId,
           purchaseDate: { gte: from, lte: to },
         },
         include: { lines: true },
@@ -114,7 +155,7 @@ export class PlatformCashCloseService {
       }),
       this.prisma.staffShift.findMany({
         where: {
-          companyId: tenant.companyId,
+          companyId,
           shiftDate,
         },
         include: { staffMember: { select: { id: true, name: true } } },
@@ -123,7 +164,7 @@ export class PlatformCashCloseService {
       this.prisma.cashClose.findUnique({
         where: {
           companyId_closeDate: {
-            companyId: tenant.companyId,
+            companyId,
             closeDate: shiftDate,
           },
         },
@@ -197,6 +238,16 @@ export class PlatformCashCloseService {
     }));
     const expectedCashCOP = this.computeExpectedCash(paymentsByMethod);
 
+    let cashCOP = 0;
+    let nequiCOP = 0;
+    let otherPayCOP = 0;
+    for (const p of paymentsByMethod) {
+      const ch = splitPaymentChannels(p.method, p.totalCOP);
+      cashCOP += ch.cashCOP;
+      nequiCOP += ch.nequiCOP;
+      otherPayCOP += ch.otherCOP;
+    }
+
     return {
       date: dateKey,
       companyName: company?.name ?? '—',
@@ -209,13 +260,81 @@ export class PlatformCashCloseService {
         laborTotalCOP: laborTotal,
         shiftCount: shifts.length,
         expectedCashCOP,
+        cashCOP,
+        nequiCOP,
+        otherPayCOP,
       },
       paymentsByMethod,
       sales: saleRows,
       purchases: purchaseRows,
       shifts: shiftRows,
       record: record ? formatRecord(record) : null,
+      meta: {
+        autoCloseAt: '23:59',
+        timezone: 'America/Bogota',
+        isEditable: record
+          ? record.status !== 'CLOSED' && !isPastAutoCloseTime(dateKey)
+          : !isPastAutoCloseTime(dateKey),
+      },
     };
+  }
+
+  private async autoFinalizeIfDue(companyId: string, dateKey: string) {
+    if (!isPastAutoCloseTime(dateKey)) return;
+
+    const { shiftDate, to } = dayBounds(dateKey);
+    const existing = await this.prisma.cashClose.findUnique({
+      where: {
+        companyId_closeDate: { companyId, closeDate: shiftDate },
+      },
+    });
+    if (existing?.status === 'CLOSED') return;
+
+    const daily = await this.buildDailyClose(companyId, dateKey);
+    const openingFloat =
+      existing?.openingFloatCOP != null
+        ? Number(existing.openingFloatCOP)
+        : 0;
+    const expected =
+      (daily.summary.expectedCashCOP ?? 0) + openingFloat;
+    const counted =
+      existing?.countedCashCOP != null
+        ? Number(existing.countedCashCOP)
+        : expected;
+    const variance = counted - expected;
+
+    await this.prisma.cashClose.upsert({
+      where: {
+        companyId_closeDate: { companyId, closeDate: shiftDate },
+      },
+      create: {
+        companyId,
+        closeDate: shiftDate,
+        status: 'CLOSED',
+        salesTotalCOP: new Prisma.Decimal(daily.summary.salesTotalCOP),
+        purchasesTotalCOP: new Prisma.Decimal(daily.summary.purchasesTotalCOP),
+        laborTotalCOP: new Prisma.Decimal(daily.summary.laborTotalCOP),
+        expectedCashCOP: new Prisma.Decimal(expected),
+        openingFloatCOP:
+          existing?.openingFloatCOP != null
+            ? existing.openingFloatCOP
+            : null,
+        countedCashCOP: new Prisma.Decimal(counted),
+        varianceCOP: new Prisma.Decimal(variance),
+        notes: existing?.notes ?? null,
+        closedAt: to,
+      },
+      update: {
+        status: 'CLOSED',
+        salesTotalCOP: new Prisma.Decimal(daily.summary.salesTotalCOP),
+        purchasesTotalCOP: new Prisma.Decimal(daily.summary.purchasesTotalCOP),
+        laborTotalCOP: new Prisma.Decimal(daily.summary.laborTotalCOP),
+        expectedCashCOP: new Prisma.Decimal(expected),
+        countedCashCOP: new Prisma.Decimal(counted),
+        varianceCOP: new Prisma.Decimal(variance),
+        closedAt: existing?.closedAt ?? to,
+      },
+    });
   }
 
   async getCalendar(tenant: TenantContext, year: number, month: number) {
@@ -309,7 +428,12 @@ export class PlatformCashCloseService {
     dateKey: string,
     dto: UpsertCashCloseDto,
   ) {
-    const daily = await this.getDailyClose(tenant, dateKey);
+    if (isPastAutoCloseTime(dateKey)) {
+      throw new BadRequestException(
+        'Este día ya cerró automáticamente a las 11:59 p. m.',
+      );
+    }
+    const daily = await this.buildDailyClose(tenant.companyId, dateKey);
     const { shiftDate } = dayBounds(dateKey);
     const openingFloat =
       dto.openingFloatCOP != null ? Math.round(dto.openingFloatCOP) : null;
@@ -373,6 +497,11 @@ export class PlatformCashCloseService {
     return {
       ...daily,
       record: formatRecord(row),
+      meta: {
+        autoCloseAt: '23:59',
+        timezone: 'America/Bogota',
+        isEditable: true,
+      },
     };
   }
 
@@ -387,7 +516,9 @@ export class PlatformCashCloseService {
       },
     });
     if (!existing) {
-      throw new NotFoundException('Guardá el arqueo antes de cerrar el día.');
+      throw new BadRequestException(
+        'Guardá el arqueo antes de cerrar el día.',
+      );
     }
     if (existing.status === 'CLOSED') {
       throw new BadRequestException('Este día ya está cerrado.');
@@ -398,7 +529,7 @@ export class PlatformCashCloseService {
       );
     }
 
-    const daily = await this.getDailyClose(tenant, dateKey);
+    const daily = await this.buildDailyClose(tenant.companyId, dateKey);
     const row = await this.prisma.cashClose.update({
       where: { id: existing.id },
       data: {
@@ -414,6 +545,49 @@ export class PlatformCashCloseService {
     return {
       ...daily,
       record: formatRecord(row),
+      meta: {
+        autoCloseAt: '23:59',
+        timezone: 'America/Bogota',
+        isEditable: false,
+      },
+    };
+  }
+
+  async buildReportPdf(tenant: TenantContext, dateKey: string) {
+    const daily = await this.getDailyClose(tenant, dateKey);
+    const buffer = await buildCashClosePdf({
+      date: daily.date,
+      companyName: daily.companyName,
+      summary: daily.summary,
+      paymentsByMethod: daily.paymentsByMethod,
+      sales: daily.sales.map((s) => ({
+        code: s.code,
+        customer: s.customer,
+        paymentMethod: s.paymentMethod,
+        total: s.total,
+      })),
+      purchases: daily.purchases.map((p) => ({
+        code: p.code,
+        name: p.name,
+        total: p.total,
+      })),
+      shifts: daily.shifts.map((s) => ({
+        staffName: s.staffName,
+        hoursWorked: s.hoursWorked,
+        totalPayCOP: s.totalPayCOP,
+      })),
+      record: daily.record,
+    });
+    const slug = (daily.companyName ?? 'empresa')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 32);
+    return {
+      buffer,
+      filename: `cierre-caja-${dateKey}-${slug || 'empresa'}.pdf`,
     };
   }
 }

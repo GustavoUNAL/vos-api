@@ -1,3 +1,5 @@
+import { bogotaDateKey, bogotaDayBounds } from '../common/bogota-time';
+
 export type AnalyticsGranularity = 'day' | 'week' | 'month';
 
 export function parseDateRange(dateFrom?: string, dateTo?: string): {
@@ -6,54 +8,56 @@ export function parseDateRange(dateFrom?: string, dateTo?: string): {
   fromKey: string;
   toKey: string;
 } {
-  const now = new Date();
-  const defaultFrom = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  );
-  const defaultTo = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999),
-  );
+  const todayKey = bogotaDateKey(new Date());
+  const [y, m] = todayKey.split('-').map(Number);
+  const monthStart = `${y}-${String(m).padStart(2, '0')}-01`;
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const monthEnd = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-  let from = defaultFrom;
-  let to = defaultTo;
+  let fromKey = monthStart;
+  let toKey = monthEnd;
 
-  if (dateFrom?.trim()) {
-    const d = new Date(`${dateFrom.trim()}T00:00:00.000Z`);
-    if (!Number.isNaN(d.getTime())) from = d;
+  if (dateFrom?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom.trim())) {
+    fromKey = dateFrom.trim();
   }
-  if (dateTo?.trim()) {
-    const d = new Date(`${dateTo.trim()}T23:59:59.999Z`);
-    if (!Number.isNaN(d.getTime())) to = d;
+  if (dateTo?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(dateTo.trim())) {
+    toKey = dateTo.trim();
   }
 
-  if (from.getTime() > to.getTime()) {
-    const swap = from;
-    from = to;
-    to = swap;
+  if (fromKey > toKey) {
+    const swap = fromKey;
+    fromKey = toKey;
+    toKey = swap;
   }
 
   return {
-    from,
-    to,
-    fromKey: from.toISOString().slice(0, 10),
-    toKey: to.toISOString().slice(0, 10),
+    from: bogotaDayBounds(fromKey).from,
+    to: bogotaDayBounds(toKey).to,
+    fromKey,
+    toKey,
   };
 }
 
+/** Lunes de la semana en calendario Bogotá (YYYY-MM-DD). */
+function bogotaWeekStartKey(date: Date): string {
+  const key = bogotaDateKey(date);
+  const [y, m, d] = key.split('-').map(Number);
+  const noon = new Date(`${key}T12:00:00-05:00`);
+  const dow = noon.getUTCDay();
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(Date.UTC(y, m - 1, d + mondayOffset));
+  return monday.toISOString().slice(0, 10);
+}
+
 export function periodKey(date: Date, granularity: AnalyticsGranularity): string {
+  const day = bogotaDateKey(date);
   if (granularity === 'month') {
-    return date.toISOString().slice(0, 7);
+    return day.slice(0, 7);
   }
   if (granularity === 'week') {
-    const d = new Date(
-      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
-    );
-    const dow = d.getUTCDay();
-    const diff = dow === 0 ? -6 : 1 - dow;
-    d.setUTCDate(d.getUTCDate() + diff);
-    return d.toISOString().slice(0, 10);
+    return bogotaWeekStartKey(date);
   }
-  return date.toISOString().slice(0, 10);
+  return day;
 }
 
 export function periodLabel(key: string, granularity: AnalyticsGranularity): string {
@@ -66,13 +70,16 @@ export function periodLabel(key: string, granularity: AnalyticsGranularity): str
     }).format(dt);
   }
   if (granularity === 'week') {
-    const start = new Date(`${key}T12:00:00.000Z`);
+    const start = new Date(`${key}T12:00:00-05:00`);
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 6);
-    const fmt = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short' });
+    const fmt = new Intl.DateTimeFormat('es-CO', {
+      day: 'numeric',
+      month: 'short',
+    });
     return `Sem. ${fmt.format(start)} – ${fmt.format(end)}`;
   }
-  const dt = new Date(`${key}T12:00:00.000Z`);
+  const dt = new Date(`${key}T12:00:00-05:00`);
   return new Intl.DateTimeFormat('es-CO', {
     weekday: 'short',
     day: 'numeric',
@@ -85,6 +92,9 @@ type Bucket = {
   totalCOP: number;
   profitCOP?: number;
   hours?: number;
+  cashCOP?: number;
+  nequiCOP?: number;
+  otherCOP?: number;
 };
 
 export function mergeIntoBuckets(
@@ -98,6 +108,9 @@ export function mergeIntoBuckets(
     totalCOP: prev.totalCOP + (patch.totalCOP ?? 0),
     profitCOP: (prev.profitCOP ?? 0) + (patch.profitCOP ?? 0),
     hours: (prev.hours ?? 0) + (patch.hours ?? 0),
+    cashCOP: (prev.cashCOP ?? 0) + (patch.cashCOP ?? 0),
+    nequiCOP: (prev.nequiCOP ?? 0) + (patch.nequiCOP ?? 0),
+    otherCOP: (prev.otherCOP ?? 0) + (patch.otherCOP ?? 0),
   });
 }
 
@@ -118,5 +131,8 @@ export function bucketsToSeries(
         agg.hours != null
           ? Math.round(agg.hours * 100) / 100
           : undefined,
+      cashCOP: agg.cashCOP != null ? Math.round(agg.cashCOP) : undefined,
+      nequiCOP: agg.nequiCOP != null ? Math.round(agg.nequiCOP) : undefined,
+      otherCOP: agg.otherCOP != null ? Math.round(agg.otherCOP) : undefined,
     }));
 }

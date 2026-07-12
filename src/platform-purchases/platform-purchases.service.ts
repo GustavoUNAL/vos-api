@@ -8,6 +8,7 @@ import {
   bogotaDateKey,
   bogotaDayBounds,
   bogotaMonthBounds,
+  parseBogotaDateInput,
 } from '../common/bogota-time';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
@@ -54,7 +55,7 @@ function formatLotDisplayName(
   name: string | null,
 ): string {
   if (name?.trim()) return name.trim();
-  const day = purchaseDate.toISOString().slice(0, 10);
+  const day = bogotaDateKey(purchaseDate);
   if (supplier?.trim()) return `${supplier.trim()} · ${day}`;
   return code;
 }
@@ -67,7 +68,7 @@ export class PlatformPurchasesService {
     tenant: TenantContext,
     purchaseDate: Date,
   ): Promise<string> {
-    const day = purchaseDate.toISOString().slice(0, 10).replace(/-/g, '');
+    const day = bogotaDateKey(purchaseDate).replace(/-/g, '');
     const prefix = `C-${day}-`;
     const existing = await this.prisma.purchaseLot.count({
       where: {
@@ -346,14 +347,16 @@ export class PlatformPurchasesService {
   }
 
   async createManual(tenant: TenantContext, dto: CreatePurchaseLotDto) {
-    const purchaseDate = new Date(dto.purchaseDate.trim());
-    if (Number.isNaN(purchaseDate.getTime())) {
+    let purchaseDate: Date;
+    try {
+      purchaseDate = parseBogotaDateInput(dto.purchaseDate.trim());
+    } catch {
       throw new BadRequestException('Fecha de compra inválida.');
     }
     const code = await this.nextLotCode(tenant, purchaseDate);
     const supplier = dto.supplier?.trim() || null;
     const name = supplier
-      ? `${supplier} · ${purchaseDate.toISOString().slice(0, 10)}`
+      ? `${supplier} · ${bogotaDateKey(purchaseDate)}`
       : null;
     const receiptImage = dto.receiptImageDataUrl?.trim() || null;
 
@@ -411,11 +414,11 @@ export class PlatformPurchasesService {
     const data: Prisma.PurchaseLotUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name?.trim() || null;
     if (dto.purchaseDate !== undefined) {
-      const purchaseDate = new Date(dto.purchaseDate);
-      if (Number.isNaN(purchaseDate.getTime())) {
+      try {
+        data.purchaseDate = parseBogotaDateInput(dto.purchaseDate);
+      } catch {
         throw new BadRequestException('Fecha de compra inválida.');
       }
-      data.purchaseDate = purchaseDate;
     }
     if (dto.supplier !== undefined) data.supplier = dto.supplier?.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;

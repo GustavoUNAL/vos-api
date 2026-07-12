@@ -424,6 +424,7 @@ async function main() {
       { name: 'Cócteles', slug: 'cocteles' },
       { name: 'Shots', slug: 'shots' },
       { name: 'Licores', slug: 'licores' },
+      { name: 'Otros', slug: 'otros' },
     ] as const;
 
     const categoryIds: Record<string, string> = {};
@@ -893,6 +894,13 @@ async function main() {
         categorySlug: 'licores',
         price: 45000,
         sku: '6011',
+      },
+      {
+        name: 'Cigarrillos',
+        description: 'Unidad de cigarrillo.',
+        categorySlug: 'otros',
+        price: 1000,
+        sku: '7001',
       },
     ];
 

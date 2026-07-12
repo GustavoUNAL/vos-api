@@ -6,8 +6,10 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { PermissionsGuard } from '../tenant/permissions.guard';
@@ -49,6 +51,24 @@ export class PlatformCashCloseController {
       date?.trim() ||
       new Date().toISOString().slice(0, 10);
     return this.cashClose.getDailyClose(tenant, dateKey);
+  }
+
+  @Get(':date/report.pdf')
+  @RequirePermissions('sales.view')
+  async reportPdf(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('date') date: string,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.cashClose.buildReportPdf(
+      tenant,
+      date.trim(),
+    );
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    res.send(buffer);
   }
 
   @Put(':date')
