@@ -20,6 +20,7 @@ import { PlatformStaffModule } from './platform-staff/platform-staff.module';
 import { PlatformTasksModule } from './platform-tasks/platform-tasks.module';
 import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics.module';
 import { PlatformCashCloseModule } from './platform-cash-close/platform-cash-close.module';
+import { PlatformOperatingExpensesModule } from './platform-operating-expenses/platform-operating-expenses.module';
 import { PlatformShopOrdersModule } from './platform-shop-orders/platform-shop-orders.module';
 import { PlatformShopSettingsModule } from './platform-shop-settings/platform-shop-settings.module';
 import { PublicShopModule } from './public-shop/public-shop.module';
@@ -51,6 +52,7 @@ import { TelegramModule } from './telegram/telegram.module';
     PlatformTasksModule,
     PlatformAnalyticsModule,
     PlatformCashCloseModule,
+    PlatformOperatingExpensesModule,
     PlatformShopOrdersModule,
     PlatformShopSettingsModule,
     PublicShopModule,

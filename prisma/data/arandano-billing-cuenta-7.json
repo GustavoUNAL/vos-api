@@ -1,0 +1,82 @@
+{
+  "source": "Cuenta de Cobro 7 — Arándano Café · David Alejandro Herrera Bravo · 5 jul 2026",
+  "staffMember": "David",
+  "importTag": "import:arandano-billing-cuenta-7",
+  "hourlyRateCOP": 5000,
+  "expectedTotalPayCOP": 284250,
+  "expectedTotalHours": 39.25,
+  "expectedTotalLabel": "7 turnos trabajados · $284.250 · 22 jun – 3 jul 2026",
+  "staffProfile": {
+    "name": "David Alejandro Herrera Bravo",
+    "idNumber": "1081275828",
+    "phone": "3207925676",
+    "email": "davidalejandroherrerabravo@gmail.com",
+    "defaultHourlyRate": 5000,
+    "notes": "C.C. 1.081.275.828 Pasto · Davivienda 3207925676 · Carrera 23 # 13-63 · Desde 25-jun-2026: $5.000/h base · $9.000/h si ventas > $150.000"
+  },
+  "shifts": [
+    {
+      "date": "2026-06-23",
+      "hours": 6.5,
+      "hourlyRateCOP": 8000,
+      "schedule": "4:30 pm – 11:00 pm",
+      "salesCOP": 96000,
+      "purchasesCOP": 28000,
+      "notes": "Cuenta 7 · tarifa $8.000/h (antes del cambio 25-jun)"
+    },
+    {
+      "date": "2026-06-24",
+      "hours": 2.5,
+      "hourlyRateCOP": 8000,
+      "schedule": "5:00 pm – 7:30 pm",
+      "salesCOP": 0,
+      "purchasesCOP": 0,
+      "notes": "Cuenta 7 · tarifa $8.000/h · día corto"
+    },
+    {
+      "date": "2026-06-26",
+      "hours": 6,
+      "hourlyRateCOP": 9000,
+      "schedule": "4:00 pm – 10:00 pm",
+      "salesCOP": 176000,
+      "purchasesCOP": 52000,
+      "notes": "Cuenta 7 · meta >$150k · $9.000/h solo este día"
+    },
+    {
+      "date": "2026-06-30",
+      "hours": 4.5,
+      "hourlyRateCOP": 5000,
+      "schedule": "4:30 pm – 9:00 pm",
+      "salesCOP": 41000,
+      "purchasesCOP": 1000,
+      "notes": "Cuenta 7 · tarifa base $5.000/h"
+    },
+    {
+      "date": "2026-07-01",
+      "hours": 3,
+      "hourlyRateCOP": 5000,
+      "schedule": "4:00 pm – 7:00 pm",
+      "salesCOP": 0,
+      "purchasesCOP": 7000,
+      "notes": "Cuenta 7 · tarifa base $5.000/h"
+    },
+    {
+      "date": "2026-07-02",
+      "hours": 9.25,
+      "hourlyRateCOP": 9000,
+      "schedule": "3:30 pm – 12:45 am",
+      "salesCOP": 273500,
+      "purchasesCOP": 16000,
+      "notes": "Cuenta 7 · meta >$150k · $9.000/h solo este día · cierra madrugada 3-jul"
+    },
+    {
+      "date": "2026-07-03",
+      "hours": 7.5,
+      "hourlyRateCOP": 5000,
+      "schedule": "3:30 pm – 11:00 pm",
+      "salesCOP": 69000,
+      "purchasesCOP": 42200,
+      "notes": "Cuenta 7 · tarifa base $5.000/h"
+    }
+  ]
+}

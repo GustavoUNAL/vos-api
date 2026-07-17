@@ -512,17 +512,31 @@ export class AuthService {
       throw new UnauthorizedException('Usuario inactivo');
     }
 
+    // Platform admin usa /auth/platform/enter-company, no este endpoint.
     if (user.isPlatformAdmin) {
-      const memberships = await this.loadMemberships(userId);
-      return this.issuePlatformCompanySession(user, companyId, memberships);
+      throw new ForbiddenException(
+        'Usá el panel de plataforma para entrar a una empresa',
+      );
     }
 
     const membership = await this.loadMemberships(userId);
-    const target = membership.find(
-      (m) => m.company.id === companyId && m.company.status === 'ACTIVE',
+    const ownedActive = membership.filter(
+      (m) =>
+        m.company.status === 'ACTIVE' &&
+        m.memberRoles.some((mr) => mr.role.slug === 'owner'),
     );
+
+    if (ownedActive.length < 2) {
+      throw new ForbiddenException(
+        'Solo cuentas propietarias con varias empresas pueden cambiar de empresa',
+      );
+    }
+
+    const target = ownedActive.find((m) => m.company.id === companyId);
     if (!target) {
-      throw new UnauthorizedException('Sin acceso a esa empresa');
+      throw new UnauthorizedException(
+        'Sin acceso de propietario a esa empresa',
+      );
     }
 
     return this.issueSession(user, target, membership);

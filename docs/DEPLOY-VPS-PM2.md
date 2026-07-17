@@ -33,11 +33,30 @@ rm -f .env.local
 ./scripts/deploy-pm2-vps.sh
 ```
 
+Tras el deploy (si hace falta reasegurar owners multi-empresa en Neon):
+
+```bash
+npm run db:create-gustavo-user
+```
+
+Eso deja `owner@arandano.com` y Gustavo como owner de:
+**Arándano Café Bar**, **El electricista** y **Main**.
+
+La migración `operating_expenses` (agua/energía/internet) corre con `npm run db:migrate` dentro del script.
+
 Comprobar CORS:
 
 ```bash
 curl -sI -H "Origin: https://vos-ai.arandano.shop" http://127.0.0.1:3001/health | grep -i access-control
 ```
+
+## Checklist post-deploy
+
+- [ ] `https://vos-ai.arandano.shop/backend/health` → OK
+- [ ] Login `owner@arandano.com` → selector de 3 empresas
+- [ ] Cambiar empresa desde header / menú móvil
+- [ ] Análisis financiero abre en móvil (KPIs, servicios, cards)
+- [ ] David (`david@arandano.com`) **no** ve selector multi-empresa
 
 ## 2. Front (`vos-front`)
 

@@ -133,6 +133,7 @@ model Company {
   shopOrders       ShopOrder[]
   tasks            CompanyTask[]
   cashCloses       CashClose[]
+  operatingExpenses OperatingExpense[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -689,6 +690,32 @@ model StaffShift {
   @@index([companyId, shiftDate], map: "idx_staff_shifts_company_shift_date")
   @@index([shiftDate], map: "idx_staff_shifts_shift_date")
   @@map("staff_shifts")
+}
+
+enum OperatingExpenseKind {
+  AGUA
+  ENERGIA
+  INTERNET
+  OTHER
+}
+
+/// Gastos operativos mensuales (servicios: agua, energía, internet, etc.)
+model OperatingExpense {
+  id            String               @id @default(cuid())
+  companyId     String               @map("company_id")
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  kind          OperatingExpenseKind
+  /// Primer día del mes al que corresponde el recibo (YYYY-MM-01).
+  expenseMonth  DateTime             @map("expense_month") @db.Date
+  amountCOP     Decimal              @map("amount_cop") @db.Decimal(14, 2)
+  notes         String?
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([companyId, kind, expenseMonth], map: "operating_expenses_company_kind_month_key")
+  @@index([companyId], map: "idx_operating_expenses_company_id")
+  @@index([companyId, expenseMonth], map: "idx_operating_expenses_company_month")
+  @@map("operating_expenses")
 }
 
 enum CashCloseStatus {

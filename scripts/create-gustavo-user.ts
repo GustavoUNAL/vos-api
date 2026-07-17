@@ -1,5 +1,8 @@
 /**
- * Crea o actualiza Gustavo con acceso owner a Arándano Café Bar y El electricista.
+ * Crea o actualiza owners multi-empresa:
+ * - Gustavo (SEED_GUSTAVO_*)
+ * - Owner Arándano (SEED_ARANDANO_* / owner@arandano.com)
+ * con acceso a Arándano Café Bar, El electricista y Main.
  * Uso: npm run db:create-gustavo-user
  */
 import 'dotenv/config';
@@ -11,6 +14,7 @@ import { pgPoolConfig } from '../src/common/pg-pool-config';
 
 const ARANDANO_ID = 'seed-arandano-cafe-bar';
 const ELECTRICISTA_ID = 'seed-el-electricista';
+const MAIN_ID = 'seed-main';
 
 const SERVICE_COMPANY_MODULES = [
   'products',
@@ -130,7 +134,6 @@ async function main() {
     .toLowerCase();
   const password = process.env.SEED_GUSTAVO_PASSWORD ?? 'Gustavo2026!';
   const name = process.env.SEED_GUSTAVO_NAME ?? 'Gustavo Arteaga';
-  const passwordHash = await bcrypt.hash(password, 10);
 
   const pool = new Pool(pgPoolConfig(url));
   const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
@@ -149,32 +152,73 @@ async function main() {
       email: 'gustavoarteaga0508@gmail.com',
     });
 
-    const user = await prisma.user.upsert({
-      where: { email },
-      create: {
-        email,
-        passwordHash,
-        name,
-        active: true,
-        isPlatformAdmin: false,
-      },
-      update: { passwordHash, name, active: true, isPlatformAdmin: false },
+    const main = await provisionServiceCompany(prisma, {
+      id: MAIN_ID,
+      name: 'Main',
+      email: 'gustavoarteaga0508@gmail.com',
     });
 
-    const memberships = await Promise.all([
-      ensureOwnerMembership(prisma, arandano.id, user.id),
-      ensureOwnerMembership(prisma, electricista.id, user.id),
-    ]);
+    const companyIds = [arandano.id, electricista.id, main.id];
 
-    console.log('Usuario Gustavo OK:', {
-      email,
-      password,
-      name,
-      companies: memberships.map((m) => m.companyId),
+    async function ensureOwnerUser(opts: {
+      email: string;
+      password: string;
+      name: string;
+    }) {
+      const hash = await bcrypt.hash(opts.password, 10);
+      const user = await prisma.user.upsert({
+        where: { email: opts.email },
+        create: {
+          email: opts.email,
+          passwordHash: hash,
+          name: opts.name,
+          active: true,
+          isPlatformAdmin: false,
+        },
+        update: {
+          passwordHash: hash,
+          name: opts.name,
+          active: true,
+          isPlatformAdmin: false,
+        },
+      });
+      const memberships = await Promise.all(
+        companyIds.map((companyId) =>
+          ensureOwnerMembership(prisma, companyId, user.id),
+        ),
+      );
+      return {
+        email: opts.email,
+        password: opts.password,
+        name: opts.name,
+        companies: memberships.map((m) => m.companyId),
+      };
+    }
+
+    const gustavo = await ensureOwnerUser({ email, password, name });
+
+    const arandanoOwnerEmail = (
+      process.env.SEED_ARANDANO_EMAIL ?? 'owner@arandano.com'
+    )
+      .trim()
+      .toLowerCase();
+    const arandanoOwnerPassword =
+      process.env.SEED_ARANDANO_PASSWORD ?? 'Arandano2026!';
+    const arandanoOwnerName =
+      process.env.SEED_ARANDANO_NAME ?? 'Propietario Arándano';
+
+    const arandanoOwner = await ensureOwnerUser({
+      email: arandanoOwnerEmail,
+      password: arandanoOwnerPassword,
+      name: arandanoOwnerName,
     });
+
+    console.log('Usuario Gustavo OK:', gustavo);
+    console.log('Usuario owner@arandano OK:', arandanoOwner);
     console.log('Empresas:', {
       arandano: arandano.name,
       electricista: electricista.name,
+      main: main.name,
     });
   } finally {
     await prisma.$disconnect();
