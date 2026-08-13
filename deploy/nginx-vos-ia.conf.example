@@ -7,20 +7,15 @@
 #
 # Requiere: vos-front en :5174 (PM2), vos-api en :3001 (PM2).
 # El puerto :3000 lo usa otra app (Next.js arandano) — no tocar.
+#
+# Importante: vos-ia.com y www tienen que estar en el MISMO server
+# para que Certbot pueda validar ambos. Después del SSL, Certbot
+# suele redirigir HTTP→HTTPS; www seguirá sirviendo el mismo sitio.
 
-# www → apex
 server {
   listen 80;
   listen [::]:80;
-  server_name www.vos-ia.com;
-  return 301 http://vos-ia.com$request_uri;
-}
-
-# --- Front + API: vos-ia.com ---
-server {
-  listen 80;
-  listen [::]:80;
-  server_name vos-ia.com;
+  server_name vos-ia.com www.vos-ia.com vos-ai.arandano.shop;
 
   client_max_body_size 20m;
 
@@ -52,12 +47,4 @@ server {
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
   }
-}
-
-# Dominio anterior (si el DNS de arandano.shop sigue apuntando al VPS)
-server {
-  listen 80;
-  listen [::]:80;
-  server_name vos-ai.arandano.shop;
-  return 301 http://vos-ia.com$request_uri;
 }
