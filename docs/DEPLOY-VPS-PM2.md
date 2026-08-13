@@ -1,13 +1,13 @@
-# Despliegue VPS con PM2 — VOS AI
+# Despliegue VPS con PM2 — VOS IA
 
-Stack en el servidor **51.222.24.228** (Arándano):
+Stack en el servidor **51.222.24.228**:
 
 | Servicio | PM2 | Puerto | Variables |
 |----------|-----|--------|-----------|
 | Next.js arándano | `arandano` | **3000** | No tocar |
 | **vos-api** (NestJS) | `vos-api` | **3001** | `vos-api/.env` |
 | **vos-front** (Vite preview) | `vos-front` | **5174** | `vos-front/.env` |
-| Nginx | sistema | 80/443 | `vos-ai.arandano.shop` |
+| Nginx | sistema | 80/443 | **vos-ia.com** |
 
 ## Convención de archivos `.env`
 
@@ -21,16 +21,47 @@ Plantillas commiteadas: `.env.local.example`, `.env.production.example`, `.env.d
 
 ⚠️ **Nunca** dejes `.env.local` en el VPS: pisa CORS, PORT y `VITE_API_URL`.
 
+## 0. Dominio en Hostinger (vos-ia.com)
+
+El sitio **no** se hospeda en Hostinger: Hostinger solo gestiona el DNS. La app corre en el VPS.
+
+En hPanel → **Dominios** → `vos-ia.com` → **DNS / Zona DNS**:
+
+| Tipo | Nombre | Apunta a | TTL |
+|------|--------|----------|-----|
+| **A** | `@` | `51.222.24.228` | 300 |
+| **A** | `www` | `51.222.24.228` | 300 |
+
+- Borrá registros **A** o **AAAA** que apunten a IPs de Hostinger (parking / web).
+- Si existe un **CNAME** de `www`, reemplazalo por el **A** de arriba.
+- **No toques MX/TXT** si usás correo de Hostinger.
+- Desconectá el “sitio web” de Hostinger para este dominio (si está activo pisa el DNS).
+
+Comprobar desde tu Mac (puede tardar minutos):
+
+```bash
+dig +short vos-ia.com A
+dig +short www.vos-ia.com A
+```
+
+Tiene que salir `51.222.24.228`. Recién entonces pedí el certificado SSL.
+
 ## 1. API (`vos-api`)
 
 ```bash
 cd ~/projects/vos-ai/vos-api
 git pull origin main
 cp .env.production.example .env   # solo la primera vez
-nano .env                         # DATABASE_URL, JWT_SECRET, OPENAI_API_KEY
+nano .env                         # DATABASE_URL, JWT_SECRET, CORS_ORIGIN, OPENAI_API_KEY
 
 rm -f .env.local
 ./scripts/deploy-pm2-vps.sh
+```
+
+`CORS_ORIGIN` en producción:
+
+```text
+https://vos-ia.com,https://www.vos-ia.com,https://vos-ai.arandano.shop
 ```
 
 Tras el deploy (si hace falta reasegurar owners multi-empresa en Neon):
@@ -39,24 +70,18 @@ Tras el deploy (si hace falta reasegurar owners multi-empresa en Neon):
 npm run db:create-gustavo-user
 ```
 
-Eso deja `owner@arandano.com` y Gustavo como owner de:
-**Arándano Café Bar**, **El electricista** y **Main**.
-
-La migración `operating_expenses` (agua/energía/internet) corre con `npm run db:migrate` dentro del script.
-
 Comprobar CORS:
 
 ```bash
-curl -sI -H "Origin: https://vos-ai.arandano.shop" http://127.0.0.1:3001/health | grep -i access-control
+curl -sI -H "Origin: https://vos-ia.com" http://127.0.0.1:3001/health | grep -i access-control
 ```
 
 ## Checklist post-deploy
 
-- [ ] `https://vos-ai.arandano.shop/backend/health` → OK
-- [ ] Login `owner@arandano.com` → selector de 3 empresas
-- [ ] Cambiar empresa desde header / menú móvil
-- [ ] Análisis financiero abre en móvil (KPIs, servicios, cards)
-- [ ] David (`david@arandano.com`) **no** ve selector multi-empresa
+- [ ] `https://vos-ia.com/backend/health` → OK
+- [ ] Login clínica `https://vos-ia.com/#/health/login`
+- [ ] Login negocio `https://vos-ia.com/#/login`
+- [ ] `www.vos-ia.com` redirige a `vos-ia.com`
 
 ## 2. Front (`vos-front`)
 
@@ -64,7 +89,7 @@ curl -sI -H "Origin: https://vos-ai.arandano.shop" http://127.0.0.1:3001/health 
 cd ~/projects/vos-ai/vos-front
 git pull origin main
 cp .env.production.example .env   # solo la primera vez
-nano .env                         # VITE_API_URL=https://vos-ai.arandano.shop/backend
+nano .env                         # VITE_API_URL=https://vos-ia.com/backend
 
 rm -f .env.local
 npm ci && npm run build
@@ -74,18 +99,22 @@ pm2 restart vos-front --update-env
 Verificar que el build embebe HTTPS:
 
 ```bash
-grep -o 'https://vos-ai.arandano.shop/backend\|http://51.222.24.228:3001' dist/assets/index-*.js | sort -u
+grep -o 'https://vos-ia.com/backend\|http://51.222.24.228:3001' dist/assets/index-*.js | sort -u
 ```
 
-## 3. Nginx + HTTPS (dominio)
+## 3. Nginx + HTTPS (vos-ia.com)
 
 ```bash
 cd ~/projects/vos-ai/vos-api
-sudo cp deploy/nginx-vos-ai.conf.example /etc/nginx/sites-available/vos-ai.arandano.shop
-sudo ln -sf /etc/nginx/sites-available/vos-ai.arandano.shop /etc/nginx/sites-enabled/
+sudo cp deploy/nginx-vos-ia.conf.example /etc/nginx/sites-available/vos-ia.com
+sudo ln -sf /etc/nginx/sites-available/vos-ia.com /etc/nginx/sites-enabled/
+# Opcional: desactivar el site viejo
+sudo rm -f /etc/nginx/sites-enabled/vos-ai.arandano.shop
 sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d vos-ai.arandano.shop
+sudo certbot --nginx -d vos-ia.com -d www.vos-ia.com
 ```
+
+Certbot reescribe el archivo de Nginx con `listen 443 ssl` y redirección HTTP→HTTPS.
 
 ## Variables clave (producción)
 
@@ -93,15 +122,18 @@ sudo certbot --nginx -d vos-ai.arandano.shop
 |----------|-------|-------|
 | `NODE_ENV` | vos-api `.env` | `production` |
 | `PORT` | vos-api `.env` | `3001` |
-| `CORS_ORIGIN` | vos-api `.env` | `https://vos-ai.arandano.shop` |
-| `VITE_API_URL` | vos-front `.env` | `https://vos-ai.arandano.shop/backend` |
+| `CORS_ORIGIN` | vos-api `.env` | `https://vos-ia.com,https://www.vos-ia.com` |
+| `VITE_API_URL` | vos-front `.env` | `https://vos-ia.com/backend` |
+| `VITE_APP_URL` | vos-front `.env` | `https://vos-ia.com` |
 | `DATABASE_URL` | vos-api `.env` | Neon con `?sslmode=require` |
 
 ## Problemas frecuentes
 
 | Síntoma | Causa | Solución |
 |---------|-------|----------|
-| Mixed Content | `VITE_API_URL` en `http://` con front en `https://` | `.env` front → `https://.../backend` + `npm run build` |
+| Mixed Content | `VITE_API_URL` en `http://` con front en `https://` | `.env` front → `https://vos-ia.com/backend` + `npm run build` |
 | CORS sin `Allow-Origin` | `.env.local` en vos-api o `NODE_ENV=development` | `rm .env.local`, `NODE_ENV=production`, `--update-env` |
 | Front viejo | Build sin recompilar | `npm run build` + `pm2 restart vos-front --update-env` |
 | API devuelve HTML Next.js | Curl a `:3000` | API está en `:3001` |
+| Certbot: NXDOMAIN | DNS aún no apunta al VPS | Esperá el A record y reintentá |
+| Vite 403 Host | `allowedHosts` sin vos-ia.com | `git pull` front + restart `vos-front` |

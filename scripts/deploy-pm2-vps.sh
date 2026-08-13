@@ -53,6 +53,6 @@ sleep 2
 echo ""
 echo "==> Verificación"
 curl -fsS "http://127.0.0.1:3001/health" && echo ""
-curl -sI -H "Origin: https://vos-ai.arandano.shop" "http://127.0.0.1:3001/health" | grep -i access-control || true
+curl -sI -H "Origin: https://vos-ia.com" "http://127.0.0.1:3001/health" | grep -i access-control || true
 echo ""
-echo "Listo. Front: https://vos-ai.arandano.shop  |  API: https://vos-ai.arandano.shop/backend"
+echo "Listo. Front: https://vos-ia.com  |  API: https://vos-ia.com/backend"

@@ -1,0 +1,63 @@
+# Nginx — VOS IA en vos-ia.com
+# Copiar:
+#   sudo cp deploy/nginx-vos-ia.conf.example /etc/nginx/sites-available/vos-ia.com
+#   sudo ln -sf /etc/nginx/sites-available/vos-ia.com /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#   sudo certbot --nginx -d vos-ia.com -d www.vos-ia.com
+#
+# Requiere: vos-front en :5174 (PM2), vos-api en :3001 (PM2).
+# El puerto :3000 lo usa otra app (Next.js arandano) — no tocar.
+
+# www → apex
+server {
+  listen 80;
+  listen [::]:80;
+  server_name www.vos-ia.com;
+  return 301 http://vos-ia.com$request_uri;
+}
+
+# --- Front + API: vos-ia.com ---
+server {
+  listen 80;
+  listen [::]:80;
+  server_name vos-ia.com;
+
+  client_max_body_size 20m;
+
+  # API bajo /backend/
+  location /backend/ {
+    proxy_pass http://127.0.0.1:3001/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+  }
+
+  location /ws {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+  }
+
+  # Front Vite (PM2 :5174)
+  location / {
+    proxy_pass http://127.0.0.1:5174;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+}
+
+# Dominio anterior (si el DNS de arandano.shop sigue apuntando al VPS)
+server {
+  listen 80;
+  listen [::]:80;
+  server_name vos-ai.arandano.shop;
+  return 301 http://vos-ia.com$request_uri;
+}
