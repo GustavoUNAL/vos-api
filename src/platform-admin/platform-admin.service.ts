@@ -17,6 +17,8 @@ export class PlatformAdminService {
       usersCount,
       pendingRequests,
       recentRequests,
+      users,
+      companies,
     ] = await Promise.all([
       this.prisma.company.count(),
       this.prisma.company.count({ where: { status: 'ACTIVE' } }),
@@ -27,6 +29,45 @@ export class PlatformAdminService {
         orderBy: { createdAt: 'desc' },
         take: 8,
       }),
+      this.prisma.user.findMany({
+        where: { active: true },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          isPlatformAdmin: true,
+          createdAt: true,
+          memberships: {
+            where: { status: 'ACTIVE' },
+            include: {
+              company: { select: { id: true, name: true } },
+              memberRoles: { include: { role: { select: { slug: true } } } },
+            },
+          },
+        },
+      }),
+      this.prisma.company.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          _count: {
+            select: {
+              members: true,
+              products: true,
+              sales: true,
+              inventoryItems: true,
+            },
+          },
+          companyModules: {
+            where: { isEnabled: true },
+            include: { module: { select: { slug: true } } },
+          },
+        },
+      }),
     ]);
 
     return {
@@ -35,6 +76,27 @@ export class PlatformAdminService {
       usersCount,
       pendingRequests,
       recentRequests,
+      recentUsers: users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        isPlatformAdmin: u.isPlatformAdmin,
+        createdAt: u.createdAt,
+        companies: u.memberships.map((m) => ({
+          id: m.company.id,
+          name: m.company.name,
+          role: m.memberRoles[0]?.role.slug ?? 'member',
+        })),
+      })),
+      companyStats: companies.map((c) => ({
+        id: c.id,
+        name: c.name,
+        membersCount: c._count.members,
+        productsCount: c._count.products,
+        salesCount: c._count.sales,
+        inventoryCount: c._count.inventoryItems,
+        modules: c.companyModules.map((cm) => cm.module.slug),
+      })),
     };
   }
 

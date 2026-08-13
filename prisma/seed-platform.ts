@@ -14,6 +14,7 @@ const MODULES = [
   { slug: 'tasks', name: 'Tareas', description: 'Actividades diarias del equipo', sortOrder: 36 },
   { slug: 'staff', name: 'Personal', description: 'Turnos y nómina por hora', sortOrder: 38 },
   { slug: 'finance', name: 'Finanzas', description: 'Análisis y reportes', sortOrder: 42 },
+  { slug: 'dental', name: 'Clínica dental', description: 'Pacientes, agenda y bioseguridad', sortOrder: 15 },
   { slug: 'crm', name: 'CRM', description: 'Clientes y relaciones', sortOrder: 40 },
   { slug: 'projects', name: 'Proyectos', description: 'Gestión de proyectos', sortOrder: 50 },
 ] as const;

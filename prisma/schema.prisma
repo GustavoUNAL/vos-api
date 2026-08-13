@@ -134,6 +134,17 @@ model Company {
   tasks            CompanyTask[]
   cashCloses       CashClose[]
   operatingExpenses OperatingExpense[]
+  dentalPatients    DentalPatient[]
+  dentalAppointments DentalAppointment[]
+  dentalIncomes     DentalIncome[]
+  dentalExpenses    DentalExpense[]
+  dentalSterilizations DentalSterilization[]
+  dentalWastes      DentalWaste[]
+  dentalTempLogs    DentalTempHumidityLog[]
+  dentalSites       DentalSite[]
+  dentalProcedures  DentalProcedure[]
+  dentalBudgets     DentalBudget[]
+  dentalFinancings  DentalFinancing[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -769,6 +780,262 @@ model CompanyTask {
   @@index([companyId, taskDate], map: "idx_company_tasks_company_date")
   @@index([taskDate], map: "idx_company_tasks_task_date")
   @@map("company_tasks")
+}
+
+// ---------------------------------------------------------------------------
+// Dental clinic (odontología)
+// ---------------------------------------------------------------------------
+
+model DentalSite {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  address   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  patients       DentalPatient[]
+  appointments   DentalAppointment[]
+  incomes        DentalIncome[]
+  expenses       DentalExpense[]
+  sterilizations DentalSterilization[]
+  wastes         DentalWaste[]
+  tempLogs       DentalTempHumidityLog[]
+
+  @@index([companyId], map: "idx_dental_sites_company")
+  @@map("dental_sites")
+}
+
+model DentalPatient {
+  id              String    @id @default(cuid())
+  companyId       String    @map("company_id")
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  siteId          String?   @map("site_id")
+  site            DentalSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  fullName        String    @map("full_name")
+  documentType    String    @default("cc") @map("document_type")
+  documentNumber  String    @map("document_number")
+  birthDate       DateTime? @map("birth_date") @db.Date
+  gender          String?
+  bloodType       String?   @map("blood_type")
+  maritalStatus   String?   @map("marital_status")
+  occupation      String?
+  phone           String?
+  email           String?
+  address         String?
+  city            String?
+  country         String?   @default("Colombia")
+  insurer         String?
+  coverage        String?
+  notes           String?
+  clinicalHistory Json?     @map("clinical_history") @db.JsonB
+  odontogram      Json?     @db.JsonB
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  appointments DentalAppointment[]
+  incomes      DentalIncome[]
+  budgets      DentalBudget[]
+  financings   DentalFinancing[]
+
+  @@unique([companyId, documentNumber], map: "dental_patients_company_doc_key")
+  @@index([companyId], map: "idx_dental_patients_company")
+  @@index([companyId, fullName], map: "idx_dental_patients_name")
+  @@map("dental_patients")
+}
+
+model DentalProcedure {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  category    String   @default("general")
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(14, 2)
+  durationMin Int      @default(30) @map("duration_min")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  appointments DentalAppointment[]
+
+  @@index([companyId, active], map: "idx_dental_procedures_company_active")
+  @@map("dental_procedures")
+}
+
+model DentalAppointment {
+  id             String    @id @default(cuid())
+  companyId      String    @map("company_id")
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  patientId      String?   @map("patient_id")
+  patient        DentalPatient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  siteId         String?   @map("site_id")
+  site           DentalSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  procedureId    String?   @map("procedure_id")
+  procedure      DentalProcedure? @relation(fields: [procedureId], references: [id], onDelete: SetNull)
+  procedureName  String?   @map("procedure_name")
+  estimatedCost  Decimal?  @map("estimated_cost") @db.Decimal(14, 2)
+  chargedAmount  Decimal?  @map("charged_amount") @db.Decimal(14, 2)
+  durationMin    Int       @default(30) @map("duration_min")
+  startsAt       DateTime  @map("starts_at") @db.Timestamptz(6)
+  endsAt         DateTime? @map("ends_at") @db.Timestamptz(6)
+  kind           String    @default("tratamiento")
+  status         String    @default("confirmada")
+  room           String?   @default("CONSULTORIO 1")
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  incomes  DentalIncome[]
+  budgets  DentalBudget[]
+
+  @@index([companyId, startsAt], map: "idx_dental_appointments_company_starts")
+  @@map("dental_appointments")
+}
+
+model DentalIncome {
+  id            String    @id @default(cuid())
+  companyId     String    @map("company_id")
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  patientId     String?   @map("patient_id")
+  patient       DentalPatient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  appointmentId String?   @map("appointment_id")
+  appointment   DentalAppointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  siteId        String?   @map("site_id")
+  site          DentalSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  number        Int
+  incomeDate    DateTime  @map("income_date") @db.Date
+  amount        Decimal   @db.Decimal(14, 2)
+  paymentMethod String?   @map("payment_method")
+  status        String    @default("Creado")
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([companyId, number], map: "dental_incomes_company_number_key")
+  @@index([companyId, incomeDate], map: "idx_dental_incomes_company_date")
+  @@index([appointmentId], map: "idx_dental_incomes_appointment")
+  @@map("dental_incomes")
+}
+
+model DentalBudget {
+  id            String    @id @default(cuid())
+  companyId     String    @map("company_id")
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  patientId     String    @map("patient_id")
+  patient       DentalPatient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointmentId String?   @map("appointment_id")
+  appointment   DentalAppointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  title         String
+  status        String    @default("Pendiente")
+  lines         Json      @db.JsonB
+  subtotal      Decimal   @db.Decimal(14, 2)
+  total         Decimal   @db.Decimal(14, 2)
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  financings DentalFinancing[]
+
+  @@index([companyId, status], map: "idx_dental_budgets_company_status")
+  @@map("dental_budgets")
+}
+
+model DentalFinancing {
+  id               String    @id @default(cuid())
+  companyId        String    @map("company_id")
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  patientId        String?   @map("patient_id")
+  patient          DentalPatient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  budgetId         String?   @map("budget_id")
+  budget           DentalBudget? @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  amount           Decimal   @db.Decimal(14, 2)
+  initialPayment   Decimal   @default(0) @map("initial_payment") @db.Decimal(14, 2)
+  installments     Int       @default(0)
+  installmentValue Decimal   @default(0) @map("installment_value") @db.Decimal(14, 2)
+  status           String    @default("en_tramite")
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([companyId, status], map: "idx_dental_financings_company_status")
+  @@map("dental_financings")
+}
+
+model DentalExpense {
+  id           String    @id @default(cuid())
+  companyId    String    @map("company_id")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  siteId       String?   @map("site_id")
+  site         DentalSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  expenseDate  DateTime  @map("expense_date") @db.Date
+  concept      String
+  provider     String?
+  expenseType  String?   @map("expense_type")
+  amount       Decimal   @db.Decimal(14, 2)
+  status       String    @default("Registrado")
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([companyId, expenseDate], map: "idx_dental_expenses_company_date")
+  @@map("dental_expenses")
+}
+
+model DentalSterilization {
+  id          String    @id @default(cuid())
+  companyId   String    @map("company_id")
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  siteId      String?   @map("site_id")
+  site        DentalSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  loadDate    DateTime  @map("load_date") @db.Timestamptz(6)
+  equipment   String?
+  cycle       String?
+  result      String    @default("OK")
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([companyId, loadDate], map: "idx_dental_sterilizations_company_date")
+  @@map("dental_sterilizations")
+}
+
+model DentalWaste {
+  id             String    @id @default(cuid())
+  companyId      String    @map("company_id")
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  siteId         String?   @map("site_id")
+  site           DentalSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  wasteDate      DateTime  @map("waste_date") @db.Date
+  wasteType      String    @map("waste_type")
+  classification String?
+  bagColor       String?   @map("bag_color")
+  weightKg       Decimal?  @map("weight_kg") @db.Decimal(10, 3)
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([companyId, wasteDate], map: "idx_dental_wastes_company_date")
+  @@map("dental_wastes")
+}
+
+model DentalTempHumidityLog {
+  id            String    @id @default(cuid())
+  companyId     String    @map("company_id")
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  siteId        String?   @map("site_id")
+  site          DentalSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  logDate       DateTime  @map("log_date") @db.Date
+  deviceName    String?   @map("device_name")
+  temperatureC  Decimal?  @map("temperature_c") @db.Decimal(6, 2)
+  humidityPct   Decimal?  @map("humidity_pct") @db.Decimal(6, 2)
+  observations  String?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([companyId, logDate], map: "idx_dental_temp_logs_company_date")
+  @@map("dental_temp_humidity_logs")
 }
 
 // ---------------------------------------------------------------------------
