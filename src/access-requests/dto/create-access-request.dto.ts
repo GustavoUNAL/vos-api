@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateAccessRequestDto {
   @IsString()
@@ -20,4 +20,8 @@ export class CreateAccessRequestDto {
   @IsString()
   @MinLength(5)
   message?: string;
+
+  @IsOptional()
+  @IsIn(['TRIAL', 'PRO', 'BUSINESS'])
+  plan?: 'TRIAL' | 'PRO' | 'BUSINESS';
 }

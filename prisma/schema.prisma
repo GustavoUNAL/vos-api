@@ -18,6 +18,12 @@ enum CompanyStatus {
   INACTIVE
 }
 
+enum CompanyPlan {
+  TRIAL
+  PRO
+  BUSINESS
+}
+
 enum MemberStatus {
   ACTIVE
   INVITED
@@ -84,6 +90,26 @@ enum AuditAction {
   IMPORT
 }
 
+enum ProjectStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum BookingAppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum BookingAppointmentSource {
+  ADMIN
+  PUBLIC_BOOKING
+  API
+}
+
 enum AccessRequestStatus {
   PENDING
   APPROVED
@@ -110,6 +136,8 @@ model Company {
   phone     String?
   email     String?
   status    CompanyStatus @default(ACTIVE)
+  plan      CompanyPlan   @default(TRIAL)
+  storageLimitBytes Int   @default(26214400) @map("storage_limit_bytes")
   createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -145,6 +173,14 @@ model Company {
   dentalProcedures  DentalProcedure[]
   dentalBudgets     DentalBudget[]
   dentalFinancings  DentalFinancing[]
+  serviceProjects   ServiceProject[]
+  bookingSettings   BookingSettings?
+  bookingServices   BookingService[]
+  bookingStaff      BookingStaff[]
+  bookingCustomers  BookingCustomer[]
+  bookingAppointments BookingAppointment[]
+  bookingWorkingHours BookingWorkingHour[]
+  bookingBlocks     BookingAvailabilityBlock[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -159,6 +195,9 @@ model User {
   name             String
   active           Boolean  @default(true)
   isPlatformAdmin  Boolean  @default(false) @map("is_platform_admin")
+  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(6)
+  termsAcceptedAt  DateTime? @map("terms_accepted_at") @db.Timestamptz(6)
+  privacyAcceptedAt DateTime? @map("privacy_accepted_at") @db.Timestamptz(6)
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -780,6 +819,182 @@ model CompanyTask {
   @@index([companyId, taskDate], map: "idx_company_tasks_company_date")
   @@index([taskDate], map: "idx_company_tasks_task_date")
   @@map("company_tasks")
+}
+
+/// Historial de obras / servicios (El electricista y empresas similares).
+model ServiceProject {
+  id             String        @id @default(cuid())
+  companyId      String        @map("company_id")
+  company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name           String
+  address        String
+  description    String        @default("")
+  chargedAmount  Decimal       @map("charged_amount") @db.Decimal(14, 2)
+  status         ProjectStatus @default(IN_PROGRESS)
+  notes          String?
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([companyId, status], map: "idx_service_projects_company_status")
+  @@index([companyId, createdAt], map: "idx_service_projects_company_created")
+  @@map("service_projects")
+}
+
+// ---------------------------------------------------------------------------
+// Booking engine (citas/reservas reutilizable — no específico de un oficio)
+// ---------------------------------------------------------------------------
+
+model BookingSettings {
+  id              String   @id @default(cuid())
+  companyId       String   @unique @map("company_id")
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  publicSlug      String   @unique @map("public_slug")
+  timezone        String   @default("America/Bogota")
+  slotIntervalMin Int      @default(15) @map("slot_interval_min")
+  bufferMin       Int      @default(0) @map("buffer_min")
+  publicEnabled   Boolean  @default(true) @map("public_enabled")
+  welcomeMessage  String   @default("") @map("welcome_message")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("booking_settings")
+}
+
+model BookingService {
+  id           String   @id @default(cuid())
+  companyId    String   @map("company_id")
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name         String
+  description  String   @default("")
+  durationMin  Int      @map("duration_min")
+  price        Decimal  @db.Decimal(14, 2)
+  currency     String   @default("COP")
+  active       Boolean  @default(true)
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  staffLinks    BookingStaffService[]
+  appointments  BookingAppointment[]
+
+  @@index([companyId, active], map: "idx_booking_services_company_active")
+  @@map("booking_services")
+}
+
+model BookingStaff {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String?
+  email     String?
+  photoUrl  String?  @map("photo_url")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  serviceLinks  BookingStaffService[]
+  workingHours  BookingWorkingHour[]
+  blocks        BookingAvailabilityBlock[]
+  appointments  BookingAppointment[]
+
+  @@index([companyId, active], map: "idx_booking_staff_company_active")
+  @@map("booking_staff")
+}
+
+model BookingStaffService {
+  staffId   String         @map("staff_id")
+  staff     BookingStaff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  serviceId String         @map("service_id")
+  service   BookingService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([staffId, serviceId])
+  @@map("booking_staff_services")
+}
+
+model BookingCustomer {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  email     String?
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  appointments BookingAppointment[]
+
+  @@unique([companyId, phone], map: "booking_customers_company_phone_key")
+  @@index([companyId], map: "idx_booking_customers_company")
+  @@map("booking_customers")
+}
+
+/// weekday: 0 = domingo … 6 = sábado. staffId nulo = horario del negocio.
+model BookingWorkingHour {
+  id        String        @id @default(cuid())
+  companyId String        @map("company_id")
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staffId   String?       @map("staff_id")
+  staff     BookingStaff? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  weekday   Int
+  startMin  Int           @map("start_min")
+  endMin    Int           @map("end_min")
+
+  @@index([companyId, staffId, weekday], map: "idx_booking_hours_company_staff_day")
+  @@map("booking_working_hours")
+}
+
+model BookingAvailabilityBlock {
+  id        String        @id @default(cuid())
+  companyId String        @map("company_id")
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staffId   String?       @map("staff_id")
+  staff     BookingStaff? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  startAt   DateTime      @map("start_at") @db.Timestamptz(6)
+  endAt     DateTime      @map("end_at") @db.Timestamptz(6)
+  reason    String?
+
+  @@index([companyId, startAt], map: "idx_booking_blocks_company_start")
+  @@map("booking_availability_blocks")
+}
+
+model BookingAppointment {
+  id         String                     @id @default(cuid())
+  companyId  String                     @map("company_id")
+  company    Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerId String                     @map("customer_id")
+  customer   BookingCustomer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  serviceId  String                     @map("service_id")
+  service    BookingService             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  staffId    String                     @map("staff_id")
+  staff      BookingStaff               @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  startAt    DateTime                   @map("start_at") @db.Timestamptz(6)
+  endAt      DateTime                   @map("end_at") @db.Timestamptz(6)
+  status     BookingAppointmentStatus   @default(CONFIRMED)
+  source     BookingAppointmentSource   @default(ADMIN)
+  notes      String?
+  createdAt  DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  events BookingAppointmentEvent[]
+
+  @@index([companyId, startAt], map: "idx_booking_appts_company_start")
+  @@index([staffId, startAt], map: "idx_booking_appts_staff_start")
+  @@index([customerId], map: "idx_booking_appts_customer")
+  @@map("booking_appointments")
+}
+
+model BookingAppointmentEvent {
+  id            String              @id @default(cuid())
+  appointmentId String              @map("appointment_id")
+  appointment   BookingAppointment  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  action        String
+  payload       Json?
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([appointmentId], map: "idx_booking_appt_events_appt")
+  @@map("booking_appointment_events")
 }
 
 // ---------------------------------------------------------------------------

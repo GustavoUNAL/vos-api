@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { TrialQuotaInterceptor } from './billing/trial-quota.interceptor';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { AuthModule } from './auth/auth.module';
@@ -21,6 +22,9 @@ import { PlatformTasksModule } from './platform-tasks/platform-tasks.module';
 import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics.module';
 import { PlatformCashCloseModule } from './platform-cash-close/platform-cash-close.module';
 import { PlatformOperatingExpensesModule } from './platform-operating-expenses/platform-operating-expenses.module';
+import { PlatformProjectsModule } from './platform-projects/platform-projects.module';
+import { SchedulingEngineModule } from './scheduling-engine/scheduling-engine.module';
+import { PlatformBookingModule } from './platform-booking/platform-booking.module';
 import { PlatformDentalModule } from './platform-dental/platform-dental.module';
 import { PlatformShopOrdersModule } from './platform-shop-orders/platform-shop-orders.module';
 import { PlatformShopSettingsModule } from './platform-shop-settings/platform-shop-settings.module';
@@ -28,6 +32,7 @@ import { PublicShopModule } from './public-shop/public-shop.module';
 import { AccessRequestsModule } from './access-requests/access-requests.module';
 import { PlatformAdminModule } from './platform-admin/platform-admin.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -37,6 +42,7 @@ import { TelegramModule } from './telegram/telegram.module';
       skipIf: () => process.env.NODE_ENV !== 'production',
     }),
     PrismaModule,
+    BillingModule,
     TelegramModule,
     TenantModule,
     AuthModule,
@@ -54,6 +60,9 @@ import { TelegramModule } from './telegram/telegram.module';
     PlatformAnalyticsModule,
     PlatformCashCloseModule,
     PlatformOperatingExpensesModule,
+    PlatformProjectsModule,
+    SchedulingEngineModule,
+    PlatformBookingModule,
     PlatformDentalModule,
     PlatformShopOrdersModule,
     PlatformShopSettingsModule,
@@ -62,6 +71,10 @@ import { TelegramModule } from './telegram/telegram.module';
     PlatformAdminModule,
   ],
   controllers: [AppController],
-  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: TrialQuotaInterceptor },
+  ],
 })
 export class AppModule {}

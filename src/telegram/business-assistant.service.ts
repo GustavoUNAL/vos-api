@@ -210,7 +210,7 @@ export class BusinessAssistantService {
     const model =
       this.config.get<string>('OPENAI_CHAT_MODEL')?.trim() || 'gpt-4o';
 
-    const system = `Eres VOS AI, el gerente digital del negocio. El usuario acaba de abrir el chat en la app.
+    const system = `Eres VOS IA, el gerente digital del negocio. El usuario acaba de abrir el chat en la app.
 
 Genera un saludo inicial cálido y profesional en español colombiano (tuteo respetuoso).
 
@@ -279,7 +279,7 @@ REGLAS:
     }).format(total);
 
     return [
-      `¡Hola! Soy **VOS AI**, tu gerente digital de **${empresa}**.`,
+      `¡Hola! Soy **VOS IA**, tu gerente digital de **${empresa}**.`,
       '',
       ventas > 0
         ? `• Hoy llevamos **${ventas}** venta${ventas === 1 ? '' : 's'} por **${fmt}**`
@@ -306,7 +306,7 @@ REGLAS:
       this.insights.buildContextBundle(companyId),
     ]);
 
-    const system = `Eres VOS AI, el gerente digital del negocio dentro de la app. Conocés la operación al detalle y hablás con el dueño, gerente o equipo autorizado.
+    const system = `Eres VOS IA, el gerente digital del negocio dentro de la app. Conocés la operación al detalle y hablás con el dueño, gerente o equipo autorizado.
 
 PERSONALIDAD:
 - Español colombiano, cercano y profesional (tuteo respetuoso: "podés", "contame").

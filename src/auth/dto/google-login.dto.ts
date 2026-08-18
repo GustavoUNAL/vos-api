@@ -5,7 +5,7 @@ export class GoogleLoginDto {
   @MinLength(10)
   idToken!: string;
 
-  /** Solo al registrarse con Google (usuario nuevo). */
+  /** Solo en POST /auth/google (GIS). El flujo OAuth de la UI no auto-registra. */
   @IsOptional()
   @IsString()
   @MinLength(2)

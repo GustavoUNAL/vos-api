@@ -14,9 +14,9 @@ const MODULES = [
   { slug: 'tasks', name: 'Tareas', description: 'Actividades diarias del equipo', sortOrder: 36 },
   { slug: 'staff', name: 'Personal', description: 'Turnos y nómina por hora', sortOrder: 38 },
   { slug: 'finance', name: 'Finanzas', description: 'Análisis y reportes', sortOrder: 42 },
-  { slug: 'dental', name: 'Clínica dental', description: 'Pacientes, agenda y bioseguridad', sortOrder: 15 },
+  { slug: 'booking', name: 'Agenda de citas', description: 'Motor de citas y reservas reutilizable', sortOrder: 18 },
   { slug: 'crm', name: 'CRM', description: 'Clientes y relaciones', sortOrder: 40 },
-  { slug: 'projects', name: 'Proyectos', description: 'Gestión de proyectos', sortOrder: 50 },
+  { slug: 'projects', name: 'Proyectos', description: 'Historial de obras y servicios', sortOrder: 50 },
 ] as const;
 
 const PRODUCT_PERMISSIONS = [
@@ -38,6 +38,20 @@ const TASKS_PERMISSIONS = [
   { slug: 'tasks.create', name: 'Crear tareas' },
   { slug: 'tasks.update', name: 'Editar tareas' },
   { slug: 'tasks.delete', name: 'Eliminar tareas' },
+] as const;
+
+const BOOKING_PERMISSIONS = [
+  { slug: 'booking.view', name: 'Ver reservas' },
+  { slug: 'booking.create', name: 'Crear reservas' },
+  { slug: 'booking.update', name: 'Editar reservas' },
+  { slug: 'booking.delete', name: 'Eliminar reservas' },
+] as const;
+
+const PROJECTS_PERMISSIONS = [
+  { slug: 'projects.view', name: 'Ver proyectos' },
+  { slug: 'projects.create', name: 'Crear proyectos' },
+  { slug: 'projects.update', name: 'Editar proyectos' },
+  { slug: 'projects.delete', name: 'Eliminar proyectos' },
 ] as const;
 
 /** Operaciones diarias sin finanzas ni borrar ventas. */
@@ -168,6 +182,11 @@ async function main() {
       },
     });
 
+    await prisma.user.updateMany({
+      where: { email: 'gustavoarteaga0508@gmail.com' },
+      data: { isPlatformAdmin: true, active: true },
+    });
+
     const arandanoUser = await prisma.user.upsert({
       where: { email: arandanoEmail },
       create: {
@@ -281,6 +300,8 @@ async function main() {
       ...PURCHASES_PERMISSIONS,
       ...STAFF_PERMISSIONS,
       ...TASKS_PERMISSIONS,
+      ...PROJECTS_PERMISSIONS,
+      ...BOOKING_PERMISSIONS,
       ...FINANCE_PERMISSIONS,
     ]) {
       await prisma.permission.upsert({

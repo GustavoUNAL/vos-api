@@ -1,9 +1,19 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { GoogleLoginDto } from './dto/google-login.dto';
+import { CompleteGoogleSignupDto } from './dto/complete-google-signup.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import type { JwtPayload } from './jwt.types';
@@ -22,7 +32,7 @@ export class AuthController {
   })
   @Post('login')
   login(@Body() dto: LoginDto) {
-    return this.auth.login(dto.email, dto.password);
+    return this.auth.login(dto.email, dto.password, dto.companyId);
   }
 
   @Throttle({
@@ -38,6 +48,8 @@ export class AuthController {
       dto.email,
       dto.password,
       dto.companyName,
+      dto.acceptTerms,
+      dto.acceptPrivacy,
     );
   }
 
@@ -47,9 +59,73 @@ export class AuthController {
       limit: process.env.NODE_ENV === 'production' ? 20 : 60,
     },
   })
+  @Get('google')
+  startGoogle(
+    @Query('returnTo') returnTo: string | undefined,
+    @Query('companyId') companyId: string | undefined,
+    @Query('popup') popup: string | undefined,
+    @Res() res: Response,
+  ) {
+    res.redirect(
+      302,
+      this.auth.buildGoogleAuthorizeRedirect(
+        returnTo,
+        companyId,
+        popup === '1' || popup === 'true',
+      ),
+    );
+  }
+
+  @Throttle({
+    default: {
+      ttl: 60_000,
+      limit: process.env.NODE_ENV === 'production' ? 20 : 60,
+    },
+  })
+  @Get('google/callback')
+  async googleCallback(
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Query('error') error: string | undefined,
+    @Res() res: Response,
+  ) {
+    const url = await this.auth.handleGoogleOAuthCallback({
+      code,
+      state,
+      error,
+    });
+    res.redirect(302, url);
+  }
+
+  @Throttle({
+    default: {
+      ttl: 60_000,
+      limit: process.env.NODE_ENV === 'production' ? 20 : 60,
+    },
+  })
   @Post('google')
-  google(@Body() dto: GoogleLoginDto) {
-    return this.auth.googleLogin(dto.idToken, dto.companyName);
+  async google(@Body() dto: GoogleLoginDto) {
+    const result = await this.auth.googleLogin(dto.idToken, dto.companyName);
+    if (result.kind === 'signup') {
+      return {
+        needsSignup: true,
+        signupToken: result.signupToken,
+        email: result.email,
+        name: result.name,
+      };
+    }
+    return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @Throttle({
+    default: {
+      ttl: 60_000,
+      limit: process.env.NODE_ENV === 'production' ? 8 : 30,
+    },
+  })
+  @Post('google/complete')
+  completeGoogleSignup(@Body() dto: CompleteGoogleSignupDto) {
+    return this.auth.completeGoogleSignup(dto);
   }
 
   @Get('me')

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AssistantHistoryItem } from './business-assistant.service';
 
 const PRODUCT_CONTEXT = `
-VOS AI es un sistema operativo inteligente para negocios en Colombia.
+VOS IA es un sistema operativo inteligente para negocios en Colombia.
 - Centraliza ventas, inventario, compras, finanzas, personal y clientes.
 - Asistente IA 24/7: responde en lenguaje natural con datos reales del negocio.
 - Canales: app web, POS móvil y mensajería (WhatsApp/Telegram según activación).
@@ -11,7 +11,7 @@ VOS AI es un sistema operativo inteligente para negocios en Colombia.
 
 Fase actual: etapa de validación con usuarios reales (cafeterías, bares, restaurantes, tiendas).
 - Sin costo durante la validación; cupos limitados.
-- El visitante solicita acceso con "Quiero VOS AI en mi negocio" en la página.
+- El visitante solicita acceso con "Quiero VOS IA en mi negocio" en la página.
 - Si ya tiene credenciales, usa "Iniciar sesión" / "Ir a mi negocio".
 
 Para hablar con un asesor humano: el visitante debe pedirlo en este chat (ej. "hablar con un asesor"); entonces aparece el botón para continuar por WhatsApp. NUNCA des números de teléfono ni enlaces wa.me en el texto.
@@ -31,7 +31,7 @@ export class LandingAssistantService {
     if (!text) {
       return {
         answer:
-          'Preguntame qué es VOS AI, cómo empezar con tu negocio, para qué rubros sirve o qué incluye el acceso.',
+          'Preguntame qué es VOS IA, cómo empezar con tu negocio, para qué rubros sirve o qué incluye el acceso.',
       };
     }
 
@@ -97,7 +97,7 @@ export class LandingAssistantService {
 En un momento te aparece el botón **Continuar por WhatsApp** para seguir con un asesor.`;
     }
     if (/que es|vos ai|para que sirve/.test(n)) {
-      return `**VOS AI** centraliza tu operación y te responde con datos reales del negocio.
+      return `**VOS IA** centraliza tu operación y te responde con datos reales del negocio.
 
 • Ventas (POS + tienda web), inventario y compras
 • Finanzas, personal y clientes en un solo panel
@@ -109,7 +109,7 @@ Estamos en etapa de validación con usuarios reales. ¿Te cuento cómo empezar c
       return `Funciona en tres pasos simples:
 
 • **Registrás** ventas desde POS o tienda web
-• **VOS AI analiza** stock, márgenes y tendencias en tiempo real
+• **VOS IA analiza** stock, márgenes y tendencias en tiempo real
 • **Preguntás** lo que necesites: qué comprar, utilidad del mes, clientes inactivos…
 
 Todo queda en la nube, con acceso web y móvil. ¿Querés que profundice en POS o en el asistente?`;
@@ -135,14 +135,14 @@ Si me contás tu rubro, te digo qué módulos te convienen más.`;
     if (/demo|prueba|probar|empezar|comenzar|piloto|validar|inscrib|usar vos/.test(n)) {
       return `Podés empezar así:
 
-• **Quiero VOS AI en mi negocio** en la página — revisamos tu operación y activamos credenciales
+• **Quiero VOS IA en mi negocio** en la página — revisamos tu operación y activamos credenciales
 • **Hablar con un asesor** en este chat si preferís una conversación antes
 
 ¿Cuál te resulta más cómoda?`;
     }
     return `Puedo ayudarte con:
 
-• Qué es VOS AI y cómo funciona
+• Qué es VOS IA y cómo funciona
 • Cómo usar la plataforma con tu negocio
 • Industrias y casos de uso
 • Qué incluye el acceso en esta etapa
@@ -160,14 +160,14 @@ Si me contás tu rubro, te digo qué módulos te convienen más.`;
     const model =
       this.config.get<string>('OPENAI_CHAT_MODEL')?.trim() || 'gpt-4o';
 
-    const system = `Eres el asistente comercial de VOS AI en la landing web (visitante antes de registrarse). Tono profesional, cálido y claro — español colombiano (tuteo respetuoso: "tu", "podés").
+    const system = `Eres el asistente comercial de VOS IA en la landing web (visitante antes de registrarse). Tono profesional, cálido y claro — español colombiano (tuteo respetuoso: "tu", "podés").
 
 REGLAS ESTRICTAS:
-- Responde SOLO sobre VOS AI: beneficios, módulos, etapa de validación con usuarios reales, industrias y cómo solicitar acceso.
+- Responde SOLO sobre VOS IA: beneficios, módulos, etapa de validación con usuarios reales, industrias y cómo solicitar acceso.
 - NO menciones planes de precios ni suscripciones: estamos en etapa de validación con usuarios reales.
 - NO inventes clientes, testimonios ni métricas falsas.
 - NO des teléfonos, WhatsApp, emails ni enlaces wa.me en el texto.
-- Si piden asesor o demo humana → indica que escriban "hablar con un asesor" en este chat (aparecerá WhatsApp) o usen "Quiero VOS AI en mi negocio" en la página.
+- Si piden asesor o demo humana → indica que escriban "hablar con un asesor" en este chat (aparecerá WhatsApp) o usen "Quiero VOS IA en mi negocio" en la página.
 - No digas que eres GPT, OpenAI ni un modelo de lenguaje.
 - Máximo 12 líneas. Respuestas escaneables, nunca un bloque denso.
 

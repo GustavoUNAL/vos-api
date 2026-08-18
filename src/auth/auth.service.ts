@@ -8,19 +8,58 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { UsageService } from '../billing/usage.service';
 import { resolveCompanySystemSettings } from '../config/system-settings';
 import type { AuthUserResponse, CompanySummary, JwtPayload } from './jwt.types';
 import { slugifyCompanyLabel, uniqueShopSlug } from './company-slug';
+import { isPlatformAdminEmail } from './platform-admins';
+import {
+  googleAuthorizeUrl,
+  googleCallbackErrorCode,
+  googleConfig,
+  googleFrontRedirect,
+  googleOAuthConfigured,
+  googleTokenExchangeBody,
+  parseGoogleReturnTo,
+  pickActiveMembership,
+  sanitizeCompanyIdHint,
+  type GoogleOAuthState,
+  type GoogleSignupTicket,
+} from './google-oauth';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly usage: UsageService,
   ) {}
 
   private companySlugFromName(name: string, shopSlug: string | null): string {
     return shopSlug?.trim() || slugifyCompanyLabel(name);
+  }
+
+  private async ensurePlatformAdminFlag(user: {
+    id: string;
+    email: string;
+    isPlatformAdmin?: boolean;
+  }): Promise<boolean> {
+    if (user.isPlatformAdmin) return true;
+    if (!isPlatformAdminEmail(user.email)) return false;
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { isPlatformAdmin: true },
+    });
+    return true;
+  }
+
+  private touchLastLogin(userId: string) {
+    void this.prisma.user
+      .update({
+        where: { id: userId },
+        data: { lastLoginAt: new Date() },
+      })
+      .catch(() => undefined);
   }
 
   private withSystemSettings(user: AuthUserResponse): AuthUserResponse {
@@ -34,6 +73,16 @@ export class AuthService {
         user.companySlug,
       ),
     };
+  }
+
+  private async withUsage(user: AuthUserResponse): Promise<AuthUserResponse> {
+    if (!user.companyId?.trim() || user.platformView) return user;
+    try {
+      const usage = await this.usage.getUsage(user.companyId);
+      return usage ? { ...user, usage } : user;
+    } catch {
+      return user;
+    }
   }
 
   private async loadAllPermissions(): Promise<string[]> {
@@ -157,7 +206,7 @@ export class AuthService {
     };
   }
 
-  private issueSession(
+  private async issueSession(
     user: { id: string; email: string; name: string; isPlatformAdmin?: boolean },
     membership: Awaited<ReturnType<typeof this.loadMemberships>>[0],
     allMemberships: Awaited<ReturnType<typeof this.loadMemberships>>,
@@ -169,7 +218,9 @@ export class AuthService {
       .map((m) => this.membershipToSummary(m));
     return {
       accessToken,
-      user: this.withSystemSettings({ ...payload, companies }),
+      user: await this.withUsage(
+        this.withSystemSettings({ ...payload, companies }),
+      ),
     };
   }
 
@@ -212,7 +263,9 @@ export class AuthService {
       .map((m) => this.membershipToSummary(m));
     return {
       accessToken,
-      user: this.withSystemSettings({ ...payload, companies }),
+      user: await this.withUsage(
+        this.withSystemSettings({ ...payload, companies }),
+      ),
     };
   }
 
@@ -221,10 +274,14 @@ export class AuthService {
       where: { id: userId },
       select: { id: true, email: true, name: true, active: true, isPlatformAdmin: true },
     });
-    if (!user?.active || !user.isPlatformAdmin) {
+    if (!user?.active) {
       throw new ForbiddenException('Acceso reservado al administrador de plataforma');
     }
-    return user;
+    const isAdmin = await this.ensurePlatformAdminFlag(user);
+    if (!isAdmin) {
+      throw new ForbiddenException('Acceso reservado al administrador de plataforma');
+    }
+    return { ...user, isPlatformAdmin: true };
   }
 
   private async provisionNewCompany(companyName: string, userId: string) {
@@ -245,6 +302,7 @@ export class AuthService {
     }
 
     for (const mod of modules) {
+      if (mod.slug === 'dental') continue;
       await this.prisma.companyModule.create({
         data: {
           companyId: company.id,
@@ -313,7 +371,11 @@ export class AuthService {
     };
   }
 
-  async login(emailRaw: string, password: string) {
+  async login(
+    emailRaw: string,
+    password: string,
+    preferredCompanyId?: string,
+  ) {
     const email = (emailRaw ?? '').trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -335,19 +397,11 @@ export class AuthService {
     }
 
     const memberships = await this.loadMemberships(user.id);
-    const activeMemberships = memberships.filter(
-      (m) => m.company.status === 'ACTIVE',
+    return this.issueExistingUserSession(
+      user,
+      memberships,
+      preferredCompanyId,
     );
-
-    if (user.isPlatformAdmin) {
-      return this.issuePlatformSession(user, memberships);
-    }
-
-    if (!activeMemberships.length) {
-      throw new UnauthorizedException('Usuario sin empresas activas');
-    }
-
-    return this.issueSession(user, activeMemberships[0], memberships);
   }
 
   async register(
@@ -355,13 +409,21 @@ export class AuthService {
     emailRaw: string,
     password: string,
     companyName: string,
+    acceptTerms: boolean,
+    acceptPrivacy: boolean,
   ) {
+    if (!acceptTerms || !acceptPrivacy) {
+      throw new BadRequestException(
+        'Para crear la cuenta tenés que aceptar los términos y el tratamiento de datos.',
+      );
+    }
     const email = emailRaw.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('Ya existe una cuenta con ese email');
     }
 
+    const now = new Date();
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await this.prisma.user.create({
       data: {
@@ -369,6 +431,8 @@ export class AuthService {
         passwordHash,
         name: name.trim(),
         active: true,
+        termsAcceptedAt: now,
+        privacyAcceptedAt: now,
       },
     });
 
@@ -382,9 +446,14 @@ export class AuthService {
     return this.issueSession(user, primary, memberships);
   }
 
-  async googleLogin(idToken: string, companyName?: string) {
+  async googleLogin(
+    idToken: string,
+    companyName?: string,
+    preferredCompanyId?: string,
+    opts?: { allowSignup?: boolean },
+  ) {
     const profile = await this.verifyGoogleIdToken(idToken);
-    let user = await this.prisma.user.findUnique({
+    const existing = await this.prisma.user.findUnique({
       where: { email: profile.email },
       select: {
         id: true,
@@ -395,66 +464,312 @@ export class AuthService {
       },
     });
 
-    if (!user) {
-      if (!companyName?.trim()) {
-        throw new BadRequestException(
-          'Indicá el nombre de tu empresa para registrarte con Google',
-        );
+    if (existing) {
+      if (!existing.active) {
+        throw new UnauthorizedException({
+          code: 'GOOGLE_INACTIVE',
+          message: 'Usuario inactivo',
+        });
       }
-      const passwordHash = await bcrypt.hash(
-        `google-oauth-${profile.email}-${Date.now()}`,
-        10,
+      const memberships = await this.loadMemberships(existing.id);
+      const session = await this.issueExistingUserSession(
+        existing,
+        memberships,
+        preferredCompanyId,
+        { google: true },
       );
-      user = await this.prisma.user.create({
-        data: {
-          email: profile.email,
-          passwordHash,
-          name: profile.name,
-          active: true,
-        },
+      return { kind: 'session' as const, ...session };
+    }
+
+    if (opts?.allowSignup === false) {
+      throw new BadRequestException({
+        code: 'GOOGLE_NO_ACCOUNT',
+        message: 'No hay una cuenta VOS IA con este email. Solicitá acceso.',
       });
-      await this.provisionNewCompany(companyName.trim(), user.id);
     }
 
-    if (!user.active) {
-      throw new UnauthorizedException('Usuario inactivo');
-    }
-
-    const memberships = await this.loadMemberships(user.id);
-    if (user.isPlatformAdmin) {
-      return this.issuePlatformSession(user, memberships);
-    }
-
-    const activeMemberships = memberships.filter(
-      (m) => m.company.status === 'ACTIVE',
+    const signupToken = this.jwt.sign(
+      {
+        t: 'gs',
+        email: profile.email,
+        name: profile.name,
+      } satisfies GoogleSignupTicket,
+      { expiresIn: '20m' },
     );
-    if (!activeMemberships.length) {
+    return {
+      kind: 'signup' as const,
+      signupToken,
+      email: profile.email,
+      name: profile.name,
+    };
+  }
+
+  async completeGoogleSignup(input: {
+    signupToken: string;
+    companyName: string;
+    acceptTerms: boolean;
+    acceptPrivacy: boolean;
+  }) {
+    if (!input.acceptTerms || !input.acceptPrivacy) {
+      throw new BadRequestException(
+        'Para crear la cuenta tenés que aceptar los términos y el tratamiento de datos.',
+      );
+    }
+    let ticket: GoogleSignupTicket;
+    try {
+      ticket = this.jwt.verify<GoogleSignupTicket>(input.signupToken);
+    } catch {
+      throw new UnauthorizedException(
+        'La sesión con Google expiró. Volvé a entrar con Google.',
+      );
+    }
+    if (ticket.t !== 'gs' || !ticket.email?.trim() || !ticket.name?.trim()) {
+      throw new UnauthorizedException('El registro con Google no es válido.');
+    }
+
+    const email = ticket.email.trim().toLowerCase();
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        active: true,
+        isPlatformAdmin: true,
+      },
+    });
+    if (existing) {
+      if (!existing.active) {
+        throw new UnauthorizedException({
+          code: 'GOOGLE_INACTIVE',
+          message: 'Usuario inactivo',
+        });
+      }
+      const memberships = await this.loadMemberships(existing.id);
+      return this.issueExistingUserSession(existing, memberships, undefined, {
+        google: true,
+      });
+    }
+
+    const now = new Date();
+    const passwordHash = await bcrypt.hash(
+      `google-oauth-${email}-${Date.now()}`,
+      10,
+    );
+    const created = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        name: ticket.name.trim(),
+        active: true,
+        termsAcceptedAt: now,
+        privacyAcceptedAt: now,
+      },
+    });
+    await this.provisionNewCompany(input.companyName.trim(), created.id);
+    const memberships = await this.loadMemberships(created.id);
+    return this.issueExistingUserSession(created, memberships, undefined, {
+      google: true,
+    });
+  }
+
+  /**
+   * Reabre la sesión de una cuenta ya existente.
+   * No actualiza nombre, password, membresías ni datos operativos.
+   */
+  private async issueExistingUserSession(
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      isPlatformAdmin?: boolean;
+    },
+    memberships: Awaited<ReturnType<typeof this.loadMemberships>>,
+    preferredCompanyId?: string,
+    opts?: { google?: boolean },
+  ) {
+    this.touchLastLogin(user.id);
+    const isPlatformAdmin = await this.ensurePlatformAdminFlag(user);
+    const sessionUser = { ...user, isPlatformAdmin };
+
+    if (isPlatformAdmin) {
+      const preferred = sanitizeCompanyIdHint(preferredCompanyId);
+      if (preferred) {
+        const company = await this.prisma.company.findFirst({
+          where: { id: preferred, status: 'ACTIVE' },
+          select: { id: true },
+        });
+        if (company) {
+          return this.issuePlatformCompanySession(
+            sessionUser,
+            company.id,
+            memberships,
+          );
+        }
+      }
+      return this.issuePlatformSession(sessionUser, memberships);
+    }
+
+    const picked = pickActiveMembership(memberships, preferredCompanyId);
+    if (!picked) {
+      if (opts?.google) {
+        throw new UnauthorizedException({
+          code: 'GOOGLE_NO_COMPANY',
+          message: 'Usuario sin empresas activas',
+        });
+      }
       throw new UnauthorizedException('Usuario sin empresas activas');
     }
+    return this.issueSession(sessionUser, picked, memberships);
+  }
 
-    return this.issueSession(user, activeMemberships[0], memberships);
+  buildGoogleAuthorizeRedirect(
+    returnToRaw?: string,
+    companyIdRaw?: string,
+    popup = false,
+  ): string {
+    const cfg = googleConfig();
+    const returnTo = parseGoogleReturnTo(returnToRaw);
+    if (!googleOAuthConfigured(cfg)) {
+      return googleFrontRedirect({
+        frontUrl: cfg.frontUrl,
+        returnTo,
+        error: 'not_configured',
+        popup,
+      });
+    }
+    const companyId = sanitizeCompanyIdHint(companyIdRaw);
+    const state = this.jwt.sign(
+      {
+        t: 'g',
+        r: returnTo,
+        ...(companyId ? { c: companyId } : {}),
+        ...(popup ? { p: 1 as const } : {}),
+      } satisfies GoogleOAuthState,
+      { expiresIn: '10m' },
+    );
+    return googleAuthorizeUrl({
+      clientId: cfg.clientId,
+      redirectUri: cfg.redirectUri,
+      state,
+      popup,
+    });
+  }
+
+  async handleGoogleOAuthCallback(query: {
+    code?: string;
+    state?: string;
+    error?: string;
+  }): Promise<string> {
+    const cfg = googleConfig();
+    let returnTo = parseGoogleReturnTo(undefined);
+    let preferredCompanyId: string | undefined;
+    let popup = false;
+    const redirect = (
+      extra: { token?: string; signup?: string; error?: string } = {},
+    ) =>
+      googleFrontRedirect({
+        frontUrl: cfg.frontUrl,
+        returnTo,
+        popup,
+        ...extra,
+      });
+    if (!query.state?.trim()) {
+      return redirect({ error: 'invalid_state' });
+    }
+    try {
+      const payload = this.jwt.verify<GoogleOAuthState>(query.state);
+      if (payload.t === 'g') {
+        returnTo = parseGoogleReturnTo(payload.r);
+        preferredCompanyId = sanitizeCompanyIdHint(payload.c);
+        popup = payload.p === 1;
+      } else {
+        return redirect({ error: 'invalid_state' });
+      }
+    } catch {
+      return redirect({ error: 'invalid_state' });
+    }
+    if (query.error) {
+      const error =
+        query.error === 'access_denied' ? 'access_denied' : 'oauth_failed';
+      return redirect({ error });
+    }
+    if (!query.code?.trim()) {
+      return redirect({ error: 'oauth_failed' });
+    }
+    if (!googleOAuthConfigured(cfg)) {
+      return redirect({ error: 'not_configured' });
+    }
+    try {
+      const idToken = await this.exchangeGoogleAuthCode(query.code.trim(), cfg);
+      const result = await this.googleLogin(
+        idToken,
+        undefined,
+        preferredCompanyId,
+        { allowSignup: returnTo === 'login' },
+      );
+      if (result.kind === 'signup') {
+        return redirect({ signup: result.signupToken });
+      }
+      return redirect({ token: result.accessToken });
+    } catch (err) {
+      return redirect({ error: googleCallbackErrorCode(err) });
+    }
+  }
+
+  private async exchangeGoogleAuthCode(
+    code: string,
+    cfg: ReturnType<typeof googleConfig>,
+  ): Promise<string> {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: googleTokenExchangeBody({
+        code,
+        clientId: cfg.clientId,
+        clientSecret: cfg.clientSecret,
+        redirectUri: cfg.redirectUri,
+      }),
+    });
+    if (!res.ok) {
+      throw new UnauthorizedException('No se pudo canjear el código de Google');
+    }
+    const data = (await res.json()) as { id_token?: string };
+    if (!data.id_token?.trim()) {
+      throw new UnauthorizedException('Google no devolvió un id_token');
+    }
+    return data.id_token.trim();
   }
 
   async me(jwt: JwtPayload): Promise<AuthUserResponse> {
     const dbUser = await this.prisma.user.findUnique({
       where: { id: jwt.sub },
-      select: { isPlatformAdmin: true },
+      select: { id: true, email: true, isPlatformAdmin: true },
     });
+    const isPlatformAdmin = dbUser
+      ? await this.ensurePlatformAdminFlag({
+          id: dbUser.id,
+          email: dbUser.email,
+          isPlatformAdmin: dbUser.isPlatformAdmin,
+        })
+      : Boolean(jwt.isPlatformAdmin);
 
     const memberships = await this.loadMemberships(jwt.sub);
     const companies = memberships
       .filter((m) => m.company.status === 'ACTIVE')
       .map((m) => this.membershipToSummary(m));
 
-    if (dbUser?.isPlatformAdmin && jwt.platformView) {
-      return this.withSystemSettings({
-        ...this.buildPlatformPayload({
-          id: jwt.sub,
-          email: jwt.email,
-          name: jwt.name,
+    if (isPlatformAdmin && jwt.platformView) {
+      return this.withUsage(
+        this.withSystemSettings({
+          ...this.buildPlatformPayload({
+            id: jwt.sub,
+            email: jwt.email,
+            name: jwt.name,
+          }),
+          companies,
         }),
-        companies,
-      });
+      );
     }
 
     const current =
@@ -466,35 +781,39 @@ export class AuthService {
           id: jwt.sub,
           email: jwt.email,
           name: jwt.name,
-          isPlatformAdmin: dbUser?.isPlatformAdmin ?? false,
+          isPlatformAdmin,
         },
         current,
       );
-      if (dbUser?.isPlatformAdmin && !jwt.platformView) {
-        return this.withSystemSettings({
-          ...payload,
-          isPlatformAdmin: true,
-          platformView: false,
-          role: 'platform-admin',
-          permissions: await this.loadAllPermissions(),
-          companies,
-        });
+      if (isPlatformAdmin && !jwt.platformView) {
+        return this.withUsage(
+          this.withSystemSettings({
+            ...payload,
+            isPlatformAdmin: true,
+            platformView: false,
+            role: 'platform-admin',
+            permissions: await this.loadAllPermissions(),
+            companies,
+          }),
+        );
       }
-      return this.withSystemSettings({ ...payload, companies });
+      return this.withUsage(this.withSystemSettings({ ...payload, companies }));
     }
 
-    if (dbUser?.isPlatformAdmin) {
-      return this.withSystemSettings({
-        ...this.buildPlatformPayload({
-          id: jwt.sub,
-          email: jwt.email,
-          name: jwt.name,
+    if (isPlatformAdmin) {
+      return this.withUsage(
+        this.withSystemSettings({
+          ...this.buildPlatformPayload({
+            id: jwt.sub,
+            email: jwt.email,
+            name: jwt.name,
+          }),
+          companies,
         }),
-        companies,
-      });
+      );
     }
 
-    return this.withSystemSettings({ ...jwt, companies });
+    return this.withUsage(this.withSystemSettings({ ...jwt, companies }));
   }
 
   async switchCompany(userId: string, companyId: string) {
@@ -512,8 +831,9 @@ export class AuthService {
       throw new UnauthorizedException('Usuario inactivo');
     }
 
+    const isAdmin = await this.ensurePlatformAdminFlag(user);
     // Platform admin usa /auth/platform/enter-company, no este endpoint.
-    if (user.isPlatformAdmin) {
+    if (isAdmin) {
       throw new ForbiddenException(
         'Usá el panel de plataforma para entrar a una empresa',
       );

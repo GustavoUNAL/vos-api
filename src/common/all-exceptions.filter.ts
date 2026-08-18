@@ -166,6 +166,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
         if ('hint' in body && (body as { hint?: unknown }).hint != null) {
           hint = String((body as { hint: unknown }).hint);
         }
+        if ('code' in body && typeof (body as { code?: unknown }).code === 'string') {
+          code = (body as { code: string }).code;
+        }
+        if ('usage' in body && (body as { usage?: unknown }).usage != null) {
+          meta.usage = (body as { usage: unknown }).usage;
+        }
       }
       if (status === HttpStatus.TOO_MANY_REQUESTS) {
         message =
@@ -238,6 +244,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     };
     if (code) payload.code = code;
     if (hint) payload.hint = hint;
+    if (meta.usage) payload.usage = meta.usage;
     if (!isProd && exception instanceof Error && !(exception instanceof HttpException)) {
       payload.error = exception.name;
     }

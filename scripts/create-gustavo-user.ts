@@ -11,6 +11,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { pgPoolConfig } from '../src/common/pg-pool-config';
+import { isPlatformAdminEmail } from '../src/auth/platform-admins';
 
 const ARANDANO_ID = 'seed-arandano-cafe-bar';
 const ELECTRICISTA_ID = 'seed-el-electricista';
@@ -165,6 +166,7 @@ async function main() {
       password: string;
       name: string;
     }) {
+      const isAdmin = isPlatformAdminEmail(opts.email);
       const hash = await bcrypt.hash(opts.password, 10);
       const user = await prisma.user.upsert({
         where: { email: opts.email },
@@ -173,13 +175,13 @@ async function main() {
           passwordHash: hash,
           name: opts.name,
           active: true,
-          isPlatformAdmin: false,
+          isPlatformAdmin: isAdmin,
         },
         update: {
           passwordHash: hash,
           name: opts.name,
           active: true,
-          isPlatformAdmin: false,
+          isPlatformAdmin: isAdmin,
         },
       });
       const memberships = await Promise.all(

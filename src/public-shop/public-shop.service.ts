@@ -11,6 +11,7 @@ import {
   ShopPaymentMethod,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { UsageService } from '../billing/usage.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { ShopOrdersRealtimeService } from '../platform-shop-orders/shop-orders-realtime.service';
 import { ShopCheckoutDto } from './dto/shop-checkout.dto';
@@ -30,6 +31,7 @@ export class PublicShopService {
     private readonly telegram: TelegramService,
     private readonly config: ConfigService,
     private readonly shopRealtime: ShopOrdersRealtimeService,
+    private readonly usage: UsageService,
   ) {}
 
   private async resolveCompany(slug: string) {
@@ -110,6 +112,7 @@ export class PublicShopService {
 
   async checkout(slug: string, dto: ShopCheckoutDto) {
     const company = await this.resolveCompany(slug);
+    await this.usage.assertWithinQuota(company.id);
     const phone = this.normalizePhone(dto.customerPhone);
     const paymentMethod = dto.paymentMethod ?? ShopPaymentMethod.NEQUI;
 

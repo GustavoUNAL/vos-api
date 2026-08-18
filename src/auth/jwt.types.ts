@@ -23,7 +23,23 @@ export type SystemSettings = {
   inaugurationDate: string | null;
 };
 
+export type CompanyUsageSummary = {
+  plan: 'TRIAL' | 'PRO' | 'BUSINESS';
+  storageUsedBytes: number;
+  storageLimitBytes: number;
+  percent: number;
+  products: number;
+  sales: number;
+  purchases: number;
+  inventory: number;
+  appointments: number;
+  overLimit: boolean;
+  offerPro: boolean;
+  limitLabel: string | null;
+};
+
 export type AuthUserResponse = JwtPayload & {
   companies: CompanySummary[];
   systemSettings?: SystemSettings;
+  usage?: CompanyUsageSummary | null;
 };

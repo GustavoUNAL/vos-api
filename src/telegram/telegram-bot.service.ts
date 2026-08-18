@@ -96,7 +96,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       await this.telegram.sendMessage(
         chatId,
         [
-          `¡Hola${name}! Soy el asistente de VOS AI.`,
+          `¡Hola${name}! Soy el asistente de VOS IA.`,
           '',
           'Preguntame cosas como:',
           '• ¿Cómo va el negocio hoy?',
