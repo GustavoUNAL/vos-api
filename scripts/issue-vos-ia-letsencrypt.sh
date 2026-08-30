@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Emite el certificado Let's Encrypt de vos-ia.com y lo pone en Nginx.
-# No usa `certbot --nginx` (eso pegaba el dominio al café).
-# No toca arandano-app, :3000, .env ni la base.
-#
-#   bash ~/projects/vos-ai/vos-api/scripts/issue-vos-ia-letsencrypt.sh
+# Emite Let's Encrypt para vos-ia.com y lo carga en Nginx.
+# No usa certbot --nginx (mezcla el vhost del café).
 set -euo pipefail
 
 DOMAIN="vos-ia.com"
@@ -12,66 +9,82 @@ WEBROOT="/var/www/certbot"
 NGINX_SITE="/etc/nginx/sites-available/${DOMAIN}"
 LE_CERT="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
 LE_KEY="/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
-TMP_CERT="/etc/nginx/ssl/${DOMAIN}.crt"
-TMP_KEY="/etc/nginx/ssl/${DOMAIN}.key"
+LE_LOG="/tmp/vos-ia-certbot.log"
 
 log() { echo "==> $*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }
 
-[[ -f "$NGINX_SITE" ]] || die "No está $NGINX_SITE. Primero: bash scripts/fix-vos-ia-https.sh"
+[[ -f "$NGINX_SITE" ]] || die "No está $NGINX_SITE"
 
-log "Comprobar desafío HTTP (Let's Encrypt lo usa)"
+log "Webroot ACME"
 sudo mkdir -p "${WEBROOT}/.well-known/acme-challenge"
 echo ping | sudo tee "${WEBROOT}/.well-known/acme-challenge/ping" >/dev/null
+sudo chmod -R a+rX "$WEBROOT"
 acme="$(curl -fsS --max-time 8 "http://${DOMAIN}/.well-known/acme-challenge/ping" || true)"
-[[ "$acme" == *ping* ]] || die "http://${DOMAIN}/.well-known/acme-challenge/ping no responde. Nginx ACME no está listo."
+[[ "$acme" == *ping* ]] || die "ACME HTTP de ${DOMAIN} no responde ping"
 
 if ! command -v certbot >/dev/null 2>&1; then
-  log "Instalar certbot (sin plugin nginx)"
+  log "Instalar certbot"
   sudo apt-get update -y
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y certbot
 fi
+certbot --version
 
-log "Emitir certificado propio de ${DOMAIN} (webroot)"
-sudo certbot certonly --webroot -w "$WEBROOT" \
-  -d "$DOMAIN" -d "$WWW" \
-  --cert-name "$DOMAIN" \
-  --non-interactive --agree-tos --register-unsafely-without-email \
-  --keep-until-expiring --expand \
-  --deploy-hook "systemctl reload nginx"
+run_certbot() {
+  sudo certbot certonly --webroot -w "$WEBROOT" \
+    --cert-name "$DOMAIN" \
+    --non-interactive --agree-tos --register-unsafely-without-email \
+    --expand \
+    --deploy-hook "systemctl reload nginx" \
+    "$@"
+}
 
-[[ -f "$LE_CERT" && -f "$LE_KEY" ]] || die "No se creó $LE_CERT"
+log "Pedir certificado a Let's Encrypt"
+set +e
+run_certbot -d "$DOMAIN" -d "$WWW" 2>&1 | tee "$LE_LOG"
+ok=${PIPESTATUS[0]}
+set -e
 
-SAN="$(sudo openssl x509 -in "$LE_CERT" -noout -ext subjectAltName 2>/dev/null || true)"
-echo "$SAN"
-echo "$SAN" | grep -q "$DOMAIN" || die "El certificado no incluye ${DOMAIN}"
-if echo "$SAN" | grep -q arandanocafe; then
-  die "Ese certificado es el del café. Abortando."
+if [[ "$ok" -ne 0 || ! -f "$LE_CERT" ]]; then
+  log "Falló apex+www; reintento solo ${DOMAIN}"
+  set +e
+  run_certbot -d "$DOMAIN" 2>&1 | tee -a "$LE_LOG"
+  ok=${PIPESTATUS[0]}
+  set -e
 fi
 
-log "Apuntar Nginx al cert de Let's Encrypt (sin reescribir el vhost)"
+if [[ "$ok" -ne 0 || ! -f "$LE_CERT" ]]; then
+  echo "----- certbot log -----"
+  cat "$LE_LOG" || true
+  die "Certbot no emitió $LE_CERT. Pegá el log de arriba."
+fi
+
+issuer="$(sudo openssl x509 -in "$LE_CERT" -noout -issuer)"
+echo "$issuer"
+echo "$issuer" | grep -qi "Let's Encrypt" || die "El archivo emitido no es de Let's Encrypt: $issuer"
+
+log "Poner el cert en Nginx"
 sudo cp -a "$NGINX_SITE" "${NGINX_SITE}.bak-le-$(date +%Y%m%d-%H%M%S)"
 sudo sed -i \
-  -e "s|${TMP_CERT}|${LE_CERT}|g" \
-  -e "s|${TMP_KEY}|${LE_KEY}|g" \
   -e "s|/etc/nginx/ssl/${DOMAIN}.crt|${LE_CERT}|g" \
   -e "s|/etc/nginx/ssl/${DOMAIN}.key|${LE_KEY}|g" \
+  -e "s|/etc/letsencrypt/live/${DOMAIN}/fullchain.pem|${LE_CERT}|g" \
+  -e "s|/etc/letsencrypt/live/${DOMAIN}/privkey.pem|${LE_KEY}|g" \
   "$NGINX_SITE"
 
 if ! sudo grep -q "$LE_CERT" "$NGINX_SITE"; then
-  die "Nginx no quedó con $LE_CERT. Revisá $NGINX_SITE"
+  sudo sed -i "s|ssl_certificate .*|ssl_certificate     ${LE_CERT};|" "$NGINX_SITE"
+  sudo sed -i "s|ssl_certificate_key .*|ssl_certificate_key ${LE_KEY};|" "$NGINX_SITE"
 fi
+sudo grep -n ssl_certificate "$NGINX_SITE"
 
 sudo nginx -t
 sudo systemctl reload nginx
 
 echo ""
-echo "Certificado:"
-sudo openssl x509 -in "$LE_CERT" -noout -issuer -subject -dates
-echo ""
-echo "Público:"
+echo "En disco:  $issuer"
+echo "En 443:"
 echo | openssl s_client -servername "$DOMAIN" -connect "${DOMAIN}:443" 2>/dev/null \
-  | openssl x509 -noout -issuer -subject || true
+  | openssl x509 -noout -issuer -subject
 echo ""
-echo "Listo. Recargá https://${DOMAIN}/ — el emisor tiene que ser Let's Encrypt, no CN=${DOMAIN}."
-echo "Renovación: certbot.timer (ya recarga Nginx con --deploy-hook)."
+echo "Si el emisor es Let's Encrypt, recargá https://${DOMAIN}/ (el aviso ERR_CERT_AUTHORITY_INVALID desaparece)."
