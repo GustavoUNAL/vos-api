@@ -1,26 +1,24 @@
 #!/usr/bin/env bash
-# Repara HTTPS de vos-ia.com SIN tocar arandano-app, .env ni la base.
+# Deja https://vos-ia.com en VOS IA (:5174), no en Arándano Café (:3000).
+# No toca arandano-app, .env ni la base.
 #
-# Por qué fallaba: `certbot --nginx` agrega vos-ia.com al vhost SSL por defecto
-# (arandanocafe.com → Next.js :3000). El navegador pide https://vos-ia.com y
-# Nginx lo manda al café.
-#
-# Este script:
-#   1) saca vos-ia.com de los otros vhosts
-#   2) deja HTTP sirviendo VOS IA (:5174) para el desafío ACME
-#   3) emite/renueva el cert con webroot (no modifica Nginx del café)
-#   4) instala el vhost HTTPS propio
+# Estado real del VPS: HTTP ya es VOS IA; HTTPS usa el vhost/cert del café
+# porque no hay server 443 para vos-ia.com. Este script INSTALA ese 443
+# ya, con cert temporal si Let's Encrypt aún no emitió.
 set -euo pipefail
 
 DOMAIN="vos-ia.com"
 WWW="www.vos-ia.com"
 API_DIR="${API_DIR:-$HOME/projects/vos-ai/vos-api}"
 NGINX_SITE="/etc/nginx/sites-available/${DOMAIN}"
-SSL_EXAMPLE="$API_DIR/deploy/nginx-vos-ia.ssl.conf.example"
 HTTP_EXAMPLE="$API_DIR/deploy/nginx-vos-ia.conf.example"
+SSL_443_EXAMPLE="$API_DIR/deploy/nginx-vos-ia.443.conf.example"
 DETACH_PY="$API_DIR/scripts/nginx-detach-vos-ia-names.py"
 WEBROOT="/var/www/certbot"
-CERT_LIVE="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+LE_CERT="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+LE_KEY="/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
+TMP_CERT="/etc/nginx/ssl/${DOMAIN}.crt"
+TMP_KEY="/etc/nginx/ssl/${DOMAIN}.key"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
 log() { echo "==> $*"; }
@@ -30,15 +28,20 @@ title_of() {
   curl -ksS --max-time 15 "$@" | grep -oE '<title>[^<]+</title>' | head -1 || true
 }
 
+looks_like_cafe() {
+  echo "$1" | grep -Eiq 'arándano|arandano café|café bar|Arándano Café'
+}
+
 nginx_test_reload() {
-  local err
+  local err ok
   set +e
   err="$(sudo nginx -t 2>&1)"
-  local ok=$?
+  ok=$?
   set -e
   if [[ "$ok" -ne 0 ]]; then
-    if echo "$err" | grep -qi http2 && sudo grep -q 'ssl http2' "$NGINX_SITE"; then
-      log "Nginx no acepta listen http2; se deja solo ssl"
+    if echo "$err" | grep -qi http2; then
+      log "Ajuste http2 para Nginx 1.26"
+      sudo sed -i '/http2 on;/d' "$NGINX_SITE"
       sudo sed -i 's/ ssl http2;/ ssl;/g' "$NGINX_SITE"
       sudo nginx -t
     else
@@ -49,102 +52,142 @@ nginx_test_reload() {
   sudo systemctl reload nginx
 }
 
+write_site() {
+  local cert="$1" key="$2"
+  [[ -f "$HTTP_EXAMPLE" && -f "$SSL_443_EXAMPLE" ]] || die "Faltan templates Nginx — git pull"
+  [[ -f "$cert" && -f "$key" ]] || die "No está el certificado $cert"
+  {
+    cat "$HTTP_EXAMPLE"
+    echo
+    sed \
+      -e "s|__SSL_CERTIFICATE__|${cert}|g" \
+      -e "s|__SSL_CERTIFICATE_KEY__|${key}|g" \
+      "$SSL_443_EXAMPLE"
+  } | sudo tee "$NGINX_SITE" >/dev/null
+  sudo ln -sf "$NGINX_SITE" "/etc/nginx/sites-enabled/${DOMAIN}"
+}
+
+ensure_self_signed() {
+  sudo mkdir -p /etc/nginx/ssl
+  if [[ -f "$TMP_CERT" && -f "$TMP_KEY" ]]; then
+    return 0
+  fi
+  log "Certificado temporal de ${DOMAIN} (hasta Let's Encrypt)"
+  if ! sudo openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
+    -keyout "$TMP_KEY" -out "$TMP_CERT" \
+    -subj "/CN=${DOMAIN}" \
+    -addext "subjectAltName=DNS:${DOMAIN},DNS:${WWW}"
+  then
+    sudo openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
+      -keyout "$TMP_KEY" -out "$TMP_CERT" \
+      -subj "/CN=${DOMAIN}"
+  fi
+}
+
 [[ -f "$HTTP_EXAMPLE" ]] || die "Falta $HTTP_EXAMPLE — git pull en vos-api"
-[[ -f "$SSL_EXAMPLE" ]] || die "Falta $SSL_EXAMPLE — git pull en vos-api"
+[[ -f "$SSL_443_EXAMPLE" ]] || die "Falta $SSL_443_EXAMPLE — git pull en vos-api"
 [[ -f "$DETACH_PY" ]] || die "Falta $DETACH_PY — git pull en vos-api"
 
-log "Comprobar que VOS IA está arriba en este VPS (no el café)"
+log "Comprobar VOS IA en este VPS"
 curl -fsS --max-time 5 "http://127.0.0.1:3001/health" >/dev/null || die "vos-api no responde en :3001"
 curl -fsS --max-time 5 -o /dev/null "http://127.0.0.1:5174/" || die "vos-front no responde en :5174"
+local_front="$(title_of http://127.0.0.1:5174/)"
+log "Front :5174 ${local_front:-<sin title>}"
+if looks_like_cafe "$local_front"; then
+  die "El proceso :5174 no es VOS IA. No se toca Nginx."
+fi
 
-log "Backup de Nginx"
-sudo mkdir -p /etc/nginx/sites-available /var/backups/nginx-vos-ia
+log "Backup Nginx"
+sudo mkdir -p /var/backups/nginx-vos-ia
 sudo tar -czf "/var/backups/nginx-vos-ia/sites-${STAMP}.tgz" \
   /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
 if [[ -f "$NGINX_SITE" ]]; then
   sudo cp -a "$NGINX_SITE" "${NGINX_SITE}.bak-${STAMP}"
 fi
 
-log "Sacar ${DOMAIN} de vhosts ajenos (arandanocafe y lo que Certbot haya mezclado)"
+log "Sacar ${DOMAIN} de vhosts ajenos"
 sudo python3 "$DETACH_PY"
 sudo rm -f "/etc/nginx/sites-enabled/vos-ai.arandano.shop"
 
-log "Webroot ACME + vhost HTTP de VOS IA (sin redirect al café)"
-sudo mkdir -p "$WEBROOT"
-sudo chown -R www-data:www-data "$WEBROOT" 2>/dev/null || sudo chmod 755 "$WEBROOT"
-echo ok | sudo tee "${WEBROOT}/health.txt" >/dev/null
-sudo cp "$HTTP_EXAMPLE" "$NGINX_SITE"
-sudo ln -sf "$NGINX_SITE" "/etc/nginx/sites-enabled/${DOMAIN}"
-nginx_test_reload
+log "Webroot ACME"
+sudo mkdir -p "${WEBROOT}/.well-known/acme-challenge"
+echo ping | sudo tee "${WEBROOT}/.well-known/acme-challenge/ping" >/dev/null
+sudo chown -R www-data:www-data "$WEBROOT" 2>/dev/null || sudo chmod -R a+rX "$WEBROOT"
 
-HTTP_TITLE="$(title_of --resolve "${DOMAIN}:80:127.0.0.1" "http://${DOMAIN}/")"
-log "HTTP local Host ${DOMAIN}: ${HTTP_TITLE:-<sin title>}"
-if echo "$HTTP_TITLE" | grep -Eiq 'arándano|arandano|café bar'; then
-  die "HTTP de ${DOMAIN} sigue sirviendo Arándano. Revisá sites-enabled y que vos-front (:5174) esté vivo."
+if [[ -f "$LE_CERT" && -f "$LE_KEY" ]]; then
+  CERT="$LE_CERT"
+  KEY="$LE_KEY"
+  log "Usando Let's Encrypt ya emitido"
+else
+  ensure_self_signed
+  CERT="$TMP_CERT"
+  KEY="$TMP_KEY"
 fi
 
-log "Certificado Let's Encrypt propio (webroot — no usa el plugin nginx)"
+log "Instalar HTTP + HTTPS de VOS IA (nunca :3000)"
+write_site "$CERT" "$KEY"
+nginx_test_reload
+
+acme="$(curl -sS --max-time 8 --resolve "${DOMAIN}:80:127.0.0.1" "http://${DOMAIN}/.well-known/acme-challenge/ping" || true)"
+log "ACME ping: ${acme:-<vacío>}"
+
+HTTP_TITLE="$(title_of --resolve "${DOMAIN}:80:127.0.0.1" "http://${DOMAIN}/")"
+HTTPS_TITLE="$(title_of --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/")"
+log "HTTP  ${HTTP_TITLE:-<sin title>}"
+log "HTTPS ${HTTPS_TITLE:-<sin title>}"
+if looks_like_cafe "$HTTPS_TITLE"; then
+  echo "=== server_name que aún mencionan vos-ia.com ==="
+  sudo grep -RIn --exclude='*.bak*' --exclude='*~' 'vos-ia.com' /etc/nginx/sites-enabled /etc/nginx/sites-available /etc/nginx/conf.d || true
+  die "HTTPS sigue en el café. Pegá la salida de: sudo nginx -T 2>/dev/null | grep -nE 'server_name|listen .*443|ssl_certificate'"
+fi
+
+log "Let's Encrypt (webroot). Si falla, HTTPS ya es VOS IA con cert temporal."
 CERTBOT_OK=0
 if command -v certbot >/dev/null 2>&1; then
-  certbot_webroot() {
+  if sudo certbot certonly --webroot -w "$WEBROOT" \
+    -d "$DOMAIN" -d "$WWW" \
+    --cert-name "$DOMAIN" \
+    --non-interactive --agree-tos --register-unsafely-without-email \
+    --keep-until-expiring --expand \
+    --deploy-hook "systemctl reload nginx"
+  then
+    CERTBOT_OK=1
+  elif [[ ! -f "$LE_CERT" ]]; then
     sudo certbot certonly --webroot -w "$WEBROOT" \
       -d "$DOMAIN" -d "$WWW" \
       --cert-name "$DOMAIN" \
       --non-interactive --agree-tos --register-unsafely-without-email \
-      --keep-until-expiring --expand \
-      --deploy-hook "systemctl reload nginx" \
-      "$@"
-  }
-  if certbot_webroot; then
-    CERTBOT_OK=1
-  elif [[ ! -f "$CERT_LIVE" ]] && certbot_webroot --duplicate; then
-    CERTBOT_OK=1
-  else
-    echo "WARN: certbot webroot no pudo emitir/renovar. Si ya existe ${CERT_LIVE}, se instala igual." >&2
+      --duplicate \
+      --deploy-hook "systemctl reload nginx" && CERTBOT_OK=1 || true
   fi
 else
-  echo "WARN: certbot no está instalado." >&2
+  echo "WARN: certbot no está instalado (sudo apt-get install -y certbot)" >&2
 fi
 
-if [[ ! -f "$CERT_LIVE" ]]; then
-  echo ""
-  echo "No hay ${CERT_LIVE}. ${DOMAIN} queda en HTTP sirviendo VOS IA (sin mandarte al café)."
-  echo "Cuando el DNS A de ${DOMAIN} y ${WWW} apunte a este VPS, volvé a correr:"
-  echo "  bash $API_DIR/scripts/fix-vos-ia-https.sh"
-  echo ""
-  echo "Title HTTP: $HTTP_TITLE"
-  exit 0
-fi
-
-log "Instalar vhost HTTPS con el cert de ${DOMAIN}"
-sudo cp "$SSL_EXAMPLE" "$NGINX_SITE"
-nginx_test_reload
-
-echo ""
-log "Certificado instalado"
-sudo openssl x509 -in "$CERT_LIVE" -noout -subject -dates -ext subjectAltName || true
-SAN="$(sudo openssl x509 -in "$CERT_LIVE" -noout -ext subjectAltName 2>/dev/null || true)"
-echo "$SAN" | grep -q "$DOMAIN" || die "El certificado no incluye ${DOMAIN} en SAN"
-if echo "$SAN" | grep -q arandanocafe; then
-  die "El certificado todavía menciona arandanocafe.com — no es el cert de VOS IA"
-fi
-
-HTTPS_TITLE="$(title_of --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/")"
-log "HTTPS local Host ${DOMAIN}: ${HTTPS_TITLE:-<sin title>}"
-if echo "$HTTPS_TITLE" | grep -Eiq 'arándano|arandano|café bar'; then
-  die "HTTPS de ${DOMAIN} sigue sirviendo Arándano. Nginx aún está mezclando vhosts."
-fi
-
-HTTP_LOC="$(curl -sI --max-time 10 --resolve "${DOMAIN}:80:127.0.0.1" "http://${DOMAIN}/" | tr -d '\r' | awk 'tolower($1)=="location:"{print $2; exit}')"
-if echo "$HTTP_LOC" | grep -Eiq 'arandano'; then
-  die "HTTP redirige a Arándano ($HTTP_LOC)"
+if [[ -f "$LE_CERT" && -f "$LE_KEY" ]]; then
+  log "Pasar Nginx al certificado Let's Encrypt"
+  write_site "$LE_CERT" "$LE_KEY"
+  nginx_test_reload
+  SAN="$(sudo openssl x509 -in "$LE_CERT" -noout -ext subjectAltName 2>/dev/null || true)"
+  echo "$SAN"
+  echo "$SAN" | grep -q "$DOMAIN" || die "El cert LE no incluye ${DOMAIN}"
+  if echo "$SAN" | grep -q arandanocafe; then
+    die "El cert LE menciona arandanocafe.com"
+  fi
+  HTTPS_TITLE="$(title_of --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/")"
 fi
 
 echo ""
-echo "Listo. ${DOMAIN} usa su propio certificado y el front en :5174."
-echo "Title HTTPS: ${HTTPS_TITLE}"
-echo "HTTP Location: ${HTTP_LOC:-<sin redirect todavía, recargá>}"
-echo "Probá en el navegador (sin caché): https://${DOMAIN}/"
-if [[ "$CERTBOT_OK" -eq 0 ]]; then
-  echo "Nota: certbot no renovó ahora; se reutilizó el cert que ya estaba en disco."
+echo "HTTP:  ${HTTP_TITLE}"
+echo "HTTPS: ${HTTPS_TITLE}"
+if looks_like_cafe "$HTTPS_TITLE"; then
+  die "HTTPS todavía muestra el café"
+fi
+echo ""
+echo "Listo: https://${DOMAIN}/ tiene que abrir VOS IA, no el café."
+if [[ "$CERTBOT_OK" -eq 1 || -f "$LE_CERT" ]]; then
+  echo "Candado: certificado Let's Encrypt de ${DOMAIN}."
+else
+  echo "Candado: todavía temporal. Revisá certbot (DNS y puerto 80)."
+  echo "Cuando Let's Encrypt funcione, volvé a correr este script."
 fi

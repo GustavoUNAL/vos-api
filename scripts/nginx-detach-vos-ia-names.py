@@ -22,7 +22,7 @@ SERVER_NAME_RE = re.compile(r"(server_name\s+)([^;]+)(;)", re.IGNORECASE)
 
 def strip_names(raw: str) -> str | None:
     names = raw.split()
-    kept = [n for n in names if n not in DROP]
+    kept = [n for n in names if n.strip("'\"") not in DROP]
     if kept == names:
         return None
     if not kept:
@@ -30,8 +30,18 @@ def strip_names(raw: str) -> str | None:
     return " ".join(kept)
 
 
+CERTBOT_IF_HOST_RE = re.compile(
+    r"\n?\s*if\s*\(\s*\$host\s*=\s*'?(?:www\.)?vos-ia\.com'?\s*\)\s*\{[^{}]*\}\s*(?:#.*)?",
+    re.IGNORECASE,
+)
+
+
 def process_text(text: str) -> tuple[str, list[str]]:
     notes: list[str] = []
+    cleaned, n = CERTBOT_IF_HOST_RE.subn("", text)
+    if n:
+        notes.append(f"eliminados {n} if ($host = vos-ia.com) de Certbot")
+        text = cleaned
 
     def repl(match: re.Match[str]) -> str:
         stripped = strip_names(match.group(2))
