@@ -4,7 +4,7 @@
 #   sudo cp deploy/nginx-vos-ia.conf.example /etc/nginx/sites-available/vos-ia.com
 #   sudo ln -sf /etc/nginx/sites-available/vos-ia.com /etc/nginx/sites-enabled/
 #   sudo nginx -t && sudo systemctl reload nginx
-#   sudo certbot --nginx -d vos-ia.com -d www.vos-ia.com
+#   bash scripts/fix-vos-ia-https.sh
 #
 # Requiere: vos-front en :5174 (PM2), vos-api en :3001 (PM2).
 # El puerto :3000 lo usa otra app (Next.js arandano) — no tocar.

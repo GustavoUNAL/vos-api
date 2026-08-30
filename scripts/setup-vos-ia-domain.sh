@@ -146,13 +146,11 @@ WWW_IP="$(resolve_ip "$WWW" || true)"
 echo "DNS ${DOMAIN} -> ${A_IP:-?} | ${WWW} -> ${WWW_IP:-?}"
 
 if [[ "$A_IP" == "$VPS_IP" && "$WWW_IP" == "$VPS_IP" ]]; then
-  sudo certbot --nginx -d "$DOMAIN" -d "$WWW" \
-    --non-interactive --agree-tos --register-unsafely-without-email --redirect
-  echo "SSL listo."
+  bash "$API_DIR/scripts/fix-vos-ia-https.sh"
 else
   echo "SKIP SSL: el DNS todavía no apunta a ${VPS_IP}."
-  echo "Cuando Hostinger resuelva, volvé a correr este script o:"
-  echo "  sudo certbot --nginx -d ${DOMAIN} -d ${WWW} --non-interactive --agree-tos --register-unsafely-without-email --redirect"
+  echo "Cuando Hostinger resuelva:"
+  echo "  bash ${API_DIR}/scripts/fix-vos-ia-https.sh"
 fi
 
 echo ""

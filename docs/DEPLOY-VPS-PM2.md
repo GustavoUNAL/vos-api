@@ -115,15 +115,11 @@ grep -o 'https://vos-ia.com/backend\|http://51.222.24.228:3001' dist/assets/inde
 
 ```bash
 cd ~/projects/vos-ai/vos-api
-sudo cp deploy/nginx-vos-ia.conf.example /etc/nginx/sites-available/vos-ia.com
-sudo ln -sf /etc/nginx/sites-available/vos-ia.com /etc/nginx/sites-enabled/
-# Opcional: desactivar el site viejo
-sudo rm -f /etc/nginx/sites-enabled/vos-ai.arandano.shop
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d vos-ia.com -d www.vos-ia.com
+git pull origin main
+bash scripts/fix-vos-ia-https.sh
 ```
 
-Certbot reescribe el archivo de Nginx con `listen 443 ssl` y redirección HTTP→HTTPS.
+No uses `certbot --nginx`: ese plugin mete `vos-ia.com` en el vhost de `arandanocafe.com` y HTTPS abre el café. El script emite el cert con **webroot**, saca el dominio de los otros sites y deja un vhost SSL propio.
 
 ## Variables clave (producción)
 
@@ -146,3 +142,4 @@ Certbot reescribe el archivo de Nginx con `listen 443 ssl` y redirección HTTP�
 | API devuelve HTML Next.js | Curl a `:3000` | API está en `:3001` |
 | Certbot: NXDOMAIN | DNS aún no apunta al VPS | Esperá el A record y reintentá |
 | Vite 403 Host | `allowedHosts` sin vos-ia.com | `git pull` front + restart `vos-front` |
+| HTTPS abre Arándano Café / candado rojo | `certbot --nginx` pegó vos-ia.com al vhost del café | `bash scripts/fix-vos-ia-https.sh` (nunca `certbot --nginx`) |
