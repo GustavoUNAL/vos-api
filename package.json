@@ -41,6 +41,7 @@
     "db:ensure-projects": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/ensure-projects-module.ts",
     "db:seed-booking-demo": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/seed-booking-demo.ts",
     "db:create-david-user": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-david-user.ts",
+    "db:create-jl-arandano-user": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-jl-arandano-user.ts",
     "db:create-gustavo-user": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-gustavo-user.ts",
     "db:ensure-dental": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/ensure-dental-module.ts",
     "db:seed-dental-demo": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/seed-dental-demo.ts",

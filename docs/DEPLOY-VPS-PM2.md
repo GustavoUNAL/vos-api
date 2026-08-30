@@ -82,6 +82,15 @@ curl -sI -H "Origin: https://vos-ia.com" http://127.0.0.1:3001/health | grep -i 
 - [ ] Login clínica `https://vos-ia.com/#/health/login`
 - [ ] Login negocio `https://vos-ia.com/#/login`
 - [ ] `www.vos-ia.com` redirige a `vos-ia.com`
+- [ ] En un teléfono (Chrome Android / Galaxy): landing scrollea, login no hace zoom al escribir, menú y botones se tocan bien
+- [ ] `https://vos-ia.com/manifest.webmanifest` responde JSON (añadir a inicio en Samsung)
+
+## Teléfono (Samsung Galaxy A56)
+
+Chrome Android cachea el `index.html` si Nginx no manda `Cache-Control: no-cache`.
+Después de cada deploy, si el teléfono sigue viendo la versión vieja: en Chrome → menú → **Borrar datos de sitios** para `vos-ia.com`, o recargar sin caché.
+
+Para instalar como app: Chrome → menú → **Agregar a la pantalla de inicio**.
 
 ## 2. Front (`vos-front`)
 
