@@ -208,6 +208,7 @@ model User {
   tasksCreated    CompanyTask[]    @relation("TaskCreatedBy")
   tasksAssigned   CompanyTask[]    @relation("TaskAssignedTo")
   cashClosesClosed CashClose[]     @relation("CashCloseClosedBy")
+  staffProfiles    StaffMember[]
 
   @@index([active], map: "idx_users_active")
   @@map("users")
@@ -701,6 +702,8 @@ model StaffMember {
   id                 String   @id @default(cuid())
   companyId          String   @map("company_id")
   company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId             String?  @map("user_id")
+  user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   name               String
   phone              String?
   email              String?
@@ -715,6 +718,7 @@ model StaffMember {
 
   @@index([companyId], map: "idx_staff_members_company_id")
   @@index([companyId, active], map: "idx_staff_members_company_active")
+  @@index([userId], map: "idx_staff_members_user_id")
   @@map("staff_members")
 }
 

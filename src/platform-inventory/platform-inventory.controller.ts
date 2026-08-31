@@ -44,6 +44,7 @@ export class PlatformInventoryController {
     @Query('categoryId') categoryId?: string,
     @Query('lot') lot?: string,
     @Query('availability') availability?: 'available' | 'depleted',
+    @Query('behavior') behaviorRaw?: string,
     @Query('belowMinimum') belowMinimumRaw?: string,
     @Query('includeStats') includeStatsRaw?: string,
   ) {
@@ -63,6 +64,10 @@ export class PlatformInventoryController {
       availability:
         availability === 'available' || availability === 'depleted'
           ? availability
+          : undefined,
+      behavior:
+        behaviorRaw === 'CONSUMABLE' || behaviorRaw === 'CAPITAL_ASSET'
+          ? behaviorRaw
           : undefined,
       belowMinimum,
       includeStats,

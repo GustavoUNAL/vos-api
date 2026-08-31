@@ -26,6 +26,7 @@ const MANAGER_PERMISSION_SLUGS = [
   'staff.view',
   'staff.create',
   'staff.update',
+  'staff.manage',
   'tasks.view',
   'tasks.create',
   'tasks.update',

@@ -28,6 +28,14 @@ Panel en `#/e/arandano/…` — productos, ventas, POS, tienda, etc.
 | `SEED_ARANDANO_EMAIL` | `owner@arandano.com` |
 | `SEED_ARANDANO_PASSWORD` | `Arandano2026!` |
 | `SEED_ARANDANO_NAME` | `Propietario Arándano` |
+| `SEED_DAVID_EMAIL` | `david@arandano.com` |
+| `SEED_DAVID_PASSWORD` | `David@Arandano2026!` |
+| `SEED_SONIA_EMAIL` | `sonia@arandano.com` |
+| `SEED_SONIA_PASSWORD` | `Sonia@Arandano2026!` |
+| `SEED_SONIA_NAME` | `Sonia Herrera` |
+| `SEED_JESSICA_EMAIL` | `jessica@arandano.com` |
+| `SEED_JESSICA_PASSWORD` | `Jessica@Arandano2026!` |
+| `SEED_JESSICA_NAME` | `Jessica` (piso: inventario y solo sus turnos) |
 
 Empresa: **Arándano Café Bar** · slug `arandano` · tienda `#/tienda/arandano`
 

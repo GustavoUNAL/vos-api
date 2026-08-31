@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -21,6 +22,7 @@ import {
   parseShiftInstant,
   shiftDateFromInstant,
 } from './staff-shift.math';
+import { canManageAllStaff } from './staff-scope';
 
 type ListMembersOpts = {
   page: number;
@@ -48,6 +50,7 @@ export class PlatformStaffService {
     phone: string | null;
     email: string | null;
     idNumber: string | null;
+    userId: string | null;
     defaultHourlyRate: Prisma.Decimal;
     active: boolean;
     notes: string | null;
@@ -60,6 +63,7 @@ export class PlatformStaffService {
       phone: row.phone,
       email: row.email,
       idNumber: row.idNumber,
+      userId: row.userId ?? null,
       defaultHourlyRate: row.defaultHourlyRate.toString(),
       active: row.active,
       notes: row.notes,
@@ -92,6 +96,43 @@ export class PlatformStaffService {
     staffMember: true,
   } as const;
 
+  private async findSelfMember(tenant: TenantContext) {
+    const byUser = await this.prisma.staffMember.findFirst({
+      where: { companyId: tenant.companyId, userId: tenant.userId },
+    });
+    if (byUser) return byUser;
+    const email = tenant.email?.trim().toLowerCase();
+    if (email) {
+      const byEmail = await this.prisma.staffMember.findFirst({
+        where: {
+          companyId: tenant.companyId,
+          email: { equals: email, mode: 'insensitive' },
+        },
+      });
+      if (byEmail) return byEmail;
+    }
+    const name = tenant.name?.trim();
+    if (name) {
+      return this.prisma.staffMember.findFirst({
+        where: {
+          companyId: tenant.companyId,
+          name: { equals: name, mode: 'insensitive' },
+        },
+      });
+    }
+    return null;
+  }
+
+  private async requireSelfMember(tenant: TenantContext) {
+    const member = await this.findSelfMember(tenant);
+    if (!member) {
+      throw new ForbiddenException(
+        'Tu usuario no está vinculado a una persona de personal. Pedile a un admin que te asocie.',
+      );
+    }
+    return member;
+  }
+
   private async ensureMember(tenant: TenantContext, staffMemberId: string) {
     const member = await this.prisma.staffMember.findFirst({
       where: { id: staffMemberId, companyId: tenant.companyId },
@@ -110,6 +151,16 @@ export class PlatformStaffService {
     const where: Prisma.StaffMemberWhereInput = {
       companyId: tenant.companyId,
     };
+    if (!canManageAllStaff(tenant)) {
+      const self = await this.findSelfMember(tenant);
+      if (!self) {
+        return {
+          data: [],
+          meta: { page, limit, total: 0, totalPages: 1, hasNextPage: false },
+        };
+      }
+      where.id = self.id;
+    }
     if (opts.active === true) where.active = true;
     else if (opts.active === false) where.active = false;
     if (opts.search?.trim()) {
@@ -149,10 +200,19 @@ export class PlatformStaffService {
       where: { id, companyId: tenant.companyId },
     });
     if (!row) throw new NotFoundException('Persona no encontrada');
+    if (!canManageAllStaff(tenant)) {
+      const self = await this.requireSelfMember(tenant);
+      if (row.id !== self.id) {
+        throw new ForbiddenException('Solo podés ver tu ficha de personal');
+      }
+    }
     return this.formatMember(row);
   }
 
   async createMember(tenant: TenantContext, dto: CreateStaffMemberDto) {
+    if (!canManageAllStaff(tenant)) {
+      throw new ForbiddenException('No podés registrar otras personas');
+    }
     const row = await this.prisma.staffMember.create({
       data: {
         companyId: tenant.companyId,
@@ -173,6 +233,9 @@ export class PlatformStaffService {
     id: string,
     dto: UpdateStaffMemberDto,
   ) {
+    if (!canManageAllStaff(tenant)) {
+      throw new ForbiddenException('No podés editar otras personas');
+    }
     await this.findMember(tenant, id);
     const data: Prisma.StaffMemberUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name.trim();
@@ -193,6 +256,9 @@ export class PlatformStaffService {
   }
 
   async removeMember(tenant: TenantContext, id: string) {
+    if (!canManageAllStaff(tenant)) {
+      throw new ForbiddenException('No podés eliminar personas');
+    }
     await this.findMember(tenant, id);
     await this.prisma.staffMember.delete({ where: { id } });
     return { ok: true };
@@ -206,7 +272,12 @@ export class PlatformStaffService {
     const where: Prisma.StaffShiftWhereInput = {
       companyId: tenant.companyId,
     };
-    if (opts.staffMemberId) where.staffMemberId = opts.staffMemberId;
+    if (!canManageAllStaff(tenant)) {
+      const self = await this.requireSelfMember(tenant);
+      where.staffMemberId = self.id;
+    } else if (opts.staffMemberId) {
+      where.staffMemberId = opts.staffMemberId;
+    }
     if (opts.status) where.status = opts.status;
     if (opts.dateFrom || opts.dateTo) {
       where.shiftDate = {};
@@ -247,11 +318,20 @@ export class PlatformStaffService {
       include: this.shiftInclude,
     });
     if (!row) throw new NotFoundException('Turno no encontrado');
+    if (!canManageAllStaff(tenant)) {
+      const self = await this.requireSelfMember(tenant);
+      if (row.staffMemberId !== self.id) {
+        throw new ForbiddenException('Solo podés ver tus turnos');
+      }
+    }
     return this.formatShift(row);
   }
 
   async createShift(tenant: TenantContext, dto: CreateStaffShiftDto) {
-    const member = await this.ensureMember(tenant, dto.staffMemberId);
+    const memberId = canManageAllStaff(tenant)
+      ? dto.staffMemberId
+      : (await this.requireSelfMember(tenant)).id;
+    const member = await this.ensureMember(tenant, memberId);
     const startAt = parseShiftInstant(dto.startAt, 'Hora de entrada');
     const endAt = dto.endAt
       ? parseShiftInstant(dto.endAt, 'Hora de salida')
@@ -292,6 +372,15 @@ export class PlatformStaffService {
       where: { id, companyId: tenant.companyId },
     });
     if (!existing) throw new NotFoundException('Turno no encontrado');
+    if (!canManageAllStaff(tenant)) {
+      const self = await this.requireSelfMember(tenant);
+      if (existing.staffMemberId !== self.id) {
+        throw new ForbiddenException('Solo podés editar tus turnos');
+      }
+      if (dto.status === StaffShiftStatus.PAID) {
+        throw new ForbiddenException('No podés marcar turnos como pagados');
+      }
+    }
 
     const startAt =
       dto.startAt != null
@@ -346,6 +435,9 @@ export class PlatformStaffService {
   }
 
   async removeShift(tenant: TenantContext, id: string) {
+    if (!canManageAllStaff(tenant)) {
+      throw new ForbiddenException('No podés eliminar turnos');
+    }
     await this.findShift(tenant, id);
     await this.prisma.staffShift.delete({ where: { id } });
     return { ok: true };
@@ -355,6 +447,13 @@ export class PlatformStaffService {
     const where: Prisma.StaffShiftWhereInput = {
       companyId: tenant.companyId,
     };
+    if (!canManageAllStaff(tenant)) {
+      const self = await this.findSelfMember(tenant);
+      if (!self) {
+        return { shiftCount: 0, openShifts: 0, totalHours: 0, totalPayCOP: 0 };
+      }
+      where.staffMemberId = self.id;
+    }
     if (dateFrom || dateTo) {
       where.shiftDate = {};
       if (dateFrom) {

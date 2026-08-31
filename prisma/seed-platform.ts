@@ -71,6 +71,7 @@ const MANAGER_PERMISSION_SLUGS = [
   'staff.view',
   'staff.create',
   'staff.update',
+  'staff.manage',
   'tasks.view',
   'tasks.create',
   'tasks.update',
@@ -95,6 +96,7 @@ const STAFF_PERMISSIONS = [
   { slug: 'staff.create', name: 'Registrar personal y turnos' },
   { slug: 'staff.update', name: 'Editar personal y turnos' },
   { slug: 'staff.delete', name: 'Eliminar personal y turnos' },
+  { slug: 'staff.manage', name: 'Ver turnos de todo el equipo' },
 ] as const;
 
 const FINANCE_PERMISSIONS = [

@@ -20,6 +20,7 @@ type ListOpts = {
   belowMinimum?: boolean;
   includeStats?: boolean;
   activeOnly?: boolean;
+  behavior?: 'CONSUMABLE' | 'CAPITAL_ASSET';
 };
 
 const itemInclude = {
@@ -63,6 +64,10 @@ export class PlatformInventoryService {
       where.quantity = { gt: 0 };
     } else if (opts.availability === 'depleted') {
       where.quantity = { lte: 0 };
+    }
+
+    if (opts.behavior === 'CONSUMABLE' || opts.behavior === 'CAPITAL_ASSET') {
+      where.behavior = opts.behavior;
     }
 
     return where;
