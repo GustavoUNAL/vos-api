@@ -12,8 +12,18 @@ import { pgPoolConfig } from '../src/common/pg-pool-config';
 import { wallToUtc, ymdInOffset } from '../src/platform-booking/booking-time';
 
 const COMPANY_ID = 'seed-booking-barberia-demo';
-const MODULES = ['booking'] as const;
-const PERMS = [
+/** Agenda + operación diaria de una barbería (cobro, stock, equipo). */
+const MODULES = [
+  'booking',
+  'products',
+  'sales',
+  'inventory',
+  'purchases',
+  'staff',
+  'tasks',
+  'finance',
+] as const;
+const BOOKING_PERMS = [
   { slug: 'booking.view', name: 'Ver reservas' },
   { slug: 'booking.create', name: 'Crear reservas' },
   { slug: 'booking.update', name: 'Editar reservas' },
@@ -23,7 +33,7 @@ const PERMS = [
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required');
-  const email = (process.env.SEED_RICKY_EMAIL ?? 'ricky@barberia-demo.com').trim().toLowerCase();
+  const email = (process.env.SEED_RICKY_EMAIL ?? 'ricky@barberia.com').trim().toLowerCase();
   const password = process.env.SEED_RICKY_PASSWORD ?? 'Ricky2026!';
   const name = process.env.SEED_RICKY_NAME ?? 'Ricky';
 
@@ -44,7 +54,7 @@ async function main() {
         description: 'Motor de citas y reservas reutilizable',
       },
     });
-    for (const p of PERMS) {
+    for (const p of BOOKING_PERMS) {
       await prisma.permission.upsert({
         where: { slug: p.slug },
         create: { slug: p.slug, moduleSlug: 'booking', name: p.name },
@@ -65,23 +75,29 @@ async function main() {
       update: { name: 'Barbería Demo', email, status: 'ACTIVE' },
     });
 
+    const wantedModules = await prisma.module.findMany({
+      where: { slug: { in: [...MODULES] } },
+    });
     const allMods = await prisma.companyModule.findMany({
       where: { companyId: company.id },
       include: { module: true },
     });
+    const wanted = new Set<string>(MODULES);
     for (const cm of allMods) {
       await prisma.companyModule.update({
         where: { id: cm.id },
-        data: { isEnabled: cm.module.slug === 'booking' },
+        data: { isEnabled: wanted.has(cm.module.slug) },
       });
     }
-    await prisma.companyModule.upsert({
-      where: {
-        companyId_moduleId: { companyId: company.id, moduleId: bookingModule.id },
-      },
-      create: { companyId: company.id, moduleId: bookingModule.id, isEnabled: true },
-      update: { isEnabled: true },
-    });
+    for (const mod of wantedModules) {
+      await prisma.companyModule.upsert({
+        where: {
+          companyId_moduleId: { companyId: company.id, moduleId: mod.id },
+        },
+        create: { companyId: company.id, moduleId: mod.id, isEnabled: true },
+        update: { isEnabled: true },
+      });
+    }
 
     const ownerRole = await prisma.role.upsert({
       where: { companyId_slug: { companyId: company.id, slug: 'owner' } },
@@ -114,7 +130,7 @@ async function main() {
       update: { name: 'Equipo' },
     });
     const perms = await prisma.permission.findMany({
-      where: { slug: { in: PERMS.map((p) => p.slug) } },
+      where: { moduleSlug: { in: [...MODULES] } },
     });
     for (const role of [ownerRole, adminRole]) {
       await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
@@ -138,7 +154,7 @@ async function main() {
     const user = await prisma.user.upsert({
       where: { email },
       create: { email, passwordHash, name, active: true, isPlatformAdmin: false },
-      update: { passwordHash, name, active: true },
+      update: { name, active: true },
     });
     const membership = await prisma.companyMember.upsert({
       where: { companyId_userId: { companyId: company.id, userId: user.id } },
@@ -156,15 +172,21 @@ async function main() {
         companyId: company.id,
         publicSlug: 'barberia-ricky',
         timezone: 'America/Bogota',
-        welcomeMessage: 'Reserva tu cita. Elige servicio, profesional y horario.',
+        welcomeMessage: 'Ricky Barbero',
+        noticeMessage:
+          'Su turno quedó confirmado. Escríbanos por WhatsApp si necesita cambiar algo.',
+        whatsappPhone: '',
         publicEnabled: true,
-        slotIntervalMin: 15,
+        slotIntervalMin: 60,
       },
       update: {
         publicSlug: 'barberia-ricky',
         timezone: 'America/Bogota',
         publicEnabled: true,
-        welcomeMessage: 'Reserva tu cita. Elige servicio, profesional y horario.',
+        welcomeMessage: 'Ricky Barbero',
+        noticeMessage:
+          'Su turno quedó confirmado. Escríbanos por WhatsApp si necesita cambiar algo.',
+        slotIntervalMin: 60,
       },
     });
 
@@ -175,12 +197,12 @@ async function main() {
         companyId: company.id,
         name: 'Corte',
         description: 'Corte clásico',
-        durationMin: 40,
+        durationMin: 60,
         price: new Prisma.Decimal(25000),
         currency: 'COP',
         sortOrder: 1,
       },
-      update: { name: 'Corte', durationMin: 40, price: new Prisma.Decimal(25000), active: true },
+      update: { name: 'Corte', durationMin: 60, price: new Prisma.Decimal(25000), active: true },
     });
     const barba = await prisma.bookingService.upsert({
       where: { id: 'seed-booking-svc-barba' },
@@ -210,15 +232,15 @@ async function main() {
     });
 
     const staffRows = [
-      { id: 'seed-booking-staff-ricky', name: 'Ricky' },
-      { id: 'seed-booking-staff-carlos', name: 'Carlos' },
-      { id: 'seed-booking-staff-andres', name: 'Andrés' },
+      { id: 'seed-booking-staff-ricky', name: 'Ricky', active: true },
+      { id: 'seed-booking-staff-carlos', name: 'Carlos', active: false },
+      { id: 'seed-booking-staff-andres', name: 'Andrés', active: false },
     ];
     for (const s of staffRows) {
       await prisma.bookingStaff.upsert({
         where: { id: s.id },
-        create: { id: s.id, companyId: company.id, name: s.name, active: true },
-        update: { name: s.name, active: true },
+        create: { id: s.id, companyId: company.id, name: s.name, active: s.active },
+        update: { name: s.name, active: s.active },
       });
       await prisma.bookingStaffService.deleteMany({ where: { staffId: s.id } });
       await prisma.bookingStaffService.createMany({

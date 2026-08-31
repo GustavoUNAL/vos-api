@@ -192,6 +192,7 @@ export class SchedulingEngineService {
     date: string,
     serviceId: string,
     resourceId: string,
+    overrides?: { durationMin?: number; slotIntervalMin?: number },
   ) {
     const service = await this.prisma.bookingService.findFirst({
       where: { id: serviceId, companyId, active: true },
@@ -247,15 +248,18 @@ export class SchedulingEngineService {
       ...appts.map((a) => ({ startAt: a.startAt, endAt: a.endAt })),
       ...blocks.map((b) => ({ startAt: b.startAt, endAt: b.endAt })),
     ];
+    const durationMin = overrides?.durationMin ?? service.durationMin;
+    const slotIntervalMin =
+      overrides?.slotIntervalMin ?? settings?.slotIntervalMin ?? 15;
     return {
       date,
-      durationMin: service.durationMin,
+      durationMin,
       timeZone,
       slots: getAvailableSlots({
         ymd: date,
         timeZone,
-        durationMin: service.durationMin,
-        slotIntervalMin: settings?.slotIntervalMin ?? 15,
+        durationMin,
+        slotIntervalMin,
         bufferMin: settings?.bufferMin ?? 0,
         hours,
         occupied,
@@ -268,7 +272,9 @@ export class SchedulingEngineService {
     dto: CreateAppointmentInput,
     source: BookingAppointmentSource,
   ) {
-    await this.usage.assertWithinQuota(companyId);
+    if (source !== BookingAppointmentSource.PUBLIC_BOOKING) {
+      await this.usage.assertWithinQuota(companyId);
+    }
     const service = await this.prisma.bookingService.findFirst({
       where: { id: dto.serviceId, companyId, active: true },
     });
@@ -276,7 +282,11 @@ export class SchedulingEngineService {
     await this.ensureResource(companyId, dto.staffId);
     const timeZone = await this.timezoneFor(companyId);
     const startAt = wallToUtc(dto.date, dto.time, timeZone);
-    const endAt = new Date(startAt.getTime() + service.durationMin * 60_000);
+    const publicTurn = source === BookingAppointmentSource.PUBLIC_BOOKING;
+    const durationMin = publicTurn
+      ? Math.max(60, service.durationMin)
+      : service.durationMin;
+    const endAt = new Date(startAt.getTime() + durationMin * 60_000);
     if (startAt.getTime() < Date.now() - 60_000) {
       throw new BadRequestException('No se puede reservar en el pasado');
     }
@@ -286,6 +296,7 @@ export class SchedulingEngineService {
       dto.date,
       dto.serviceId,
       dto.staffId,
+      publicTurn ? { durationMin: 60, slotIntervalMin: 60 } : undefined,
     );
     if (!avail.slots.includes(dto.time)) {
       throw new ConflictException('Ese horario ya no está disponible');

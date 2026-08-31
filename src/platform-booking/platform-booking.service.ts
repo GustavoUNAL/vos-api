@@ -7,6 +7,7 @@ import {
   BookingAppointmentSource,
   BookingAppointmentStatus,
   Prisma,
+  SaleSource,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
@@ -25,6 +26,9 @@ import {
 } from './dto/booking.dto';
 import { BookingNotificationService } from './booking-notification.service';
 import { resolveTimeZone } from '../scheduling-engine/scheduling-time';
+import type { SchedulingAppointmentDto } from '../scheduling-engine/scheduling-engine.service';
+
+const bookingSaleTag = (appointmentId: string) => `booking:${appointmentId}`;
 
 /**
  * Módulo Agenda de citas — adaptador de tenant sobre el Scheduling Engine.
@@ -181,6 +185,10 @@ export class PlatformBookingService {
           : {}),
         ...(dto.welcomeMessage != null
           ? { welcomeMessage: dto.welcomeMessage }
+          : {}),
+        ...(dto.noticeMessage != null ? { noticeMessage: dto.noticeMessage } : {}),
+        ...(dto.whatsappPhone != null
+          ? { whatsappPhone: dto.whatsappPhone.trim() }
           : {}),
         ...(dto.slotIntervalMin != null
           ? { slotIntervalMin: dto.slotIntervalMin }
@@ -485,6 +493,11 @@ export class PlatformBookingService {
       id,
       dto,
     );
+    if (dto.status === 'COMPLETED') {
+      await this.recordCompletedServiceSale(tenant, formatted);
+    } else if (dto.status === 'CANCELLED' || dto.status === 'NO_SHOW') {
+      await this.removeCompletedServiceSale(tenant.companyId, id);
+    }
     if (dto.status === 'CANCELLED') {
       await this.notifications.notify('cancelled', formatted);
     } else if (dto.status === 'CONFIRMED') {
@@ -504,6 +517,7 @@ export class PlatformBookingService {
     return this.engine
       .cancelAppointment(tenant.companyId, id)
       .then(async (row) => {
+        await this.removeCompletedServiceSale(tenant.companyId, id);
         await this.notifications.notify('cancelled', row);
         return row;
       });
@@ -554,6 +568,8 @@ export class PlatformBookingService {
         name: company.name,
         slug: settings.publicSlug,
         welcomeMessage: settings.welcomeMessage,
+        noticeMessage: settings.noticeMessage,
+        whatsappPhone: settings.whatsappPhone || '',
         timezone: settings.timezone,
       },
       hours,
@@ -592,6 +608,7 @@ export class PlatformBookingService {
       date,
       serviceId,
       staffId,
+      { durationMin: 60, slotIntervalMin: 60 },
     );
   }
 
@@ -617,9 +634,19 @@ export class PlatformBookingService {
             where: { id: dto.staffId, companyId: settings.companyId, active: true },
           })
         : this.prisma.bookingStaff.findFirst({
-            where: { companyId: settings.companyId, active: true },
-            orderBy: { name: 'asc' },
-          }),
+            where: {
+              companyId: settings.companyId,
+              active: true,
+              name: { equals: 'Ricky', mode: 'insensitive' },
+            },
+          }).then(
+            (row) =>
+              row ??
+              this.prisma.bookingStaff.findFirst({
+                where: { companyId: settings.companyId, active: true },
+                orderBy: { name: 'asc' },
+              }),
+          ),
     ]);
     if (!service || !staff) {
       throw new NotFoundException('Agenda no disponible');
@@ -635,10 +662,70 @@ export class PlatformBookingService {
         customerPhone: dto.phone,
         customerEmail: dto.email,
         notes: dto.notes,
-        status: BookingAppointmentStatus.PENDING,
+        status: BookingAppointmentStatus.CONFIRMED,
       },
       BookingAppointmentSource.PUBLIC_BOOKING,
     );
+  }
+
+  private async findServiceSale(companyId: string, appointmentId: string) {
+    return this.prisma.sale.findFirst({
+      where: {
+        companyId,
+        notes: { equals: bookingSaleTag(appointmentId) },
+      },
+    });
+  }
+
+  /** Al terminar un servicio, se registra una venta para el cierre del día y finanzas. */
+  private async recordCompletedServiceSale(
+    tenant: TenantContext,
+    appointment: SchedulingAppointmentDto,
+  ) {
+    const existing = await this.findServiceSale(
+      tenant.companyId,
+      appointment.id,
+    );
+    if (existing) return existing;
+
+    const price = Math.max(0, Math.round(Number(appointment.service.price) || 0));
+    const total = new Prisma.Decimal(price);
+    const count = await this.prisma.sale.count({
+      where: { companyId: tenant.companyId },
+    });
+    const code = `V${String(count + 1).padStart(4, '0')}`;
+
+    return this.prisma.sale.create({
+      data: {
+        companyId: tenant.companyId,
+        code,
+        saleDate: new Date(),
+        total,
+        paymentMethod: 'Efectivo',
+        source: SaleSource.MANUAL,
+        userId: tenant.userId,
+        mesa: appointment.customer.name,
+        customerPhone: appointment.customer.phone || null,
+        notes: bookingSaleTag(appointment.id),
+        lines: {
+          create: {
+            productName: appointment.service.name,
+            quantity: new Prisma.Decimal(1),
+            unitPrice: total,
+            profit: total,
+          },
+        },
+      },
+    });
+  }
+
+  private async removeCompletedServiceSale(
+    companyId: string,
+    appointmentId: string,
+  ) {
+    const existing = await this.findServiceSale(companyId, appointmentId);
+    if (!existing) return;
+    await this.prisma.sale.delete({ where: { id: existing.id } });
   }
 
   private async ensureService(companyId: string, id: string) {

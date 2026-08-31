@@ -1,0 +1,3 @@
+ALTER TABLE "booking_settings"
+  ADD COLUMN IF NOT EXISTS "notice_message" TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS "whatsapp_phone" TEXT NOT NULL DEFAULT '';

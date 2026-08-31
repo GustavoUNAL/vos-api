@@ -13,7 +13,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   BookingAppointmentSource,
   BookingAppointmentStatus,
@@ -238,6 +238,16 @@ export class UpdateSettingsDto {
   welcomeMessage?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(600)
+  noticeMessage?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  whatsappPhone?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(5)
@@ -279,9 +289,10 @@ export class PublicCreateAppointmentDto {
   @MaxLength(120)
   name!: string;
 
+  @Transform(({ value }) => String(value ?? '').replace(/\D/g, ''))
   @IsString()
   @MinLength(7)
-  @MaxLength(20)
+  @MaxLength(15)
   phone!: string;
 
   @IsOptional()
