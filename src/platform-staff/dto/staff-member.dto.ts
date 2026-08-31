@@ -6,6 +6,7 @@ import {
   IsString,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateStaffMemberDto {
@@ -19,6 +20,7 @@ export class CreateStaffMemberDto {
   phone?: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== '' && v != null)
   @IsEmail()
   @MaxLength(200)
   email?: string;
@@ -54,6 +56,7 @@ export class UpdateStaffMemberDto {
   phone?: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== '' && v != null)
   @IsEmail()
   @MaxLength(200)
   email?: string;

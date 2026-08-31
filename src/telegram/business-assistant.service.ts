@@ -30,6 +30,7 @@ export class BusinessAssistantService {
     question: string,
     companyId?: string,
     history?: AssistantHistoryItem[],
+    userName?: string,
   ): Promise<string> {
     const text = question.trim();
     if (!text) {
@@ -38,7 +39,7 @@ export class BusinessAssistantService {
 
     if (text === ASSISTANT_SESSION_START) {
       return this.formatAnswer(
-        await this.generateSessionGreeting(companyId),
+        await this.generateSessionGreeting(companyId, userName),
       );
     }
 
@@ -49,7 +50,7 @@ export class BusinessAssistantService {
       if (direct) return this.formatAnswer(direct);
     }
 
-    const ai = await this.askOpenAi(text, companyId, history);
+    const ai = await this.askOpenAi(text, companyId, history, userName);
     if (ai) return this.formatAnswer(ai);
 
     if (!explicit) {
@@ -61,13 +62,13 @@ export class BusinessAssistantService {
       [
         'No encontré un dato exacto para eso en este momento.',
         '',
-        'Probá preguntarme, por ejemplo:',
+        'Pruebe preguntarme, por ejemplo:',
         '• ¿Cómo va el negocio hoy?',
         '• ¿Qué debo comprar?',
         '• ¿Cuál fue la utilidad del mes?',
         '• ¿Hay pedidos en la tienda?',
         '',
-        'También podés saludarme o contarme qué te preocupa del negocio — interpreto la pregunta con los datos en vivo.',
+        'También puede saludarme o contarme qué le preocupa del negocio — interpreto la pregunta con los datos en vivo.',
       ].join('\n'),
     );
   }
@@ -199,24 +200,26 @@ export class BusinessAssistantService {
 
   private async generateSessionGreeting(
     companyId?: string,
+    userName?: string,
   ): Promise<string> {
     const structured = await this.insights.buildStructuredContext(companyId);
     const apiKey = this.config.get<string>('OPENAI_API_KEY')?.trim();
 
     if (!apiKey) {
-      return this.fallbackSessionGreeting(structured);
+      return this.fallbackSessionGreeting(structured, userName);
     }
 
     const model =
       this.config.get<string>('OPENAI_CHAT_MODEL')?.trim() || 'gpt-4o';
 
-    const system = `Eres VOS IA, el gerente digital del negocio. El usuario acaba de abrir el chat en la app.
+    const first = userName?.trim().split(/\s+/)[0] ?? '';
+    const system = `Eres VOS IA, el gerente digital del negocio. El usuario acaba de abrir el chat en la app.${first ? ` Se llama ${first}: saludalo por su nombre de pila.` : ''}
 
 Genera un saludo inicial cálido y profesional en español colombiano (tuteo respetuoso).
 
 REGLAS:
 - Usa SOLO datos de DATOS_JSON. No inventes cifras.
-- Menciona el nombre de la empresa.
+- Menciona el nombre de la empresa.${first ? ` Primera línea: saludo a ${first}.` : ''}
 - Incluye 2 o 3 datos vivos relevantes (ventas de hoy, alertas de inventario, pedidos web o tareas pendientes) si existen en los datos.
 - Si hoy no hay ventas aún, dilo con tono constructivo y sugiere revisar inventario o pedidos.
 - Invita a preguntar lo que necesite (ventas, compras, personal, clientes, finanzas).
@@ -250,23 +253,26 @@ REGLAS:
         this.logger.warn(
           `OpenAI greeting ${res.status}: ${detail.slice(0, 180)}`,
         );
-        return this.fallbackSessionGreeting(structured);
+        return this.fallbackSessionGreeting(structured, userName);
       }
       const data = (await res.json()) as {
         choices?: { message?: { content?: string } }[];
       };
       const reply = data.choices?.[0]?.message?.content?.trim();
-      return reply || this.fallbackSessionGreeting(structured);
+      return reply || this.fallbackSessionGreeting(structured, userName);
     } catch (err) {
       this.logger.warn(`OpenAI greeting error: ${(err as Error).message}`);
-      return this.fallbackSessionGreeting(structured);
+      return this.fallbackSessionGreeting(structured, userName);
     }
   }
 
   private fallbackSessionGreeting(
     structured: Record<string, unknown>,
+    userName?: string,
   ): string {
     const empresa = String(structured.empresa ?? 'tu negocio');
+    const first = userName?.trim().split(/\s+/)[0];
+    const hello = first ? `¡Hola, **${first}**!` : '¡Hola!';
     const hoy = structured.hoy as
       | { ventas?: number; totalCOP?: number }
       | undefined;
@@ -279,14 +285,14 @@ REGLAS:
     }).format(total);
 
     return [
-      `¡Hola! Soy **VOS IA**, tu gerente digital de **${empresa}**.`,
+      `${hello} Soy **VOS IA**, su gerente digital de **${empresa}**.`,
       '',
       ventas > 0
         ? `• Hoy llevamos **${ventas}** venta${ventas === 1 ? '' : 's'} por **${fmt}**`
         : '• Aún no hay ventas registradas hoy — buen momento para revisar stock y pedidos',
-      '• Puedo contarte utilidad, compras, personal, tienda web y clientes',
+      '• Puedo contarle utilidad, compras, personal, tienda web y clientes',
       '',
-      '¿Qué querés revisar primero?',
+      '¿En qué puedo ayudarle?',
     ].join('\n');
   }
 
@@ -294,6 +300,7 @@ REGLAS:
     question: string,
     companyId?: string,
     history?: AssistantHistoryItem[],
+    userName?: string,
   ): Promise<string | null> {
     const apiKey = this.config.get<string>('OPENAI_API_KEY')?.trim();
     if (!apiKey) return null;
@@ -306,13 +313,15 @@ REGLAS:
       this.insights.buildContextBundle(companyId),
     ]);
 
-    const system = `Eres VOS IA, el gerente digital del negocio dentro de la app. Conocés la operación al detalle y hablás con el dueño, gerente o equipo autorizado.
+    const first = userName?.trim().split(/\s+/)[0];
+    const system = `Eres VOS IA, el gerente digital del negocio dentro de la app. Conoces la operación al detalle y hablas con el dueño, gerente o equipo autorizado.${first ? ` El usuario se llama ${first}: trátelo por su nombre de pila cuando salude o dé recomendaciones.` : ''}
 
 PERSONALIDAD:
-- Español colombiano, cercano y profesional (tuteo respetuoso: "podés", "contame").
-- Proactivo: si saludan, respondé con calidez Y un dato útil del negocio si está en los datos.
-- Inteligente: interpretá preguntas vagas ("¿cómo vamos?", "¿qué me preocupa?", "¿qué hago hoy?") usando el contexto completo.
-- Conectá puntos: si preguntan por utilidad, mencioná compras y nómina si impactan; si hay stock bajo, sugerí reponer.
+- Español colombiano, formal y amable (usted: "puede", "aquí", "seleccione"). Nunca uses voseo ("elegí", "podés", "querés", "acá").
+- Cercano sin ser informal: cálido, claro y respetuoso.
+- Proactivo: si saludan, responde con calidez Y un dato útil del negocio si está en los datos.
+- Inteligente: interpreta preguntas vagas ("¿cómo vamos?", "¿qué me preocupa?", "¿qué hago hoy?") usando el contexto completo.
+- Conecta puntos: si preguntan por utilidad, menciona compras y nómina si impactan; si hay stock bajo, sugiere reponer.
 
 REGLAS ESTRICTAS:
 - Usa SOLO cifras y hechos de DATOS_JSON y RESUMEN. No inventes ventas, clientes ni montos.
@@ -327,14 +336,14 @@ FORMATO (respeta saltos de línea):
 4) Línea en blanco.
 5) Cierre: recomendación accionable o pregunta de seguimiento útil.
 
-CAPACIDADES que podés ofrecer:
+CAPACIDADES que puede ofrecer:
 • Ventas hoy, semana y mes · utilidad y resultado aproximado
 • Inventario bajo y qué comprar · compras y proveedores
 • Personal y nómina · pedidos tienda online
 • Productos más rentables · clientes que no han vuelto · tareas del día
 
-Si mezclan temas en una pregunta, integrá todo en una sola respuesta coherente.
-Si ya hablaron de algo en el historial, no repitas: profundizá o cambiá el ángulo.
+Si mezclan temas en una pregunta, integre todo en una sola respuesta coherente.
+Si ya hablaron de algo en el historial, no repita: profundice o cambie el ángulo.
 Máximo 14 líneas salvo que pidan un listado largo.`;
 
     const messages: { role: string; content: string }[] = [

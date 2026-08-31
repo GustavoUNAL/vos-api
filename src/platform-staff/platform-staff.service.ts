@@ -203,7 +203,7 @@ export class PlatformStaffService {
     if (!canManageAllStaff(tenant)) {
       const self = await this.requireSelfMember(tenant);
       if (row.id !== self.id) {
-        throw new ForbiddenException('Solo podés ver tu ficha de personal');
+        throw new ForbiddenException('Solo puede ver su ficha de personal');
       }
     }
     return this.formatMember(row);
@@ -211,7 +211,7 @@ export class PlatformStaffService {
 
   async createMember(tenant: TenantContext, dto: CreateStaffMemberDto) {
     if (!canManageAllStaff(tenant)) {
-      throw new ForbiddenException('No podés registrar otras personas');
+      throw new ForbiddenException('No puede registrar otras personas');
     }
     const row = await this.prisma.staffMember.create({
       data: {
@@ -234,7 +234,21 @@ export class PlatformStaffService {
     dto: UpdateStaffMemberDto,
   ) {
     if (!canManageAllStaff(tenant)) {
-      throw new ForbiddenException('No podés editar otras personas');
+      const self = await this.requireSelfMember(tenant);
+      if (self.id !== id) {
+        throw new ForbiddenException('Solo puede editar su propio perfil');
+      }
+      const data: Prisma.StaffMemberUpdateInput = {};
+      if (dto.name !== undefined) data.name = dto.name.trim();
+      if (dto.phone !== undefined) data.phone = dto.phone?.trim() || null;
+      if (dto.email !== undefined) data.email = dto.email?.trim() || null;
+      if (dto.idNumber !== undefined) data.idNumber = dto.idNumber?.trim() || null;
+      if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
+      const row = await this.prisma.staffMember.update({
+        where: { id },
+        data,
+      });
+      return this.formatMember(row);
     }
     await this.findMember(tenant, id);
     const data: Prisma.StaffMemberUpdateInput = {};
@@ -257,7 +271,7 @@ export class PlatformStaffService {
 
   async removeMember(tenant: TenantContext, id: string) {
     if (!canManageAllStaff(tenant)) {
-      throw new ForbiddenException('No podés eliminar personas');
+      throw new ForbiddenException('No puede eliminar personas');
     }
     await this.findMember(tenant, id);
     await this.prisma.staffMember.delete({ where: { id } });
@@ -321,7 +335,7 @@ export class PlatformStaffService {
     if (!canManageAllStaff(tenant)) {
       const self = await this.requireSelfMember(tenant);
       if (row.staffMemberId !== self.id) {
-        throw new ForbiddenException('Solo podés ver tus turnos');
+        throw new ForbiddenException('Solo puede ver sus turnos');
       }
     }
     return this.formatShift(row);
@@ -336,8 +350,10 @@ export class PlatformStaffService {
     const endAt = dto.endAt
       ? parseShiftInstant(dto.endAt, 'Hora de salida')
       : null;
-    const hourlyRate =
-      dto.hourlyRateCOP ?? decimalToNumber(member.defaultHourlyRate) ?? 0;
+    const manageAll = canManageAllStaff(tenant);
+    const hourlyRate = manageAll
+      ? (dto.hourlyRateCOP ?? decimalToNumber(member.defaultHourlyRate) ?? 0)
+      : (decimalToNumber(member.defaultHourlyRate) ?? 0);
     const { hoursWorked, totalPayCOP } = computeShiftPay({
       startAt,
       endAt,
@@ -375,10 +391,10 @@ export class PlatformStaffService {
     if (!canManageAllStaff(tenant)) {
       const self = await this.requireSelfMember(tenant);
       if (existing.staffMemberId !== self.id) {
-        throw new ForbiddenException('Solo podés editar tus turnos');
+        throw new ForbiddenException('Solo puede editar sus turnos');
       }
       if (dto.status === StaffShiftStatus.PAID) {
-        throw new ForbiddenException('No podés marcar turnos como pagados');
+        throw new ForbiddenException('No puede marcar turnos como pagados');
       }
     }
 
@@ -392,10 +408,13 @@ export class PlatformStaffService {
         : dto.endAt != null
           ? parseShiftInstant(dto.endAt, 'Hora de salida')
           : existing.endAt;
-    const hourlyRate =
-      dto.hourlyRateCOP ??
-      decimalToNumber(existing.hourlyRateCOP) ??
-      0;
+    const member = await this.ensureMember(tenant, existing.staffMemberId);
+    const manageAll = canManageAllStaff(tenant);
+    const hourlyRate = manageAll
+      ? (dto.hourlyRateCOP ?? decimalToNumber(existing.hourlyRateCOP) ?? 0)
+      : (decimalToNumber(member.defaultHourlyRate) ??
+        decimalToNumber(existing.hourlyRateCOP) ??
+        0);
     const hoursOverride =
       dto.hoursWorked === null
         ? undefined
@@ -436,7 +455,7 @@ export class PlatformStaffService {
 
   async removeShift(tenant: TenantContext, id: string) {
     if (!canManageAllStaff(tenant)) {
-      throw new ForbiddenException('No podés eliminar turnos');
+      throw new ForbiddenException('No puede eliminar turnos');
     }
     await this.findShift(tenant, id);
     await this.prisma.staffShift.delete({ where: { id } });

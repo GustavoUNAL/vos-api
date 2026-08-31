@@ -689,7 +689,7 @@ export class PlatformAdminService {
 
   async deleteUser(userId: string, actorId: string) {
     if (userId === actorId) {
-      throw new ForbiddenException('No podés eliminar tu propia cuenta');
+      throw new ForbiddenException('No puede eliminar su propia cuenta');
     }
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

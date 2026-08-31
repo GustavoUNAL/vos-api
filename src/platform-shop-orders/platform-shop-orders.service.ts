@@ -44,12 +44,34 @@ export class PlatformShopOrdersService {
   async updateStatus(
     tenant: TenantContext,
     id: string,
-    next: 'PREPARING' | 'DELIVERED',
+    next: 'PREPARING' | 'DELIVERED' | 'CANCELLED' | 'PAID',
   ) {
     const order = await this.prisma.shopOrder.findFirst({
       where: { id, companyId: tenant.companyId },
     });
     if (!order) throw new NotFoundException('Pedido no encontrado');
+
+    if (next === 'PAID') {
+      throw new BadRequestException(
+        'Para marcar pagado usá Cobrar y facturar.',
+      );
+    }
+
+    if (next === 'CANCELLED') {
+      if (
+        order.status === ShopOrderStatus.PAID ||
+        order.status === ShopOrderStatus.CANCELLED
+      ) {
+        throw new BadRequestException('Este pedido ya no se puede cancelar.');
+      }
+      const updated = await this.prisma.shopOrder.update({
+        where: { id: order.id },
+        data: { status: ShopOrderStatus.CANCELLED },
+      });
+      const formatted = this.format(updated);
+      this.realtime.emitUpdated(tenant.companyId, formatted);
+      return formatted;
+    }
 
     if (next === 'PREPARING') {
       if (

@@ -529,7 +529,7 @@ export class BusinessInsightsService {
 
   helpText(): string {
     return [
-      '🤖 Soy tu gerente digital. Preguntame sobre:',
+      '🤖 Soy su gerente digital. Pregúnteme sobre:',
       '',
       '• Ventas de hoy, la semana o el mes',
       '• Utilidad, compras y nómina',
@@ -540,7 +540,7 @@ export class BusinessInsightsService {
       '• Tareas y pendientes del día',
       '• Resumen financiero del negocio',
       '',
-      'También podés saludarme o contarme en tus palabras qué te preocupa.',
+      'También puede saludarme o contarme en sus palabras qué le preocupa.',
     ].join('\n');
   }
 

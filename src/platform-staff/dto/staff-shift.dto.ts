@@ -20,9 +20,10 @@ export class CreateStaffShiftDto {
   @IsISO8601()
   endAt?: string;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  hourlyRateCOP!: number;
+  hourlyRateCOP?: number;
 
   @IsOptional()
   @IsNumber()

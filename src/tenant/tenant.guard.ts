@@ -31,7 +31,7 @@ export class TenantGuard implements CanActivate {
       '';
 
     if (!companyId) {
-      throw new ForbiddenException('Seleccioná una empresa (X-Company-Id)');
+      throw new ForbiddenException('Seleccione una empresa (X-Company-Id)');
     }
 
     const membership = await this.prisma.companyMember.findFirst({
