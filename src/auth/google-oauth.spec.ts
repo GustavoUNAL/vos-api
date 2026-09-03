@@ -2,13 +2,43 @@ import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import {
   googleAuthorizeUrl,
   googleCallbackErrorCode,
+  googleConfig,
   googleFrontRedirect,
+  googleOAuthConfigured,
   parseGoogleReturnTo,
   pickActiveMembership,
   sanitizeCompanyIdHint,
 } from './google-oauth';
 
 describe('google-oauth', () => {
+  it('en producción usa callback de vos-ia.com si falta o es localhost', () => {
+    const keys = [
+      'NODE_ENV',
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+      'GOOGLE_REDIRECT_URI',
+      'GOOGLE_FRONT_URL',
+    ] as const;
+    const prev = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.GOOGLE_CLIENT_ID = 'cid.apps.googleusercontent.com';
+      process.env.GOOGLE_CLIENT_SECRET = 'secret';
+      process.env.GOOGLE_REDIRECT_URI =
+        'http://localhost:5173/auth/google/callback';
+      process.env.GOOGLE_FRONT_URL = 'http://localhost:5173';
+      const cfg = googleConfig();
+      expect(cfg.redirectUri).toBe('https://vos-ia.com/auth/google/callback');
+      expect(cfg.frontUrl).toBe('https://vos-ia.com');
+      expect(googleOAuthConfigured(cfg)).toBe(true);
+    } finally {
+      for (const k of keys) {
+        if (prev[k] === undefined) delete process.env[k];
+        else process.env[k] = prev[k];
+      }
+    }
+  });
+
   it('arma la URL de autorización de Google', () => {
     const url = googleAuthorizeUrl({
       clientId: 'cid.apps.googleusercontent.com',

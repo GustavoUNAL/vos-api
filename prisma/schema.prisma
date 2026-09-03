@@ -181,6 +181,7 @@ model Company {
   bookingAppointments BookingAppointment[]
   bookingWorkingHours BookingWorkingHour[]
   bookingBlocks     BookingAvailabilityBlock[]
+  bookingPushDevices BookingPushDevice[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -209,6 +210,7 @@ model User {
   tasksAssigned   CompanyTask[]    @relation("TaskAssignedTo")
   cashClosesClosed CashClose[]     @relation("CashCloseClosedBy")
   staffProfiles    StaffMember[]
+  bookingPushDevices BookingPushDevice[]
 
   @@index([active], map: "idx_users_active")
   @@map("users")
@@ -864,6 +866,24 @@ model BookingSettings {
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("booking_settings")
+}
+
+model BookingPushDevice {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String   @default("") @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([companyId], map: "idx_booking_push_company")
+  @@index([userId], map: "idx_booking_push_user")
+  @@map("booking_push_devices")
 }
 
 model BookingService {

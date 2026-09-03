@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -26,12 +27,16 @@ import {
   UpsertBookingServiceDto,
   UpsertBookingStaffDto,
 } from './dto/booking.dto';
+import { BookingPushService } from './booking-push.service';
 import { BookingAppointmentSource } from '@prisma/client';
 
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('booking')
 export class PlatformBookingController {
-  constructor(private readonly booking: PlatformBookingService) {}
+  constructor(
+    private readonly booking: PlatformBookingService,
+    private readonly push: BookingPushService,
+  ) {}
 
   @Get('dashboard')
   @RequirePermissions('booking.view')
@@ -229,6 +234,53 @@ export class PlatformBookingController {
     @Param('id') id: string,
   ) {
     return this.booking.cancelAppointment(tenant, id);
+  }
+
+  @Get('push/vapid')
+  @RequirePermissions('booking.view')
+  pushVapid() {
+    return {
+      configured: this.push.isConfigured(),
+      publicKey: this.push.publicKey(),
+    };
+  }
+
+  @Post('push/subscribe')
+  @RequirePermissions('booking.view')
+  subscribePush(
+    @CurrentTenant() tenant: TenantContext,
+    @Body()
+    body: {
+      endpoint?: string;
+      keys?: { p256dh?: string; auth?: string };
+    },
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const endpoint = body.endpoint?.trim() ?? '';
+    const p256dh = body.keys?.p256dh?.trim() ?? '';
+    const auth = body.keys?.auth?.trim() ?? '';
+    if (!endpoint || !p256dh || !auth) {
+      return { ok: false };
+    }
+    return this.push.saveDevice({
+      companyId: tenant.companyId,
+      userId: tenant.userId,
+      endpoint,
+      p256dh,
+      auth,
+      userAgent,
+    });
+  }
+
+  @Delete('push/subscribe')
+  @RequirePermissions('booking.view')
+  unsubscribePush(
+    @CurrentTenant() tenant: TenantContext,
+    @Body() body: { endpoint?: string },
+  ) {
+    const endpoint = body.endpoint?.trim() ?? '';
+    if (!endpoint) return { ok: false };
+    return this.push.removeDevice(tenant.companyId, endpoint);
   }
 
   @Post('appointments/:id/reschedule')

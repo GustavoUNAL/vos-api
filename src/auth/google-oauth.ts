@@ -84,11 +84,23 @@ export function googleAuthorizeUrl(opts: {
 export function googleConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim() ?? '';
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? '';
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() ?? '';
-  const frontUrl =
+  let redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() ?? '';
+  let frontUrl =
     process.env.GOOGLE_FRONT_URL?.trim() ||
     process.env.SHOP_FRONT_URL?.trim() ||
-    'http://localhost:5173';
+    '';
+  const production =
+    process.env.NODE_ENV === 'production' ||
+    process.env.VOS_ENV === 'production';
+  if (production) {
+    if (!redirectUri || /localhost|127\.0\.0\.1/.test(redirectUri)) {
+      redirectUri = 'https://vos-ia.com/auth/google/callback';
+    }
+    if (!frontUrl || /localhost|127\.0\.0\.1/.test(frontUrl)) {
+      frontUrl = 'https://vos-ia.com';
+    }
+  }
+  if (!frontUrl) frontUrl = 'http://localhost:5173';
   return { clientId, clientSecret, redirectUri, frontUrl };
 }
 

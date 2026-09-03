@@ -51,9 +51,18 @@ fi
 git fetch origin main
 git merge --ff-only origin/main
 
+if [[ -x "$API_DIR/scripts/fix-vos-ia-google-oauth.sh" ]]; then
+  log "Restaurando Google OAuth en .env si hace falta (sin reiniciar aún)"
+  MERGE_ONLY=1 bash "$API_DIR/scripts/fix-vos-ia-google-oauth.sh" || log "Google OAuth: no se pudo restaurar (revise .env)"
+fi
+
 log "API: install, prisma, build, migrate deploy"
 cd "$API_DIR"
 npm ci
+if [[ -x "$API_DIR/scripts/ensure-vapid-keys.sh" ]]; then
+  log "Claves VAPID para avisos de citas (si faltan)"
+  bash "$API_DIR/scripts/ensure-vapid-keys.sh" || log "VAPID: no se pudieron generar"
+fi
 npx prisma generate
 NODE_ENV=production npm run build
 NODE_ENV=production npx prisma migrate deploy
