@@ -446,6 +446,7 @@ async function main() {
       { name: 'Comida rápida', slug: 'comida-rapida' },
       { name: 'Cervezas', slug: 'cervezas' },
       { name: 'Cócteles', slug: 'cocteles' },
+      { name: 'Combos', slug: 'combos' },
       { name: 'Shots', slug: 'shots' },
       { name: 'Licores', slug: 'licores' },
       { name: 'Otros', slug: 'otros' },
@@ -783,6 +784,21 @@ async function main() {
         categorySlug: 'cocteles',
         price: 35000,
         sku: '4012',
+      },
+      // Combos (editables desde Catálogo)
+      {
+        name: '2 Mojitos',
+        description: 'Dos mojitos: ron blanco, hierbabuena, limón, azúcar y soda.',
+        categorySlug: 'combos',
+        price: 30000,
+        sku: '4013',
+      },
+      {
+        name: '2 Moscow Mule',
+        description: 'Dos Moscow Mule: cerveza, limón, triple sec y vodka.',
+        categorySlug: 'combos',
+        price: 30000,
+        sku: '4014',
       },
       // Shots
       {

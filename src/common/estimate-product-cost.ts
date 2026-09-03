@@ -11,6 +11,8 @@ export const COST_RATIO_BY_CATEGORY: Record<string, number> = {
   cervezas: 0.48,
   /** Mezclas con insumos variados */
   cocteles: 0.28,
+  /** Promos de varios tragos */
+  combos: 0.28,
   /** Porción pequeña de licor */
   shots: 0.22,
   /** Botella entera o media */
