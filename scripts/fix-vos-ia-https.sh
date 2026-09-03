@@ -24,6 +24,9 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 log() { echo "==> $*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }
 
+# live/ de Let's Encrypt es 700 root: [[ -f ]] falla y el deploy pone el cert temporal.
+le_ready() { sudo test -f "$LE_CERT" && sudo test -f "$LE_KEY"; }
+
 title_of() {
   curl -ksS --max-time 15 "$@" | grep -oE '<title>[^<]+</title>' | head -1 || true
 }
@@ -55,7 +58,7 @@ nginx_test_reload() {
 write_site() {
   local cert="$1" key="$2"
   [[ -f "$HTTP_EXAMPLE" && -f "$SSL_443_EXAMPLE" ]] || die "Faltan templates Nginx — git pull"
-  [[ -f "$cert" && -f "$key" ]] || die "No está el certificado $cert"
+  sudo test -f "$cert" && sudo test -f "$key" || die "No está el certificado $cert"
   {
     cat "$HTTP_EXAMPLE"
     echo
@@ -114,7 +117,7 @@ sudo mkdir -p "${WEBROOT}/.well-known/acme-challenge"
 echo ping | sudo tee "${WEBROOT}/.well-known/acme-challenge/ping" >/dev/null
 sudo chown -R www-data:www-data "$WEBROOT" 2>/dev/null || sudo chmod -R a+rX "$WEBROOT"
 
-if [[ -f "$LE_CERT" && -f "$LE_KEY" ]]; then
+if le_ready; then
   CERT="$LE_CERT"
   KEY="$LE_KEY"
   log "Usando Let's Encrypt ya emitido"
@@ -152,7 +155,7 @@ if command -v certbot >/dev/null 2>&1; then
     --deploy-hook "systemctl reload nginx"
   then
     CERTBOT_OK=1
-  elif [[ ! -f "$LE_CERT" ]]; then
+  elif ! le_ready; then
     sudo certbot certonly --webroot -w "$WEBROOT" \
       -d "$DOMAIN" -d "$WWW" \
       --cert-name "$DOMAIN" \
@@ -164,7 +167,7 @@ else
   echo "WARN: certbot no está instalado (sudo apt-get install -y certbot)" >&2
 fi
 
-if [[ -f "$LE_CERT" && -f "$LE_KEY" ]]; then
+if le_ready; then
   log "Pasar Nginx al certificado Let's Encrypt"
   write_site "$LE_CERT" "$LE_KEY"
   nginx_test_reload
@@ -185,7 +188,7 @@ if looks_like_cafe "$HTTPS_TITLE"; then
 fi
 echo ""
 echo "Listo: https://${DOMAIN}/ tiene que abrir VOS IA, no el café."
-if [[ "$CERTBOT_OK" -eq 1 || -f "$LE_CERT" ]]; then
+if [[ "$CERTBOT_OK" -eq 1 ]] || le_ready; then
   echo "Candado: certificado Let's Encrypt de ${DOMAIN}."
 else
   echo "Candado: todavía temporal. Revisá certbot (DNS y puerto 80)."
