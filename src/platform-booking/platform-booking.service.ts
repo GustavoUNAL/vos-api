@@ -477,9 +477,13 @@ export class PlatformBookingService {
       dto,
       source,
     );
-    if (formatted.status === BookingAppointmentStatus.CONFIRMED) {
-      await this.notifications.notify('confirmed', formatted);
-    }
+    void this.notifications.notify(
+      formatted.status === BookingAppointmentStatus.CANCELLED
+        ? 'cancelled'
+        : 'confirmed',
+      formatted,
+      companyId,
+    );
     return formatted;
   }
 
@@ -499,16 +503,16 @@ export class PlatformBookingService {
       await this.removeCompletedServiceSale(tenant.companyId, id);
     }
     if (dto.status === 'CANCELLED') {
-      await this.notifications.notify('cancelled', formatted);
+      void this.notifications.notify('cancelled', formatted, tenant.companyId);
     } else if (dto.status === 'CONFIRMED') {
-      await this.notifications.notify('confirmed', formatted);
+      void this.notifications.notify('confirmed', formatted, tenant.companyId);
     } else if (
       dto.date != null ||
       dto.time != null ||
       dto.staffId != null ||
       dto.serviceId != null
     ) {
-      await this.notifications.notify('rescheduled', formatted);
+      void this.notifications.notify('rescheduled', formatted, tenant.companyId);
     }
     return formatted;
   }
@@ -518,7 +522,7 @@ export class PlatformBookingService {
       .cancelAppointment(tenant.companyId, id)
       .then(async (row) => {
         await this.removeCompletedServiceSale(tenant.companyId, id);
-        await this.notifications.notify('cancelled', row);
+        void this.notifications.notify('cancelled', row, tenant.companyId);
         return row;
       });
   }
@@ -531,7 +535,7 @@ export class PlatformBookingService {
     return this.engine
       .rescheduleAppointment(tenant.companyId, id, dto)
       .then(async (row) => {
-        await this.notifications.notify('rescheduled', row);
+        void this.notifications.notify('rescheduled', row, tenant.companyId);
         return row;
       });
   }
