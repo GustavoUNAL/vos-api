@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, StockMoveType } from '@prisma/client';
+import {
+  applyStockDelta,
+  reverseStockMoves,
+  weightedUnitCost,
+} from '../common/stock-ledger';
 import {
   bogotaDateKey,
   bogotaDayBounds,
@@ -285,6 +290,7 @@ export class PlatformPurchasesService {
     lotId: string,
     lotCode: string,
     lines: PurchaseLotLineInputDto[],
+    mode: 'apply' | 'label-only' = 'apply',
   ) {
     let sum = 0;
     const createdInventoryIds: string[] = [];
@@ -302,14 +308,16 @@ export class PlatformPurchasesService {
           throw new BadRequestException('Insumo inválido en línea de compra');
         }
       } else {
+        const purchaseCost = new Prisma.Decimal(line.purchaseUnitCostCOP);
+        const purchasedQty = new Prisma.Decimal(line.quantityPurchased);
         const inv = await tx.inventoryItem.create({
           data: {
             companyId: tenant.companyId,
             categoryId: line.categoryId?.trim() || null,
             name: line.lineName.trim(),
             unit: line.unit.trim() || 'und',
-            unitCost: new Prisma.Decimal(line.purchaseUnitCostCOP),
-            quantity: new Prisma.Decimal(line.quantityPurchased),
+            unitCost: purchaseCost,
+            quantity: mode === 'apply' ? new Prisma.Decimal(0) : purchasedQty,
             lotLabel: lotCode,
             purchaseLotId: lotId,
             active: true,
@@ -317,6 +325,21 @@ export class PlatformPurchasesService {
         });
         inventoryItemId = inv.id;
         createdInventoryIds.push(inv.id);
+        if (mode === 'apply' && purchasedQty.gt(0)) {
+          await applyStockDelta(tx, {
+            companyId: tenant.companyId,
+            inventoryItemId: inv.id,
+            type: StockMoveType.PURCHASE,
+            delta: purchasedQty,
+            unit: line.unit.trim() || 'und',
+            unitCost: purchaseCost,
+            weightedUnitCost: purchaseCost,
+            purchaseLotId: lotId,
+            userId: tenant.userId,
+            lotLabel: lotCode,
+            note: lotCode,
+          });
+        }
       }
 
       await tx.purchaseLotLine.create({
@@ -336,10 +359,46 @@ export class PlatformPurchasesService {
       });
 
       if (inventoryItemId && !createdInventoryIds.includes(inventoryItemId)) {
-        await tx.inventoryItem.update({
-          where: { id: inventoryItemId },
-          data: { purchaseLotId: lotId, lotLabel: lotCode },
-        });
+        if (mode === 'label-only') {
+          await tx.inventoryItem.update({
+            where: { id: inventoryItemId },
+            data: { purchaseLotId: lotId, lotLabel: lotCode },
+          });
+        } else {
+          const current = await tx.inventoryItem.findFirst({
+            where: { id: inventoryItemId, companyId: tenant.companyId },
+          });
+          if (!current) {
+            throw new BadRequestException('Insumo inválido en línea de compra');
+          }
+          const add = new Prisma.Decimal(line.quantityPurchased);
+          const purchaseCost = new Prisma.Decimal(line.purchaseUnitCostCOP);
+          if (add.gt(0)) {
+            await applyStockDelta(tx, {
+              companyId: tenant.companyId,
+              inventoryItemId: current.id,
+              type: StockMoveType.PURCHASE,
+              delta: add,
+              unit: line.unit.trim() || current.unit,
+              unitCost: purchaseCost,
+              weightedUnitCost: weightedUnitCost(
+                current.quantity,
+                current.unitCost,
+                add,
+                purchaseCost,
+              ),
+              purchaseLotId: lotId,
+              userId: tenant.userId,
+              lotLabel: lotCode,
+              note: lotCode,
+            });
+          } else {
+            await tx.inventoryItem.update({
+              where: { id: inventoryItemId },
+              data: { purchaseLotId: lotId, lotLabel: lotCode },
+            });
+          }
+        }
       }
     }
 
@@ -445,6 +504,20 @@ export class PlatformPurchasesService {
     if (!existing) throw new NotFoundException('Lote de compra no encontrado');
 
     const lot = await this.prisma.$transaction(async (tx) => {
+      const ledgerCount = await tx.stockMove.count({
+        where: {
+          companyId: tenant.companyId,
+          purchaseLotId: id,
+          type: StockMoveType.PURCHASE,
+        },
+      });
+      if (ledgerCount > 0) {
+        await reverseStockMoves(tx, {
+          companyId: tenant.companyId,
+          purchaseLotId: id,
+          type: StockMoveType.PURCHASE,
+        });
+      }
       await tx.purchaseLotLine.deleteMany({ where: { purchaseLotId: id } });
       const sum = await this.persistLines(
         tx,
@@ -452,6 +525,7 @@ export class PlatformPurchasesService {
         id,
         existing.code,
         dto.lines,
+        ledgerCount > 0 ? 'apply' : 'label-only',
       );
       const totalValue =
         dto.expectedTotalValueCOP != null

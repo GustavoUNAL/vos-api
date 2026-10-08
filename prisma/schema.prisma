@@ -164,6 +164,7 @@ model Company {
   tasks            CompanyTask[]
   cashCloses       CashClose[]
   operatingExpenses OperatingExpense[]
+  stockMoves        StockMove[]
   dentalPatients    DentalPatient[]
   dentalAppointments DentalAppointment[]
   dentalIncomes     DentalIncome[]
@@ -212,6 +213,7 @@ model User {
   tasksAssigned   CompanyTask[]    @relation("TaskAssignedTo")
   cashClosesClosed CashClose[]     @relation("CashCloseClosedBy")
   staffProfiles    StaffMember[]
+  stockMoves       StockMove[]
   bookingPushDevices BookingPushDevice[]
 
   @@index([active], map: "idx_users_active")
@@ -440,6 +442,7 @@ model InventoryItem {
   updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   recipeIngredients RecipeIngredient[]
+  stockMoves        StockMove[]
   purchaseLotId     String?           @map("purchase_lot_id")
   purchaseLot       PurchaseLot?      @relation(fields: [purchaseLotId], references: [id], onDelete: SetNull)
   purchaseLotLine   PurchaseLotLine?
@@ -529,6 +532,7 @@ model Sale {
 
   lines      SaleLine[]
   shopOrders ShopOrder[]
+  stockMoves StockMove[]
 
   @@unique([companyId, code], map: "sales_company_code_key")
   @@index([companyId], map: "idx_sales_company_id")
@@ -602,12 +606,50 @@ model PurchaseLot {
 
   lines            PurchaseLotLine[]
   inventoryItems   InventoryItem[]
+  stockMoves       StockMove[]
 
   @@unique([companyId, code], map: "purchase_lots_company_code_key")
   @@index([companyId], map: "idx_purchase_lots_company_id")
   @@index([companyId, purchaseDate], map: "idx_purchase_lots_company_purchase_date")
   @@index([purchaseDate], map: "idx_purchase_lots_purchase_date")
   @@map("purchase_lots")
+}
+
+enum StockMoveType {
+  SALE
+  PURCHASE
+  WASTE
+  ADJUSTMENT
+  COUNT
+}
+
+/// Kardex del insumo. `quantity` es el cambio firmado (entrada positiva, salida negativa).
+model StockMove {
+  id              String        @id @default(cuid())
+  companyId       String        @map("company_id")
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inventoryItemId String        @map("inventory_item_id")
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  type            StockMoveType
+  quantity        Decimal       @db.Decimal(14, 4)
+  unit            String
+  unitCost        Decimal?      @map("unit_cost") @db.Decimal(14, 2)
+  qtyBefore       Decimal?      @map("qty_before") @db.Decimal(14, 4)
+  costBefore      Decimal?      @map("cost_before") @db.Decimal(14, 2)
+  note            String?
+  saleId          String?       @map("sale_id")
+  sale            Sale?         @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  purchaseLotId   String?       @map("purchase_lot_id")
+  purchaseLot     PurchaseLot?  @relation(fields: [purchaseLotId], references: [id], onDelete: SetNull)
+  userId          String?       @map("user_id")
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([companyId, createdAt], map: "idx_stock_moves_company_created")
+  @@index([inventoryItemId], map: "idx_stock_moves_item")
+  @@index([saleId], map: "idx_stock_moves_sale")
+  @@index([purchaseLotId], map: "idx_stock_moves_lot")
+  @@map("stock_moves")
 }
 
 model PurchaseLotLine {

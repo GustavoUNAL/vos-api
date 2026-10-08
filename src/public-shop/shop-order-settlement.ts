@@ -1,5 +1,6 @@
 import { Prisma, SaleSource, ShopOrderStatus, ShopPaymentMethod } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
+import { applySaleRecipeStock } from '../common/stock-ledger';
 import {
   buildSaleInvoicePdf,
   formatSaleReceiptText,
@@ -93,6 +94,16 @@ export async function settleShopOrderAsSale(
         },
       });
     }
+
+    await applySaleRecipeStock(tx, {
+      companyId: order.companyId,
+      saleId: sale.id,
+      userId: null,
+      lines: lines.map((line) => ({
+        productId: line.productId,
+        quantity: new Prisma.Decimal(line.quantity),
+      })),
+    });
 
     await tx.shopOrder.update({
       where: { id: order.id },

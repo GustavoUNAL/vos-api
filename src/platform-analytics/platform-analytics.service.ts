@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { OperatingExpenseKind } from '@prisma/client';
-import { bogotaDateKey, bogotaDayBounds } from '../common/bogota-time';
+import {
+  bogotaDateKey,
+  bogotaDayBounds,
+  bogotaHour,
+  utcDateKey,
+} from '../common/bogota-time';
 import { splitPaymentChannels } from '../common/payment-channels';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
@@ -11,6 +16,7 @@ import {
   mergeIntoBuckets,
   parseDateRange,
   periodKey,
+  periodKeyFromDateColumn,
   periodLabel,
 } from './analytics-period';
 
@@ -46,32 +52,36 @@ export class PlatformAnalyticsService {
       }),
     ]);
 
-    const mins = [
-      sales._min.saleDate,
-      purchases._min.purchaseDate,
-      shifts._min.shiftDate,
-      expenses._min.expenseMonth,
-    ].filter((d): d is Date => d != null);
+    const minKeys = [
+      sales._min.saleDate ? bogotaDateKey(sales._min.saleDate) : null,
+      purchases._min.purchaseDate
+        ? bogotaDateKey(purchases._min.purchaseDate)
+        : null,
+      shifts._min.shiftDate ? utcDateKey(shifts._min.shiftDate) : null,
+      expenses._min.expenseMonth
+        ? utcDateKey(expenses._min.expenseMonth)
+        : null,
+    ].filter((key): key is string => key != null);
 
-    const maxes = [
-      sales._max.saleDate,
-      purchases._max.purchaseDate,
-      shifts._max.shiftDate,
-      expenses._max.expenseMonth,
-    ].filter((d): d is Date => d != null);
+    const maxKeys = [
+      sales._max.saleDate ? bogotaDateKey(sales._max.saleDate) : null,
+      purchases._max.purchaseDate
+        ? bogotaDateKey(purchases._max.purchaseDate)
+        : null,
+      shifts._max.shiftDate ? utcDateKey(shifts._max.shiftDate) : null,
+      expenses._max.expenseMonth
+        ? utcDateKey(expenses._max.expenseMonth)
+        : null,
+    ].filter((key): key is string => key != null);
 
-    if (!mins.length) {
+    if (!minKeys.length || !maxKeys.length) {
       const { fromKey, toKey } = parseDateRange();
       return { dateFrom: fromKey, dateTo: toKey };
     }
 
     return {
-      dateFrom: bogotaDateKey(
-        new Date(Math.min(...mins.map((d) => d.getTime()))),
-      ),
-      dateTo: bogotaDateKey(
-        new Date(Math.max(...maxes.map((d) => d.getTime()))),
-      ),
+      dateFrom: [...minKeys].sort()[0],
+      dateTo: [...maxKeys].sort().at(-1) ?? maxKeys[0],
     };
   }
 
@@ -106,7 +116,10 @@ export class PlatformAnalyticsService {
           saleDate: true,
           total: true,
           paymentMethod: true,
-          lines: { select: { profit: true } },
+          discountCop: true,
+          notes: true,
+          user: { select: { name: true } },
+          lines: { select: { profit: true, costAtSale: true, quantity: true } },
         },
       }),
       this.prisma.purchaseLot.findMany({
@@ -171,17 +184,47 @@ export class PlatformAnalyticsService {
 
     let salesTotal = 0;
     let salesProfit = 0;
+    let cogsTotal = 0;
     let cashTotal = 0;
     let nequiTotal = 0;
     let otherPayTotal = 0;
+    const hourly = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      count: 0,
+      salesCOP: 0,
+    }));
+    const personMap = new Map<
+      string,
+      { name: string; count: number; salesCOP: number; discountCOP: number }
+    >();
 
     for (const row of sales) {
       const key = periodKey(row.saleDate, granularity);
       const total = Number(row.total);
       let lineProfit = 0;
+      let lineCost = 0;
       for (const line of row.lines) {
         if (line.profit != null) lineProfit += Number(line.profit);
+        if (line.costAtSale != null) {
+          lineCost += Number(line.costAtSale) * Number(line.quantity);
+        }
       }
+      cogsTotal += lineCost;
+      const hour = bogotaHour(row.saleDate);
+      hourly[hour].count += 1;
+      hourly[hour].salesCOP += total;
+      const attended = row.notes?.match(/Atendió:\s*([^·]+)/)?.[1]?.trim();
+      const personName = attended || row.user?.name?.trim() || 'Sin asignar';
+      const person = personMap.get(personName) ?? {
+        name: personName,
+        count: 0,
+        salesCOP: 0,
+        discountCOP: 0,
+      };
+      person.count += 1;
+      person.salesCOP += total;
+      person.discountCOP += Number(row.discountCop ?? 0);
+      personMap.set(personName, person);
       const channels = splitPaymentChannels(row.paymentMethod ?? '', total);
       salesTotal += total;
       salesProfit += lineProfit;
@@ -209,7 +252,7 @@ export class PlatformAnalyticsService {
     let staffPayTotal = 0;
     let staffHours = 0;
     for (const row of shifts) {
-      const key = periodKey(row.shiftDate, granularity);
+      const key = periodKeyFromDateColumn(row.shiftDate, granularity);
       const pay = Number(row.totalPayCOP ?? 0);
       const hours = Number(row.hoursWorked ?? 0);
       staffPayTotal += pay;
@@ -228,7 +271,7 @@ export class PlatformAnalyticsService {
     let otherUtilityTotal = 0;
 
     for (const row of expenses) {
-      const key = periodKey(row.expenseMonth, granularity);
+      const key = periodKeyFromDateColumn(row.expenseMonth, granularity);
       const amount = Number(row.amountCOP ?? 0);
       utilitiesTotal += amount;
       if (row.kind === OperatingExpenseKind.AGUA) aguaTotal += amount;
@@ -287,6 +330,12 @@ export class PlatformAnalyticsService {
       });
 
     const outflowsTotal = purchasesTotal + staffPayTotal + utilitiesTotal;
+    const foodCostPct =
+      salesTotal > 0 ? Math.round((cogsTotal / salesTotal) * 1000) / 10 : null;
+    const laborPct =
+      salesTotal > 0
+        ? Math.round((staffPayTotal / salesTotal) * 1000) / 10
+        : null;
 
     return {
       granularity,
@@ -331,9 +380,26 @@ export class PlatformAnalyticsService {
         },
       },
       combined,
+      hourly: hourly.map((row) => ({
+        ...row,
+        salesCOP: Math.round(row.salesCOP),
+      })),
+      byPerson: [...personMap.values()]
+        .map((row) => ({
+          ...row,
+          salesCOP: Math.round(row.salesCOP),
+          discountCOP: Math.round(row.discountCOP),
+        }))
+        .sort((a, b) => b.salesCOP - a.salesCOP),
       summary: {
         salesCOP: Math.round(salesTotal),
         salesProfitCOP: Math.round(salesProfit),
+        cogsCOP: Math.round(cogsTotal),
+        foodCostPct,
+        laborPct,
+        contributionCOP: Math.round(
+          salesTotal - cogsTotal - staffPayTotal - utilitiesTotal,
+        ),
         grossProfitCOP: Math.round(salesTotal - purchasesTotal),
         purchasesCOP: Math.round(purchasesTotal),
         cashCOP: Math.round(cashTotal),

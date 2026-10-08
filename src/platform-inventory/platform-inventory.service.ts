@@ -3,11 +3,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, StockMoveType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  applyStockDelta,
+  loadMovementStats,
+} from '../common/stock-ledger';
 import type { TenantContext } from '../tenant/tenant.types';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
+import { InventoryQuantityNoteDto } from './dto/inventory-quantity-note.dto';
 import { mapInventoryItem } from './platform-inventory.mapper';
 
 type ListOpts = {
@@ -94,10 +99,20 @@ export class PlatformInventoryService {
 
     const total = rows.length;
     const pageRows = rows.slice(skip, skip + limit);
+    const movements = opts.includeStats
+      ? await loadMovementStats(
+          this.prisma,
+          tenant.companyId,
+          pageRows.map((row) => row.id),
+        )
+      : null;
 
     return {
       data: pageRows.map((row) =>
-        mapInventoryItem(row, { includeStats: opts.includeStats }),
+        mapInventoryItem(row, {
+          includeStats: opts.includeStats,
+          movements: movements?.get(row.id),
+        }),
       ),
       meta: {
         page,
@@ -154,7 +169,13 @@ export class PlatformInventoryService {
       include: itemInclude,
     });
     if (!row) throw new NotFoundException('Ítem de inventario no encontrado');
-    return mapInventoryItem(row, { includeStats });
+    const movements = includeStats
+      ? await loadMovementStats(this.prisma, tenant.companyId, [row.id])
+      : null;
+    return mapInventoryItem(row, {
+      includeStats,
+      movements: movements?.get(row.id),
+    });
   }
 
   async create(tenant: TenantContext, dto: CreateInventoryItemDto) {
@@ -208,9 +229,10 @@ export class PlatformInventoryService {
     if (dto.unitCost !== undefined) {
       data.unitCost = new Prisma.Decimal(dto.unitCost);
     }
-    if (dto.quantity !== undefined) {
-      data.quantity = new Prisma.Decimal(dto.quantity);
-    }
+    const nextQuantity =
+      dto.quantity !== undefined ? new Prisma.Decimal(dto.quantity) : null;
+    const quantityDelta =
+      nextQuantity != null ? nextQuantity.minus(existing.quantity) : null;
     if (dto.minStock !== undefined) {
       data.minStock =
         dto.minStock == null ? null : new Prisma.Decimal(dto.minStock);
@@ -221,13 +243,120 @@ export class PlatformInventoryService {
     if (dto.behavior !== undefined) data.behavior = dto.behavior;
     if (dto.active !== undefined) data.active = dto.active;
 
-    const row = await this.prisma.inventoryItem.update({
-      where: { id },
-      data,
-      include: itemInclude,
+    const row = await this.prisma.$transaction(async (tx) => {
+      if (quantityDelta != null && !quantityDelta.isZero()) {
+        await applyStockDelta(tx, {
+          companyId: tenant.companyId,
+          inventoryItemId: id,
+          type: StockMoveType.ADJUSTMENT,
+          delta: quantityDelta,
+          userId: tenant.userId,
+          note: 'Ajuste manual de cantidad',
+        });
+      }
+      if (Object.keys(data).length === 0) {
+        return tx.inventoryItem.findFirstOrThrow({
+          where: { id },
+          include: itemInclude,
+        });
+      }
+      return tx.inventoryItem.update({
+        where: { id },
+        data,
+        include: itemInclude,
+      });
     });
 
-    return mapInventoryItem(row, { includeStats: true });
+    return this.withMovementStats(tenant, row);
+  }
+
+  async recordWaste(
+    tenant: TenantContext,
+    id: string,
+    dto: InventoryQuantityNoteDto,
+  ) {
+    return this.recordDelta(tenant, id, dto, StockMoveType.WASTE, true);
+  }
+
+  async recordCount(
+    tenant: TenantContext,
+    id: string,
+    dto: InventoryQuantityNoteDto,
+  ) {
+    const target = new Prisma.Decimal(dto.quantity);
+    if (target.lt(0)) {
+      throw new BadRequestException('El conteo no puede ser negativo.');
+    }
+    const row = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.inventoryItem.findFirst({
+        where: { id, companyId: tenant.companyId },
+      });
+      if (!existing) throw new NotFoundException('Ítem de inventario no encontrado');
+      const delta = target.minus(existing.quantity);
+      if (!delta.isZero()) {
+        await applyStockDelta(tx, {
+          companyId: tenant.companyId,
+          inventoryItemId: id,
+          type: StockMoveType.COUNT,
+          delta,
+          userId: tenant.userId,
+          note: dto.note?.trim() || 'Conteo físico',
+        });
+      }
+      return tx.inventoryItem.findFirstOrThrow({
+        where: { id },
+        include: itemInclude,
+      });
+    });
+    return this.withMovementStats(tenant, row);
+  }
+
+  private async recordDelta(
+    tenant: TenantContext,
+    id: string,
+    dto: InventoryQuantityNoteDto,
+    type: StockMoveType,
+    outbound: boolean,
+  ) {
+    const qty = new Prisma.Decimal(dto.quantity);
+    if (qty.lte(0)) {
+      throw new BadRequestException('La cantidad tiene que ser mayor que cero.');
+    }
+    const row = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.inventoryItem.findFirst({
+        where: { id, companyId: tenant.companyId },
+      });
+      if (!existing) throw new NotFoundException('Ítem de inventario no encontrado');
+      const applied = await applyStockDelta(tx, {
+        companyId: tenant.companyId,
+        inventoryItemId: id,
+        type,
+        delta: outbound ? qty.negated() : qty,
+        userId: tenant.userId,
+        note: dto.note?.trim() || (type === StockMoveType.WASTE ? 'Merma' : null),
+      });
+      if (!applied) {
+        throw new BadRequestException('No se pudo registrar el movimiento.');
+      }
+      return tx.inventoryItem.findFirstOrThrow({
+        where: { id },
+        include: itemInclude,
+      });
+    });
+    return this.withMovementStats(tenant, row);
+  }
+
+  private async withMovementStats(
+    tenant: TenantContext,
+    row: Prisma.InventoryItemGetPayload<{ include: typeof itemInclude }>,
+  ) {
+    const movements = await loadMovementStats(this.prisma, tenant.companyId, [
+      row.id,
+    ]);
+    return mapInventoryItem(row, {
+      includeStats: true,
+      movements: movements.get(row.id),
+    });
   }
 
   async remove(tenant: TenantContext, id: string) {

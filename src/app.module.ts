@@ -21,6 +21,7 @@ import { PlatformStaffModule } from './platform-staff/platform-staff.module';
 import { PlatformTasksModule } from './platform-tasks/platform-tasks.module';
 import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics.module';
 import { PlatformCashCloseModule } from './platform-cash-close/platform-cash-close.module';
+import { PlatformOperationsModule } from './platform-operations/platform-operations.module';
 import { PlatformOperatingExpensesModule } from './platform-operating-expenses/platform-operating-expenses.module';
 import { PlatformProjectsModule } from './platform-projects/platform-projects.module';
 import { SchedulingEngineModule } from './scheduling-engine/scheduling-engine.module';
@@ -59,6 +60,7 @@ import { BillingModule } from './billing/billing.module';
     PlatformTasksModule,
     PlatformAnalyticsModule,
     PlatformCashCloseModule,
+    PlatformOperationsModule,
     PlatformOperatingExpensesModule,
     PlatformProjectsModule,
     SchedulingEngineModule,

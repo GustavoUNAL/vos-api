@@ -3,8 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SaleLine, SaleSource } from '@prisma/client';
+import { Prisma, SaleLine, SaleSource, StockMoveType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  applySaleRecipeStock,
+  reverseStockMoves,
+} from '../common/stock-ledger';
 import type { TenantContext } from '../tenant/tenant.types';
 import {
   CreateSaleDto,
@@ -394,6 +398,16 @@ export class PlatformSalesService {
         });
       }
 
+      await applySaleRecipeStock(tx, {
+        companyId: tenant.companyId,
+        saleId: row.id,
+        userId: tenant.userId,
+        lines: dto.lines.map((line) => ({
+          productId: line.productId?.trim() || null,
+          quantity: new Prisma.Decimal(line.quantity),
+        })),
+      });
+
       return tx.sale.findUniqueOrThrow({
         where: { id: row.id },
         include: saleDetailInclude,
@@ -483,6 +497,11 @@ export class PlatformSalesService {
     const total = this.computeTotal(dto.lines);
 
     await this.prisma.$transaction(async (tx) => {
+      await reverseStockMoves(tx, {
+        companyId: tenant.companyId,
+        saleId: id,
+        type: StockMoveType.SALE,
+      });
       await tx.saleLine.deleteMany({ where: { saleId: id } });
       for (const line of dto.lines) {
         const productId = line.productId?.trim() || null;
@@ -518,6 +537,15 @@ export class PlatformSalesService {
         });
       }
       await tx.sale.update({ where: { id }, data: { total } });
+      await applySaleRecipeStock(tx, {
+        companyId: tenant.companyId,
+        saleId: id,
+        userId: tenant.userId,
+        lines: dto.lines.map((line) => ({
+          productId: line.productId?.trim() || null,
+          quantity: new Prisma.Decimal(line.quantity),
+        })),
+      });
     });
 
     return this.findOne(tenant, id);
@@ -680,6 +708,11 @@ export class PlatformSalesService {
     if (!sale) throw new NotFoundException('Venta no encontrada');
 
     await this.prisma.$transaction(async (tx) => {
+      await reverseStockMoves(tx, {
+        companyId: tenant.companyId,
+        saleId: id,
+        type: StockMoveType.SALE,
+      });
       await tx.shopOrder.updateMany({
         where: { saleId: id, companyId: tenant.companyId },
         data: { saleId: null },

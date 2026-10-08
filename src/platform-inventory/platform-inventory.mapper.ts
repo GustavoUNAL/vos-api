@@ -4,9 +4,18 @@ type InventoryRow = Prisma.InventoryItemGetPayload<{
   include: { category: true; purchaseLot: true };
 }>;
 
+export type InventoryMovementStats = {
+  received: number;
+  consumedViaSales: number;
+  consumedViaOut: number;
+  consumedTotal: number;
+  waste: number;
+  adjustment: number;
+};
+
 export function mapInventoryItem(
   row: InventoryRow,
-  opts?: { includeStats?: boolean },
+  opts?: { includeStats?: boolean; movements?: InventoryMovementStats },
 ) {
   const qty = Number(row.quantity);
   const min = row.minStock != null ? Number(row.minStock) : null;
@@ -53,6 +62,7 @@ export function mapInventoryItem(
       onHand: qty,
       minStock: min,
       belowMinimum: min != null && qty <= min,
+      ...(opts.movements ? { movements: opts.movements } : {}),
     },
   };
 }

@@ -5,6 +5,28 @@ export function bogotaDateKey(d: Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: BOGOTA_TZ }).format(d);
 }
 
+/**
+ * Día calendario de una columna Postgres `DATE`.
+ * Prisma la devuelve a medianoche UTC; `bogotaDateKey` la correría al día anterior.
+ */
+export function utcDateKey(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Hora 0–23 en Bogotá. */
+export function bogotaHour(d: Date): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: BOGOTA_TZ,
+    hour: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+  return hour === 24 ? 0 : hour;
+}
+
 /** Hora y minuto actuales en Bogotá. */
 export function bogotaClock(now = new Date()): { hour: number; minute: number } {
   const parts = new Intl.DateTimeFormat('en-GB', {

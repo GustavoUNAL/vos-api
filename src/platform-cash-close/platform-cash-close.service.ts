@@ -10,6 +10,7 @@ import {
   bogotaDayBounds,
   bogotaMonthBounds,
   isPastAutoCloseTime,
+  utcDateKey,
 } from '../common/bogota-time';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../tenant/tenant.types';
@@ -44,7 +45,7 @@ function formatRecord(row: {
 }) {
   return {
     id: row.id,
-    closeDate: bogotaDateKey(row.closeDate),
+    closeDate: utcDateKey(row.closeDate),
     status: row.status,
     salesTotalCOP: Number(row.salesTotalCOP),
     purchasesTotalCOP: Number(row.purchasesTotalCOP),
@@ -59,6 +60,25 @@ function formatRecord(row: {
     varianceCOP: row.varianceCOP != null ? Number(row.varianceCOP) : null,
     notes: row.notes,
     closedAt: row.closedAt?.toISOString() ?? null,
+  };
+}
+
+function closeMeta(
+  dateKey: string,
+  record: { status: string; countedCashCOP: Prisma.Decimal | null } | null,
+) {
+  const countedMissing = !record || record.countedCashCOP == null;
+  const locked = Boolean(
+    record && record.status === 'CLOSED' && !countedMissing,
+  );
+  const needsCount =
+    countedMissing &&
+    (isPastAutoCloseTime(dateKey) || record?.status === 'CLOSED');
+  return {
+    autoCloseAt: '23:59',
+    timezone: 'America/Bogota',
+    isEditable: !locked,
+    needsCount,
   };
 }
 
@@ -106,7 +126,7 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
       try {
         await this.autoFinalizeIfDue(
           row.companyId,
-          bogotaDateKey(row.closeDate),
+          utcDateKey(row.closeDate),
         );
       } catch {
         /* ignore */
@@ -269,13 +289,7 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
       purchases: purchaseRows,
       shifts: shiftRows,
       record: record ? formatRecord(record) : null,
-      meta: {
-        autoCloseAt: '23:59',
-        timezone: 'America/Bogota',
-        isEditable: record
-          ? record.status !== 'CLOSED' && !isPastAutoCloseTime(dateKey)
-          : !isPastAutoCloseTime(dateKey),
-      },
+      meta: closeMeta(dateKey, record),
     };
   }
 
@@ -300,8 +314,8 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
     const counted =
       existing?.countedCashCOP != null
         ? Number(existing.countedCashCOP)
-        : expected;
-    const variance = counted - expected;
+        : null;
+    const variance = counted != null ? counted - expected : null;
 
     await this.prisma.cashClose.upsert({
       where: {
@@ -319,8 +333,9 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
           existing?.openingFloatCOP != null
             ? existing.openingFloatCOP
             : null,
-        countedCashCOP: new Prisma.Decimal(counted),
-        varianceCOP: new Prisma.Decimal(variance),
+        countedCashCOP:
+          counted != null ? new Prisma.Decimal(counted) : null,
+        varianceCOP: variance != null ? new Prisma.Decimal(variance) : null,
         notes: existing?.notes ?? null,
         closedAt: to,
       },
@@ -330,8 +345,9 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
         purchasesTotalCOP: new Prisma.Decimal(daily.summary.purchasesTotalCOP),
         laborTotalCOP: new Prisma.Decimal(daily.summary.laborTotalCOP),
         expectedCashCOP: new Prisma.Decimal(expected),
-        countedCashCOP: new Prisma.Decimal(counted),
-        varianceCOP: new Prisma.Decimal(variance),
+        countedCashCOP:
+          counted != null ? new Prisma.Decimal(counted) : null,
+        varianceCOP: variance != null ? new Prisma.Decimal(variance) : null,
         closedAt: existing?.closedAt ?? to,
       },
     });
@@ -390,13 +406,14 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
     }
 
     for (const row of records) {
-      const day = bogotaDateKey(row.closeDate);
+      const day = utcDateKey(row.closeDate);
       const prev = byDay.get(day) ?? {
         salesTotal: Number(row.salesTotalCOP),
         saleCount: 0,
         status: null,
       };
-      prev.status = row.status;
+      prev.status =
+        row.countedCashCOP == null ? 'NEEDS_COUNT' : row.status;
       byDay.set(day, prev);
     }
 
@@ -428,11 +445,6 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
     dateKey: string,
     dto: UpsertCashCloseDto,
   ) {
-    if (isPastAutoCloseTime(dateKey)) {
-      throw new BadRequestException(
-        'Este día ya cerró automáticamente a las 11:59 p. m.',
-      );
-    }
     const daily = await this.buildDailyClose(tenant.companyId, dateKey);
     const { shiftDate } = dayBounds(dateKey);
     const openingFloat =
@@ -452,8 +464,8 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
         },
       },
     });
-    if (existing?.status === 'CLOSED') {
-      throw new BadRequestException('Este día ya fue cerrado.');
+    if (existing?.status === 'CLOSED' && existing.countedCashCOP != null) {
+      throw new BadRequestException('Este día ya tiene el efectivo contado.');
     }
 
     const row = await this.prisma.cashClose.upsert({
@@ -491,17 +503,16 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
         varianceCOP:
           variance != null ? new Prisma.Decimal(variance) : null,
         notes: dto.notes !== undefined ? dto.notes?.trim() || null : undefined,
+        ...(existing?.status === 'CLOSED' && countedCash != null
+          ? { closedByUserId: tenant.userId, closedAt: new Date() }
+          : {}),
       },
     });
 
     return {
       ...daily,
       record: formatRecord(row),
-      meta: {
-        autoCloseAt: '23:59',
-        timezone: 'America/Bogota',
-        isEditable: true,
-      },
+      meta: closeMeta(dateKey, row),
     };
   }
 
@@ -521,7 +532,17 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
       );
     }
     if (existing.status === 'CLOSED') {
-      throw new BadRequestException('Este día ya está cerrado.');
+      if (existing.countedCashCOP == null) {
+        throw new BadRequestException(
+          'Indicá el efectivo contado antes de cerrar la caja.',
+        );
+      }
+      const daily = await this.buildDailyClose(tenant.companyId, dateKey);
+      return {
+        ...daily,
+        record: formatRecord(existing),
+        meta: closeMeta(dateKey, existing),
+      };
     }
     if (existing.countedCashCOP == null) {
       throw new BadRequestException(
@@ -545,11 +566,7 @@ export class PlatformCashCloseService implements OnModuleInit, OnModuleDestroy {
     return {
       ...daily,
       record: formatRecord(row),
-      meta: {
-        autoCloseAt: '23:59',
-        timezone: 'America/Bogota',
-        isEditable: false,
-      },
+      meta: closeMeta(dateKey, row),
     };
   }
 

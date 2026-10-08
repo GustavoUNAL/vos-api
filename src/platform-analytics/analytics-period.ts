@@ -1,4 +1,4 @@
-import { bogotaDateKey, bogotaDayBounds } from '../common/bogota-time';
+import { bogotaDateKey, bogotaDayBounds, utcDateKey } from '../common/bogota-time';
 
 export type AnalyticsGranularity = 'day' | 'week' | 'month';
 
@@ -47,6 +47,15 @@ function bogotaWeekStartKey(date: Date): string {
   const mondayOffset = dow === 0 ? -6 : 1 - dow;
   const monday = new Date(Date.UTC(y, m - 1, d + mondayOffset));
   return monday.toISOString().slice(0, 10);
+}
+
+/** Periodo de una columna `@db.Date` (medianoche UTC), sin correr el día. */
+export function periodKeyFromDateColumn(
+  date: Date,
+  granularity: AnalyticsGranularity,
+): string {
+  const key = utcDateKey(date);
+  return periodKey(new Date(`${key}T12:00:00-05:00`), granularity);
 }
 
 export function periodKey(date: Date, granularity: AnalyticsGranularity): string {

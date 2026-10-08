@@ -19,6 +19,7 @@ import { CurrentTenant } from '../tenant/tenant.decorator';
 import type { TenantContext } from '../tenant/tenant.types';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
+import { InventoryQuantityNoteDto } from './dto/inventory-quantity-note.dto';
 import { PlatformInventoryService } from './platform-inventory.service';
 
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
@@ -94,6 +95,26 @@ export class PlatformInventoryController {
     @Body() dto: CreateInventoryItemDto,
   ) {
     return this.platformInventoryService.create(tenant, dto);
+  }
+
+  @Post(':id/waste')
+  @RequirePermissions('inventory.update')
+  recordWaste(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() dto: InventoryQuantityNoteDto,
+  ) {
+    return this.platformInventoryService.recordWaste(tenant, id, dto);
+  }
+
+  @Post(':id/count')
+  @RequirePermissions('inventory.update')
+  recordCount(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() dto: InventoryQuantityNoteDto,
+  ) {
+    return this.platformInventoryService.recordCount(tenant, id, dto);
   }
 
   @Patch(':id')
