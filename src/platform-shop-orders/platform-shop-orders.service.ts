@@ -112,6 +112,25 @@ export class PlatformShopOrdersService {
     return formatted;
   }
 
+  async remove(tenant: TenantContext, id: string) {
+    const order = await this.prisma.shopOrder.findFirst({
+      where: { id, companyId: tenant.companyId },
+    });
+    if (!order) throw new NotFoundException('Pedido no encontrado');
+    if (order.status === ShopOrderStatus.PAID || order.saleId) {
+      throw new BadRequestException(
+        'Este pedido ya está facturado. La venta queda en el módulo de ventas.',
+      );
+    }
+
+    await this.prisma.shopOrder.delete({ where: { id: order.id } });
+    this.realtime.emitUpdated(tenant.companyId, {
+      ...this.format(order),
+      status: ShopOrderStatus.CANCELLED,
+    });
+    return { ok: true, id: order.id, orderCode: order.orderCode };
+  }
+
   async collectPayment(
     tenant: TenantContext,
     id: string,
@@ -122,11 +141,17 @@ export class PlatformShopOrdersService {
     });
     if (!order) throw new NotFoundException('Pedido no encontrado');
     if (order.status === ShopOrderStatus.PAID) {
+      const sale = order.saleId
+        ? await this.prisma.sale.findFirst({
+            where: { id: order.saleId, companyId: tenant.companyId },
+            select: { code: true },
+          })
+        : null;
       return {
         ...this.format(order),
         whatsappSent: true,
         internalNotified: true,
-        saleCode: order.saleId,
+        saleCode: sale?.code ?? order.saleId,
       };
     }
     if (order.status !== ShopOrderStatus.DELIVERED) {

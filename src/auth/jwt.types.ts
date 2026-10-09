@@ -41,6 +41,7 @@ export type CompanyUsageSummary = {
 
 export type AuthUserResponse = JwtPayload & {
   companies: CompanySummary[];
+  avatarUrl?: string | null;
   systemSettings?: SystemSettings;
   usage?: CompanyUsageSummary | null;
 };

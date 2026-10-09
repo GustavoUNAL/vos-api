@@ -56,6 +56,9 @@ export class PublicShopService {
 
   async getCatalog(slug: string) {
     const company = await this.resolveCompany(slug);
+    const isInternalCategory = (name: string | null | undefined) =>
+      (name ?? '').trim().toUpperCase().startsWith('INVENTORY::');
+
     const [categories, products] = await Promise.all([
       this.prisma.productCategory.findMany({
         where: { companyId: company.id, active: true },
@@ -85,8 +88,10 @@ export class PublicShopService {
         phone: company.phone,
         address: company.address,
       },
-      categories,
-      products: products.map((p) => ({
+      categories: categories.filter((c) => !isInternalCategory(c.name)),
+      products: products
+        .filter((p) => !isInternalCategory(p.category?.name))
+        .map((p) => ({
         id: p.id,
         name: p.name,
         description: p.description,

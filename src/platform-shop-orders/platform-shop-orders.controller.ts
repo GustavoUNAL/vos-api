@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -43,6 +44,15 @@ export class PlatformShopOrdersController {
     @Body() dto: UpdateShopOrderStatusDto,
   ) {
     return this.shopOrders.updateStatus(tenant, id, dto.status);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('sales.delete', 'sales.update')
+  remove(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+  ) {
+    return this.shopOrders.remove(tenant, id);
   }
 
   @Post(':id/collect-payment')

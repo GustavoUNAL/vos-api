@@ -19,6 +19,7 @@ import {
   googleConfig,
   googleFrontRedirect,
   googleOAuthConfigured,
+  googleProfilePicture,
   googleTokenExchangeBody,
   parseGoogleReturnTo,
   pickActiveMembership,
@@ -80,14 +81,26 @@ export class AuthService {
     };
   }
 
+  private async withAvatar(user: AuthUserResponse): Promise<AuthUserResponse> {
+    if (!user.sub) return user;
+    const row = await this.prisma.user.findUnique({
+      where: { id: user.sub },
+      select: { avatarUrl: true },
+    });
+    return { ...user, avatarUrl: row?.avatarUrl ?? null };
+  }
+
   private async withUsage(user: AuthUserResponse): Promise<AuthUserResponse> {
-    if (!user.companyId?.trim() || user.platformView) return user;
-    try {
-      const usage = await this.usage.getUsage(user.companyId);
-      return usage ? { ...user, usage } : user;
-    } catch {
-      return user;
+    let next = user;
+    if (user.companyId?.trim() && !user.platformView) {
+      try {
+        const usage = await this.usage.getUsage(user.companyId);
+        if (usage) next = { ...user, usage };
+      } catch {
+        /* la sesión sigue sin el cupo */
+      }
     }
+    return this.withAvatar(next);
   }
 
   private async loadAllPermissions(): Promise<string[]> {
@@ -231,7 +244,7 @@ export class AuthService {
     };
   }
 
-  private issuePlatformSession(
+  private async issuePlatformSession(
     user: { id: string; email: string; name: string },
     allMemberships: Awaited<ReturnType<typeof this.loadMemberships>>,
   ) {
@@ -242,7 +255,9 @@ export class AuthService {
       .map((m) => this.membershipToSummary(m));
     return {
       accessToken,
-      user: this.withSystemSettings({ ...payload, companies }),
+      user: await this.withAvatar(
+        this.withSystemSettings({ ...payload, companies }),
+      ),
     };
   }
 
@@ -362,6 +377,7 @@ export class AuthService {
       aud?: string;
       email?: string;
       name?: string;
+      picture?: string;
       email_verified?: string | boolean;
     };
     if (data.aud !== clientId || !data.email?.trim()) {
@@ -375,6 +391,7 @@ export class AuthService {
     return {
       email: data.email.trim().toLowerCase(),
       name: (data.name ?? data.email.split('@')[0] ?? 'Usuario').trim(),
+      picture: googleProfilePicture(data.picture),
     };
   }
 
@@ -478,6 +495,12 @@ export class AuthService {
           message: 'Usuario inactivo',
         });
       }
+      if (profile.picture) {
+        await this.prisma.user.update({
+          where: { id: existing.id },
+          data: { avatarUrl: profile.picture },
+        });
+      }
       const memberships = await this.loadMemberships(existing.id);
       const session = await this.issueExistingUserSession(
         existing,
@@ -500,6 +523,7 @@ export class AuthService {
         t: 'gs',
         email: profile.email,
         name: profile.name,
+        ...(profile.picture ? { picture: profile.picture } : {}),
       } satisfies GoogleSignupTicket,
       { expiresIn: '20m' },
     );
@@ -552,6 +576,15 @@ export class AuthService {
           message: 'Usuario inactivo',
         });
       }
+      if (ticket.picture) {
+        const picture = googleProfilePicture(ticket.picture);
+        if (picture) {
+          await this.prisma.user.update({
+            where: { id: existing.id },
+            data: { avatarUrl: picture },
+          });
+        }
+      }
       const memberships = await this.loadMemberships(existing.id);
       return this.issueExistingUserSession(existing, memberships, undefined, {
         google: true,
@@ -568,6 +601,7 @@ export class AuthService {
         email,
         passwordHash,
         name: ticket.name.trim(),
+        avatarUrl: googleProfilePicture(ticket.picture),
         active: true,
         termsAcceptedAt: now,
         privacyAcceptedAt: now,
