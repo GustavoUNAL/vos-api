@@ -603,6 +603,34 @@ async function main() {
         price: 5000,
         sku: '1016',
       },
+      {
+        name: 'Natu Malta 200 mL',
+        description: 'Malta Natu de 200 mL.',
+        categorySlug: 'cafeteria',
+        price: 4000,
+        sku: '1017',
+      },
+      {
+        name: 'H2OH Limonata',
+        description: 'Agua H2OH sabor limonata.',
+        categorySlug: 'cafeteria',
+        price: 4000,
+        sku: '1018',
+      },
+      {
+        name: 'Agua sin gas 310 mL',
+        description: 'Agua sin gas de 310 mL.',
+        categorySlug: 'cafeteria',
+        price: 4000,
+        sku: '1019',
+      },
+      {
+        name: 'Gaseosa Quatro de lata',
+        description: 'Gaseosa Quatro en lata.',
+        categorySlug: 'cafeteria',
+        price: 6000,
+        sku: '1020',
+      },
       // Comida rápida
       {
         name: 'Hot dog pequeño',
@@ -698,6 +726,20 @@ async function main() {
         categorySlug: 'cervezas',
         price: 12000,
         sku: '3008',
+      },
+      {
+        name: 'Cerveza Michelob Ultra en botella',
+        description: 'Cerveza Michelob Ultra en botella.',
+        categorySlug: 'cervezas',
+        price: 8000,
+        sku: '3009',
+      },
+      {
+        name: 'Cerveza Stella Artois en botella',
+        description: 'Cerveza Stella Artois en botella.',
+        categorySlug: 'cervezas',
+        price: 8000,
+        sku: '3010',
       },
       // Cócteles
       {

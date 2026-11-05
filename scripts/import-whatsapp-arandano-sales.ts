@@ -32,7 +32,7 @@ type SaleIn = {
   lines: LineIn[];
 };
 
-const SALES: SaleIn[] = [
+export const SALES: SaleIn[] = [
   {
     code: 'WA-20260917-1824',
     at: '2026-09-17T18:24:00-05:00',
@@ -256,22 +256,24 @@ const SALES: SaleIn[] = [
     at: '2026-10-03T23:07:00-05:00',
     payment: 'Nequi',
     notes:
-      'WhatsApp · 2 perros pequeños y 2 Poker. La foto no vino en el export; precios de carta. El cierre del día dice $146.000 y esta venta no lo cubre sola.',
-    lines: [
-      { catalog: 'Hot dog pequeño', name: 'Hot dog pequeño', qty: 2, unitPrice: 7000 },
-      { catalog: 'Cerveza Poker', name: 'Cerveza Poker', qty: 2, unitPrice: 5000 },
-    ],
+      'Excel octubre 2026 · 2 perros pequeños y 2 Poker. Comprobante Nequi M31696807 · $30.000. La carta suma $24.000; el comprobante no parte el valor.',
+    lines: [{ name: '2 perros pequeños + 2 cervezas Poker', qty: 1, unitPrice: 30000 }],
   },
   {
     code: 'WA-20261003-2314',
     at: '2026-10-03T23:14:00-05:00',
+    payment: 'Bre-B',
+    notes:
+      'Excel octubre 2026 · 2 promos Moscow Mule y 2 hervidos. Comprobante Bre-B TRsLF0j4EXEC · $74.000.',
+    lines: [{ name: '2 promos Moscow Mule + 2 hervidos', qty: 1, unitPrice: 74000 }],
+  },
+  {
+    code: 'WA-20261003-2359',
+    at: '2026-10-03T23:59:00-05:00',
     payment: 'Nequi',
     notes:
-      'WhatsApp · 2 Moscow Mule y 2 hervidos. La foto no vino en el export; precios de carta.',
-    lines: [
-      { catalog: 'Moscow Mule', name: 'Moscow Mule', qty: 2, unitPrice: 15000 },
-      { catalog: 'Hervido', name: 'Hervido', qty: 2, unitPrice: 7000 },
-    ],
+      'Excel octubre 2026 · Producto no especificado. Comprobante Nequi M32508409 · $42.000. El mensaje es de las 12:20 a. m. del 4 de octubre y el cierre lo deja en la jornada del 3.',
+    lines: [{ name: 'Producto no especificado', qty: 1, unitPrice: 42000 }],
   },
   {
     code: 'WA-20261005-2139',
@@ -295,8 +297,9 @@ const SALES: SaleIn[] = [
   {
     code: 'WA-20261006-1859',
     at: '2026-10-06T18:59:00-05:00',
-    payment: 'Nequi',
-    notes: 'WhatsApp · 2 perros grandes y 2 cafés artesanales. Comprobante $37.000.',
+    payment: 'Transferencia',
+    notes:
+      'Excel octubre 2026 · 2 perros grandes y 2 cafés artesanales. Transferencia llave Nequi, aprobación 179133110073393 · $37.000.',
     lines: [
       { catalog: 'Hot dog grande', name: 'Hot dog grande', qty: 2, unitPrice: 14000 },
       { catalog: 'Café negro artesanal', name: 'Café negro artesanal', qty: 2, unitPrice: 4500 },
@@ -305,19 +308,15 @@ const SALES: SaleIn[] = [
   {
     code: 'WA-20261006-1902',
     at: '2026-10-06T19:02:00-05:00',
-    payment: 'Nequi',
-    notes: 'WhatsApp · Sándwich club Arándano. Dale 78117596 · $20.000.',
-    lines: [{ name: 'Sándwich club Arándano', qty: 1, unitPrice: 20000 }],
-  },
-  {
-    code: 'WA-20261006-2353',
-    at: '2026-10-06T23:53:00-05:00',
-    payment: 'Efectivo',
-    notes: 'WhatsApp · Hervido, perro pequeño y 2 Poker, sumados al cierre.',
+    payment: 'Cierre',
+    notes:
+      'Excel octubre 2026 · El sándwich Club y el pedido de las 11:53 p. m. (1 hervido, 1 perro pequeño y 2 Poker) no tienen valor por separado. El cierre del 6 de octubre les asigna $49.000 juntos ($86.000 − $37.000).',
     lines: [
-      { catalog: 'Hervido', name: 'Hervido', qty: 1, unitPrice: 7000 },
-      { catalog: 'Hot dog pequeño', name: 'Hot dog pequeño', qty: 1, unitPrice: 7000 },
-      { catalog: 'Cerveza Poker', name: 'Cerveza Poker', qty: 2, unitPrice: 5000 },
+      {
+        name: 'Sándwich Club + hervido, perro pequeño y 2 Poker',
+        qty: 1,
+        unitPrice: 49000,
+      },
     ],
   },
   {
@@ -330,28 +329,23 @@ const SALES: SaleIn[] = [
   {
     code: 'WA-20261007-1856',
     at: '2026-10-07T18:56:00-05:00',
-    payment: 'Bre-B',
-    notes:
-      'WhatsApp · 3 perros grandes, 2 aromáticas y 1 hervido. Bre-B TRnVGtVU9pEC · $61.000.',
-    lines: [
-      { catalog: 'Hot dog grande', name: 'Hot dog grande', qty: 3, unitPrice: 14000 },
-      { catalog: 'Aromática con fruta', name: 'Aromática con fruta', qty: 2, unitPrice: 6000 },
-      { catalog: 'Hervido', name: 'Hervido', qty: 1, unitPrice: 7000 },
-    ],
-  },
-  {
-    code: 'WA-20261007-2315',
-    at: '2026-10-07T23:15:00-05:00',
     payment: 'Nequi',
-    notes: 'WhatsApp · 1 margarita. Dale 78317897 · $22.000.',
-    lines: [{ catalog: 'Margarita', name: 'Margarita', qty: 1, unitPrice: 22000 }],
+    notes:
+      'Excel octubre 2026 · 3 perros grandes, 2 aromáticas, 1 hervido y la margarita de las 11:50 p. m. no tienen valor por separado. El cierre del 7 les asigna $83.000 juntos (Nequi del día $97.000 − el perro de $14.000).',
+    lines: [
+      {
+        name: '3 perros grandes + 2 aromáticas + 1 hervido + 1 margarita',
+        qty: 1,
+        unitPrice: 83000,
+      },
+    ],
   },
   {
     code: 'WA-20261008-0009',
     at: '2026-10-08T00:09:00-05:00',
     payment: 'Efectivo',
     notes:
-      'WhatsApp · 18 hervidos, 2 perros pequeños y mitad de sándwich Arándano. Efectivo $160.000.',
+      'Excel octubre 2026 · 18 hervidos, 2 perros pequeños y ½ sándwich Club. Efectivo $160.000. El mensaje es de las 12:09 a. m. del 8 y el cierre lo cuenta en la jornada del 7. La mitad del sándwich quedó en $20.000 para cuadrar el ticket; la carta del medio club es $10.000.',
     lines: [
       { catalog: 'Hervido', name: 'Hervido', qty: 18, unitPrice: 7000 },
       { catalog: 'Hot dog pequeño', name: 'Hot dog pequeño', qty: 2, unitPrice: 7000 },
@@ -364,6 +358,38 @@ const SALES: SaleIn[] = [
     payment: 'Nequi',
     notes: 'WhatsApp · 2 perros pequeños. Nequi M20423228 · $14.000.',
     lines: [{ catalog: 'Hot dog pequeño', name: 'Hot dog pequeño', qty: 2, unitPrice: 7000 }],
+  },
+  {
+    code: 'WA-20261009-VECINOS',
+    at: '2026-10-09T12:00:00-05:00',
+    payment: 'Cuenta vecinos',
+    notes:
+      'Excel octubre 2026 · Lista manuscrita Cuenta vecinos (IMG-20261010-WA0000). El café artesanal de $4.500 no se repite: ya está en la venta V0395 del punto de venta. La picada quedó en $96.000 para que el día cuadre con los $854.500 de Sonia.',
+    lines: [
+      { catalog: 'Botella Aguardiente Nariño', name: 'Botella Aguardiente Nariño', qty: 4, unitPrice: 85000 },
+      { catalog: 'Media Aguardiente Nariño', name: 'Media Aguardiente Nariño', qty: 2, unitPrice: 50000 },
+      { name: 'Picada', qty: 1, unitPrice: 96000 },
+      { catalog: 'Cerveza Poker', name: 'Cerveza Poker lata', qty: 10, unitPrice: 5000 },
+      { catalog: 'Cerveza Club Colombia', name: 'Cerveza Club Colombia lata', qty: 5, unitPrice: 6000 },
+      { name: 'Vaso de agua con limón', qty: 3, unitPrice: 5000 },
+      { catalog: 'Jugo natural', name: 'Jugo natural de mango', qty: 1, unitPrice: 5000 },
+      { name: 'Agua mini Brisa', qty: 1, unitPrice: 4000 },
+      { name: 'Agua', qty: 2, unitPrice: 2000 },
+    ],
+  },
+  {
+    code: 'WA-20261009-LISTA2',
+    at: '2026-10-09T18:00:00-05:00',
+    payment: 'Lista 2',
+    notes:
+      'Excel octubre 2026 · Lista manuscrita (IMG-20261010-WA0001). Jessica avisó un sándwich Club sin valor; no está en las listas y esas listas ya suman el cierre de Sonia, así que no se registró.',
+    lines: [
+      { catalog: 'Media Aguardiente Nariño', name: 'Media Aguardiente Nariño', qty: 2, unitPrice: 50000 },
+      { catalog: 'Cerveza Poker', name: 'Cerveza Poker', qty: 4, unitPrice: 5000 },
+      { name: 'Agua', qty: 3, unitPrice: 2000 },
+      { catalog: 'Hot dog grande', name: 'Hot dog grande', qty: 5, unitPrice: 14000 },
+      { catalog: 'Coca Cola', name: 'Coca Cola', qty: 2, unitPrice: 5000 },
+    ],
   },
 ];
 
@@ -485,7 +511,10 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirect = process.argv[1]?.includes('import-whatsapp-arandano-sales');
+if (isDirect) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

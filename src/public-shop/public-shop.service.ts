@@ -72,6 +72,7 @@ export class PublicShopService {
           id: true,
           name: true,
           description: true,
+          sku: true,
           salePrice: true,
           primaryImageUrl: true,
           categoryId: true,
@@ -91,6 +92,7 @@ export class PublicShopService {
       categories: categories.filter((c) => !isInternalCategory(c.name)),
       products: products
         .filter((p) => !isInternalCategory(p.category?.name))
+        .filter((p) => p.sku !== 'POS-OPEN' && p.sku !== 'POS-EXTRA')
         .map((p) => ({
         id: p.id,
         name: p.name,
@@ -128,15 +130,20 @@ export class PublicShopService {
         id: { in: productIds },
         status: ProductStatus.ACTIVE,
       },
-      select: { id: true, name: true, salePrice: true },
+      select: { id: true, name: true, salePrice: true, sku: true },
     });
     const priceById = new Map(
       dbProducts.map((p) => [p.id, Number(p.salePrice.toString())]),
     );
+    const hiddenSku = new Set(['POS-OPEN', 'POS-EXTRA']);
 
     const lines: ShopCartLine[] = [];
     let total = 0;
     for (const item of dto.items) {
+      const product = dbProducts.find((p) => p.id === item.productId);
+      if (!product || (product.sku && hiddenSku.has(product.sku))) {
+        throw new BadRequestException(`Producto no disponible: ${item.productId}`);
+      }
       const unitPrice = priceById.get(item.productId);
       if (unitPrice == null) {
         throw new BadRequestException(`Producto no disponible: ${item.productId}`);
