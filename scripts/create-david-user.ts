@@ -8,6 +8,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { pgPoolConfig } from '../src/common/pg-pool-config';
+import { assertOperationalPassword } from '../src/common/security-policy';
 
 const COMPANY_ID = 'seed-arandano-cafe-bar';
 const MANAGER_PERMISSION_SLUGS = [
@@ -40,7 +41,10 @@ async function main() {
   const email = (process.env.SEED_DAVID_EMAIL ?? 'david@arandano.com')
     .trim()
     .toLowerCase();
-  const password = process.env.SEED_DAVID_PASSWORD ?? 'David@Arandano2026!';
+  const password = assertOperationalPassword(
+    'SEED_DAVID_PASSWORD',
+    process.env.SEED_DAVID_PASSWORD,
+  );
   const name = process.env.SEED_DAVID_NAME ?? 'David Herrera';
   const passwordHash = await bcrypt.hash(password, 10);
 

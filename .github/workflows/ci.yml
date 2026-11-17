@@ -1,4 +1,5 @@
-# Build y tests en cada push / PR a main (sin eslint: el repo aún no pasa prettier en CI).
+# Build, pruebas y lint de los controles de esta remediación.
+# El eslint de todo el repositorio sigue pendiente: el árbol anterior no pasa Prettier.
 name: CI
 
 on:
@@ -40,3 +41,9 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+      - name: E2E de identidad y salud
+        run: npm run test:e2e
+
+      - name: Lint de controles de seguridad
+        run: npx eslint src/common/security-policy.ts src/common/security-policy.spec.ts src/common/wompi-signature.ts src/common/wompi-signature.spec.ts src/common/shop-access-token.ts src/common/shop-access-token.spec.ts src/tenant/tenant.guard.ts src/tenant/tenant.guard.spec.ts src/auth/auth-cookie.ts src/auth/auth-session.service.ts src/audit/audit.service.ts src/app.active-modules.spec.ts --max-warnings 0

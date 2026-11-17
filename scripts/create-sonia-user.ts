@@ -8,12 +8,16 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { pgPoolConfig } from '../src/common/pg-pool-config';
+import { assertOperationalPassword } from '../src/common/security-policy';
 
 const COMPANY_ID = 'seed-arandano-cafe-bar';
 const EMAIL = (process.env.SEED_SONIA_EMAIL ?? 'sonia@arandano.com')
   .trim()
   .toLowerCase();
-const PASSWORD = process.env.SEED_SONIA_PASSWORD ?? 'Sonia@Arandano2026!';
+const PASSWORD = assertOperationalPassword(
+  'SEED_SONIA_PASSWORD',
+  process.env.SEED_SONIA_PASSWORD,
+);
 const NAME = process.env.SEED_SONIA_NAME ?? 'Sonia Herrera';
 
 async function main() {
@@ -83,7 +87,6 @@ async function main() {
         {
           ok: true,
           email: EMAIL,
-          password: PASSWORD,
           name: NAME,
           role: ownerRole.slug,
           company: { id: company.id, name: company.name },

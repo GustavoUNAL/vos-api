@@ -64,8 +64,16 @@ if host in {"localhost", "127.0.0.1"} or host.startswith("postgres"):
     sys.stderr.write(f"DATABASE_URL apunta a {host or 'vacío'} — aborto para no perder Neon.\n")
     sys.exit(3)
 
+secret = get(api, "JWT_SECRET")
+if len(secret) < 32 or any(w in secret.lower() for w in ("change-me", "changeme", "dev-secret")):
+    sys.stderr.write("JWT_SECRET de producción falta o parece un valor de ejemplo. No se despliega.\n")
+    sys.exit(4)
+
 api = upsert(api, "PORT", "3001")
 api = upsert(api, "NODE_ENV", "production")
+api = upsert(api, "JWT_EXPIRES_IN", "15m")
+api = upsert(api, "AUTH_PUBLIC_REGISTER", "false")
+api = upsert(api, "AUTH_REFRESH_DAYS", "14")
 api = upsert(api, "CORS_ORIGIN", "https://vos-ia.com,https://www.vos-ia.com")
 api = upsert(api, "GOOGLE_REDIRECT_URI", "https://vos-ia.com/auth/google/callback")
 api = upsert(api, "GOOGLE_FRONT_URL", "https://vos-ia.com")

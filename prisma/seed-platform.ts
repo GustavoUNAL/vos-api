@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { pgPoolConfig } from '../src/common/pg-pool-config';
 import { estimateProductionCostCOP } from '../src/common/estimate-product-cost';
+import { assertOperationalPassword } from '../src/common/security-policy';
 
 const MODULES = [
   { slug: 'products', name: 'Productos', description: 'Catálogo y precios', sortOrder: 10 },
@@ -15,7 +16,8 @@ const MODULES = [
   { slug: 'staff', name: 'Personal', description: 'Turnos y nómina por hora', sortOrder: 38 },
   { slug: 'finance', name: 'Finanzas', description: 'Análisis y reportes', sortOrder: 42 },
   { slug: 'booking', name: 'Agenda de citas', description: 'Motor de citas y reservas reutilizable', sortOrder: 18 },
-  { slug: 'crm', name: 'CRM', description: 'Clientes y relaciones', sortOrder: 40 },
+  { slug: 'crm', name: 'CRM', description: 'Reservado. No se activa en el onboarding.', sortOrder: 40 },
+  { slug: 'dental', name: 'Clínica dental', description: 'Pacientes, agenda, bioseguridad y operación clínica', sortOrder: 15 },
   { slug: 'projects', name: 'Proyectos', description: 'Historial de obras y servicios', sortOrder: 50 },
 ] as const;
 
@@ -103,6 +105,13 @@ const FINANCE_PERMISSIONS = [
   { slug: 'finance.view', name: 'Ver análisis financiero' },
 ] as const;
 
+const DENTAL_PERMISSIONS = [
+  { slug: 'dental.view', name: 'Ver clínica dental' },
+  { slug: 'dental.create', name: 'Crear registros clínicos' },
+  { slug: 'dental.update', name: 'Editar registros clínicos' },
+  { slug: 'dental.delete', name: 'Eliminar registros clínicos' },
+] as const;
+
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required');
@@ -111,21 +120,31 @@ async function main() {
   const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
   // Credenciales plataforma (solo admin global)
-  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? 'admin@vos.ai').trim().toLowerCase();
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'VosAi2026!';
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? '').trim().toLowerCase();
+  if (!adminEmail) throw new Error('SEED_ADMIN_EMAIL es obligatorio.');
+  const adminPassword = assertOperationalPassword(
+    'SEED_ADMIN_PASSWORD',
+    process.env.SEED_ADMIN_PASSWORD,
+  );
   const adminName = process.env.SEED_ADMIN_NAME ?? 'Administrador VOS AI';
   const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
 
   // Credenciales tenant Arándano Café Bar
-  const arandanoEmail = (process.env.SEED_ARANDANO_EMAIL ?? 'owner@arandano.com').trim().toLowerCase();
-  const arandanoPassword = process.env.SEED_ARANDANO_PASSWORD ?? 'Arandano2026!';
+  const arandanoEmail = (process.env.SEED_ARANDANO_EMAIL ?? '').trim().toLowerCase();
+  if (!arandanoEmail) throw new Error('SEED_ARANDANO_EMAIL es obligatorio.');
+  const arandanoPassword = assertOperationalPassword(
+    'SEED_ARANDANO_PASSWORD',
+    process.env.SEED_ARANDANO_PASSWORD,
+  );
   const arandanoName = process.env.SEED_ARANDANO_NAME ?? 'Propietario Arándano';
   const arandanoPasswordHash = await bcrypt.hash(arandanoPassword, 10);
 
-  const davidEmail = (process.env.SEED_DAVID_EMAIL ?? 'david@arandano.com')
-    .trim()
-    .toLowerCase();
-  const davidPassword = process.env.SEED_DAVID_PASSWORD ?? 'David@Arandano2026!';
+  const davidEmail = (process.env.SEED_DAVID_EMAIL ?? '').trim().toLowerCase();
+  if (!davidEmail) throw new Error('SEED_DAVID_EMAIL es obligatorio.');
+  const davidPassword = assertOperationalPassword(
+    'SEED_DAVID_PASSWORD',
+    process.env.SEED_DAVID_PASSWORD,
+  );
   const davidName = process.env.SEED_DAVID_NAME ?? 'David Herrera';
   const davidPasswordHash = await bcrypt.hash(davidPassword, 10);
 
@@ -305,6 +324,7 @@ async function main() {
       ...PROJECTS_PERMISSIONS,
       ...BOOKING_PERMISSIONS,
       ...FINANCE_PERMISSIONS,
+      ...DENTAL_PERMISSIONS,
     ]) {
       await prisma.permission.upsert({
         where: { slug: perm.slug },

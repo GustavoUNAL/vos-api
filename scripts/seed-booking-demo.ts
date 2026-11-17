@@ -1,7 +1,7 @@
 /**
  * Demo VOS AI Booking — empresa genérica de servicios + usuario Ricky.
  * Uso: npm run db:seed-booking-demo
- * Credenciales: SEED_RICKY_EMAIL / SEED_RICKY_PASSWORD (defaults de entorno de demo).
+ * Credenciales: SEED_RICKY_EMAIL / SEED_RICKY_PASSWORD (obligatorias, sin valores de respaldo).
  */
 import 'dotenv/config';
 import * as bcrypt from 'bcryptjs';
@@ -9,6 +9,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { pgPoolConfig } from '../src/common/pg-pool-config';
+import { assertOperationalPassword } from '../src/common/security-policy';
 import { wallToUtc, ymdInOffset } from '../src/platform-booking/booking-time';
 
 const COMPANY_ID = 'seed-booking-barberia-demo';
@@ -34,7 +35,10 @@ async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required');
   const email = (process.env.SEED_RICKY_EMAIL ?? 'ricky@barberia.com').trim().toLowerCase();
-  const password = process.env.SEED_RICKY_PASSWORD ?? 'Ricky2026!';
+  const password = assertOperationalPassword(
+    'SEED_RICKY_PASSWORD',
+    process.env.SEED_RICKY_PASSWORD,
+  );
   const name = process.env.SEED_RICKY_NAME ?? 'Ricky';
 
   const pool = new Pool(pgPoolConfig(url));

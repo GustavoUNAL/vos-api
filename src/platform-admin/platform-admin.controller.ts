@@ -15,6 +15,7 @@ import type { JwtPayload } from '../auth/jwt.types';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { PlatformAdminService } from './platform-admin.service';
 import { SetCompanyPlanDto } from './dto/set-company-plan.dto';
+import { SetPlatformAdminDto } from './dto/set-platform-admin.dto';
 import { SetCompanyModuleDto } from './dto/set-company-module.dto';
 import { UpdatePlatformUserDto } from './dto/update-platform-user.dto';
 import { UpdateAccessRequestDto } from './dto/update-access-request.dto';
@@ -58,6 +59,15 @@ export class PlatformAdminController {
     return detail;
   }
 
+  @Patch('users/:id/platform-admin')
+  setPlatformAdmin(
+    @Param('id') id: string,
+    @Body() body: SetPlatformAdminDto,
+    @CurrentUser() actor: JwtPayload,
+  ) {
+    return this.platform.setPlatformAdmin(actor.sub, id, body.enabled);
+  }
+
   @Patch('users/:id')
   updateUser(@Param('id') id: string, @Body() body: UpdatePlatformUserDto) {
     return this.platform.updateUser(id, body);
@@ -69,8 +79,12 @@ export class PlatformAdminController {
   }
 
   @Patch('companies/:id/plan')
-  setPlan(@Param('id') id: string, @Body() body: SetCompanyPlanDto) {
-    return this.platform.setCompanyPlan(id, body.plan);
+  setPlan(
+    @Param('id') id: string,
+    @Body() body: SetCompanyPlanDto,
+    @CurrentUser() actor: JwtPayload,
+  ) {
+    return this.platform.setCompanyPlan(id, body.plan, actor.sub);
   }
 
   @Patch('companies/:id/modules')

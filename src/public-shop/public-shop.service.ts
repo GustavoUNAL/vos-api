@@ -17,6 +17,10 @@ import { ShopOrdersRealtimeService } from '../platform-shop-orders/shop-orders-r
 import { ShopCheckoutDto } from './dto/shop-checkout.dto';
 import { PaymentLinkService } from './payment-link.service';
 import {
+  hashShopAccessToken,
+  newShopAccessToken,
+} from '../common/shop-access-token';
+import {
   formatShopOrderInternalAlert,
   settleShopOrderAsSale,
   shopPaymentLabel,
@@ -171,10 +175,12 @@ export class PublicShopService {
           });
 
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    const accessToken = newShopAccessToken();
     const order = await this.prisma.shopOrder.create({
       data: {
         companyId: company.id,
         orderCode,
+        accessTokenHash: hashShopAccessToken(accessToken),
         status: ShopOrderStatus.PENDING,
         paymentMethod,
         customerName: dto.customerName?.trim() || null,
@@ -201,40 +207,49 @@ export class PublicShopService {
 
     const formatted = this.formatOrder(order, company.name);
     this.shopRealtime.emitCreated(company.id, formatted);
-    return formatted;
+    return { ...formatted, accessToken };
   }
 
-  async getOrder(orderId: string) {
-    const order = await this.prisma.shopOrder.findUnique({
-      where: { id: orderId },
-      include: { company: { select: { name: true, shopSlug: true } } },
-    });
-    if (!order) throw new NotFoundException('Pedido no encontrado');
-    return this.formatOrder(order, order.company.name);
-  }
-
-  async getOrderByCode(slug: string, orderCode: string) {
+  async getOrderByCode(slug: string, orderCode: string, token: string) {
     const company = await this.resolveCompany(slug);
+    const accessToken = token?.trim();
+    if (!accessToken) throw new NotFoundException('Pedido no encontrado');
     const order = await this.prisma.shopOrder.findFirst({
-      where: { companyId: company.id, orderCode },
+      where: {
+        companyId: company.id,
+        orderCode,
+        accessTokenHash: hashShopAccessToken(accessToken),
+      },
     });
     if (!order) throw new NotFoundException('Pedido no encontrado');
     return this.formatOrder(order, company.name);
   }
 
-  /** @deprecated El cobro lo realiza el POS tras marcar entregado. */
-  async confirmPayment(orderId: string) {
-    const order = await this.prisma.shopOrder.findUnique({
-      where: { id: orderId },
-      include: { company: { select: { id: true, name: true } } },
+  async recordProviderPayment(input: {
+    reference: string;
+    status: string;
+    transactionId?: string;
+  }) {
+    const orders = await this.prisma.shopOrder.findMany({
+      where: { OR: [{ orderCode: input.reference }, { paymentRef: input.reference }] },
+      select: { id: true, companyId: true, providerPaymentStatus: true },
     });
-    if (!order) throw new NotFoundException('Pedido no encontrado');
-    if (order.status === ShopOrderStatus.PAID) {
-      return this.formatOrder(order, order.company.name, {
-        whatsappSent: true,
-        saleId: order.saleId,
-      });
+    if (orders.length !== 1) {
+      return { updated: false, reason: orders.length === 0 ? 'not_found' : 'ambiguous' };
     }
+    const order = orders[0];
+    if (order.providerPaymentStatus === input.status) {
+      return { updated: false, reason: 'duplicate', id: order.id };
+    }
+    await this.prisma.shopOrder.update({
+      where: { id: order.id },
+      data: { providerPaymentStatus: input.status.slice(0, 40) },
+    });
+    return { updated: true, id: order.id, status: input.status };
+  }
+
+  /** El navegador no puede marcar un pedido como pagado. */
+  async confirmPayment(_orderId: string) {
     throw new BadRequestException(
       'El pago se confirma en caja cuando el pedido esté entregado.',
     );

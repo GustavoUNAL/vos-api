@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { AuthSessionService } from '../auth/auth-session.service';
 import {
   OnGatewayConnection,
   WebSocketGateway,
@@ -7,11 +8,13 @@ import {
 } from '@nestjs/websockets';
 import type { IncomingMessage } from 'http';
 import type { Server, WebSocket } from 'ws';
+import { shouldDeliverShopEvent } from '../common/security-policy';
 import { JwtPayload } from '../auth/jwt.types';
 
 type ShopWsClient = WebSocket & {
   user?: JwtPayload;
   companyId?: string | null;
+  authed?: boolean;
 };
 
 @WebSocketGateway({ path: '/shop/ws' })
@@ -20,38 +23,51 @@ export class ShopOrdersGateway implements OnGatewayConnection {
   @WebSocketServer()
   server!: Server;
 
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly sessions: AuthSessionService,
+  ) {}
 
-  handleConnection(client: ShopWsClient, request: IncomingMessage): void {
-    const token = this.extractToken(request.url, client);
-    if (!token) {
-      client.close(4401, 'Token requerido');
-      return;
-    }
-    try {
-      const payload = this.jwt.verify<JwtPayload>(token);
-      client.user = payload;
-      client.companyId = payload.companyId ?? null;
-    } catch {
-      client.close(4401, 'Token inválido');
-    }
-  }
+  handleConnection(client: ShopWsClient, _request: IncomingMessage): void {
+    client.companyId = null;
+    client.authed = false;
+    const timer = setTimeout(() => {
+      if (!client.authed) client.close(4401, 'Auth requerida');
+    }, 5000);
 
-  private extractToken(url: string | undefined, client: WebSocket): string | null {
-    if (url) {
-      try {
-        const parsed = new URL(url, 'http://localhost');
-        const q = parsed.searchParams.get('token');
-        if (q) return q;
-      } catch {
-        /* ignore */
-      }
-    }
-    const headers = (client as WebSocket & { protocol?: string }).protocol;
-    if (headers?.startsWith('Bearer ')) {
-      return headers.slice(7);
-    }
-    return null;
+    client.on('message', (raw) => {
+      if (client.authed) return;
+      void (async () => {
+        try {
+          const msg = JSON.parse(raw.toString()) as {
+            type?: string;
+            token?: string;
+          };
+          if (msg?.type !== 'auth' || typeof msg.token !== 'string' || !msg.token) {
+            client.close(4401, 'Auth requerida');
+            return;
+          }
+          const payload = this.jwt.verify<JwtPayload>(msg.token);
+          if (!payload.sid) {
+            client.close(4401, 'Auth requerida');
+            return;
+          }
+          if (!payload.companyId) {
+            client.close(4403, 'Empresa requerida');
+            return;
+          }
+          await this.sessions.assertActive(payload.sid, payload.sub);
+          client.user = payload;
+          client.companyId = payload.companyId;
+          client.authed = true;
+          clearTimeout(timer);
+          client.send(JSON.stringify({ type: 'auth.ok' }));
+        } catch {
+          clearTimeout(timer);
+          client.close(4401, 'Token inválido');
+        }
+      })();
+    });
   }
 
   emitShopOrderEvent(
@@ -63,7 +79,7 @@ export class ShopOrdersGateway implements OnGatewayConnection {
     this.server?.clients.forEach((c) => {
       const client = c as ShopWsClient;
       if (client.readyState !== client.OPEN) return;
-      if (!client.companyId || client.companyId === companyId) {
+      if (shouldDeliverShopEvent(client.companyId, companyId)) {
         client.send(raw);
       }
     });

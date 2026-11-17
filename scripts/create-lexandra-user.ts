@@ -8,17 +8,18 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { pgPoolConfig } from '../src/common/pg-pool-config';
+import { assertOperationalPassword } from '../src/common/security-policy';
 
 const COMPANY_ID = 'seed-lexandra-odontologia';
 const COMPANY_NAME = 'Alexandra Bastidas Odontología';
 const MODULES = ['inventory', 'finance', 'dental'] as const;
 
-const EMAIL = (
-  process.env.SEED_LEXANDRA_EMAIL ?? 'lexandrabastidasodontologa@gmail.com'
-)
-  .trim()
-  .toLowerCase();
-const PASSWORD = process.env.SEED_LEXANDRA_PASSWORD ?? 'Lexandra2026!';
+const EMAIL = (process.env.SEED_LEXANDRA_EMAIL ?? '').trim().toLowerCase();
+if (!EMAIL) throw new Error('SEED_LEXANDRA_EMAIL es obligatorio.');
+const PASSWORD = assertOperationalPassword(
+  'SEED_LEXANDRA_PASSWORD',
+  process.env.SEED_LEXANDRA_PASSWORD,
+);
 const NAME = process.env.SEED_LEXANDRA_NAME ?? 'Alexandra Bastidas';
 
 async function main() {
@@ -175,7 +176,6 @@ async function main() {
         {
           ok: true,
           email: EMAIL,
-          password: PASSWORD,
           name: NAME,
           company: { id: company.id, name: company.name },
           modules: [...MODULES],

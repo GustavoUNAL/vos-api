@@ -45,6 +45,6 @@ docker compose --profile full up -d --build
 - API: http://localhost:3000  
 - App: http://localhost:8080  
 
-## Login demo
+## Acceso
 
-`admin@vos.ai` / `VosAi2026!`
+No hay credenciales de demostración en el repositorio. El seed exige `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD` en el entorno, con una contraseña propia de al menos 12 caracteres. La rotación de cuentas que llegaron a estar escritas en Git está en `CREDENTIALS.md`.

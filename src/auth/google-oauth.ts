@@ -22,6 +22,7 @@ export function googleFrontRedirect(opts: {
   signup?: string;
   error?: string;
   popup?: boolean;
+  session?: boolean;
 }): string {
   const base = opts.frontUrl.replace(/\/$/, '');
   const path = opts.popup
@@ -32,7 +33,7 @@ export function googleFrontRedirect(opts: {
         ? '/#/health/login'
         : '/#/login';
   const q = new URLSearchParams();
-  if (opts.token) q.set('google_token', opts.token);
+  if (opts.session) q.set('google_session', '1');
   if (opts.signup) q.set('google_signup', opts.signup);
   if (opts.error) q.set('google_error', opts.error);
   const qs = q.toString();

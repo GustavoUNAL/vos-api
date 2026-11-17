@@ -58,14 +58,15 @@ describe('google-oauth', () => {
     expect(parsed.searchParams.get('scope')).toContain('email');
   });
 
-  it('redirige al hash de login con el JWT', () => {
-    expect(
-      googleFrontRedirect({
-        frontUrl: 'http://localhost:5173',
-        returnTo: 'login',
-        token: 'jwt-1',
-      }),
-    ).toBe('http://localhost:5173/#/login?google_token=jwt-1');
+  it('redirige al login con sesión y sin JWT en la URL', () => {
+    const url = googleFrontRedirect({
+      frontUrl: 'http://localhost:5173',
+      returnTo: 'login',
+      token: 'jwt-1',
+      session: true,
+    });
+    expect(url).toBe('http://localhost:5173/#/login?google_session=1');
+    expect(url).not.toContain('jwt-1');
   });
 
   it('redirige a Health con error sin token', () => {
@@ -101,15 +102,18 @@ describe('google-oauth', () => {
     );
   });
 
-  it('redirige el popup a una ruta que cierra la ventana', () => {
-    expect(
-      googleFrontRedirect({
-        frontUrl: 'http://localhost:5173',
-        returnTo: 'login',
-        token: 'jwt-1',
-        popup: true,
-      }),
-    ).toBe('http://localhost:5173/#/auth/google/popup?google_token=jwt-1');
+  it('redirige el popup a una ruta que cierra la ventana, sin JWT', () => {
+    const url = googleFrontRedirect({
+      frontUrl: 'http://localhost:5173',
+      returnTo: 'login',
+      token: 'jwt-1',
+      popup: true,
+      session: true,
+    });
+    expect(url).toBe(
+      'http://localhost:5173/#/auth/google/popup?google_session=1',
+    );
+    expect(url).not.toContain('jwt-1');
   });
 
   it('acepta returnTo health y el resto cae a login', () => {

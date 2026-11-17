@@ -7,6 +7,11 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { JwtPayload } from '../auth/jwt.types';
+import {
+  readOnlyPermissions,
+  resolveTenantCompanyId,
+  supportWriteStillValid,
+} from '../common/security-policy';
 import type { TenantContext } from './tenant.types';
 
 @Injectable()
@@ -26,13 +31,18 @@ export class TenantGuard implements CanActivate {
     }
 
     const headerCompany = req.headers['x-company-id'];
-    const companyId =
-      (typeof headerCompany === 'string' ? headerCompany : jwtUser.companyId) ||
-      '';
-
-    if (!companyId) {
-      throw new ForbiddenException('Seleccione una empresa (X-Company-Id)');
+    const resolved = resolveTenantCompanyId({
+      tokenCompanyId: jwtUser.companyId,
+      headerCompanyId: typeof headerCompany === 'string' ? headerCompany : '',
+    });
+    if (!resolved.ok) {
+      throw new ForbiddenException(
+        resolved.code === 'mismatch'
+          ? 'La empresa de la cabecera no coincide con la sesión. Cambiá de empresa desde el acceso autorizado.'
+          : 'Seleccione una empresa',
+      );
     }
+    const companyId = resolved.companyId;
 
     const membership = await this.prisma.companyMember.findFirst({
       where: {
@@ -57,7 +67,11 @@ export class TenantGuard implements CanActivate {
     });
 
     if (!membership || membership.company.status !== 'ACTIVE') {
-      if (jwtUser.isPlatformAdmin && !jwtUser.platformView) {
+      if (
+        jwtUser.isPlatformAdmin &&
+        !jwtUser.platformView &&
+        jwtUser.companyId === companyId
+      ) {
         const company = await this.prisma.company.findFirst({
           where: { id: companyId, status: 'ACTIVE' },
           select: { id: true, name: true, status: true },
@@ -65,17 +79,21 @@ export class TenantGuard implements CanActivate {
         if (!company) {
           throw new ForbiddenException('Sin acceso a esta empresa');
         }
-        const allPermissions = await this.prisma.permission.findMany({
-          select: { slug: true },
+        const write = supportWriteStillValid({
+          supportMode: jwtUser.supportMode,
+          supportUntil: jwtUser.supportUntil,
         });
+        const permissions = write
+          ? (jwtUser.permissions ?? [])
+          : readOnlyPermissions(jwtUser.permissions ?? []);
         req.tenant = {
           userId: jwtUser.sub,
           email: jwtUser.email,
           name: jwtUser.name,
           companyId: company.id,
           companyName: company.name,
-          permissions: allPermissions.map((p) => p.slug),
-          role: 'platform-admin',
+          permissions,
+          role: 'platform-support',
         };
         return true;
       }

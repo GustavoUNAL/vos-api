@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
 import type { AssistantHistoryItem } from './business-assistant.service';
 
 const PRODUCT_CONTEXT = `
@@ -21,13 +22,36 @@ Para hablar con un asesor humano: el visitante debe pedirlo en este chat (ej. "h
 export class LandingAssistantService {
   private readonly logger = new Logger(LandingAssistantService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  private async consumeDailyQuota(): Promise<void> {
+    const limit = Number(this.config.get<string>('PUBLIC_AI_DAILY_LIMIT') ?? 200);
+    const cap = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 200;
+    const day = new Date();
+    day.setUTCHours(0, 0, 0, 0);
+    const row = await this.prisma.publicAiUsageDay.upsert({
+      where: { day },
+      create: { day, requests: 1 },
+      update: { requests: { increment: 1 } },
+    });
+    if (row.requests > cap) {
+      throw new HttpException('Cupo diario del asistente público alcanzado', 429);
+    }
+  }
 
   async answer(
     question: string,
     history?: AssistantHistoryItem[],
   ): Promise<{ answer: string; advisorSuggested?: boolean }> {
-    const text = question.trim();
+    await this.consumeDailyQuota();
+    const text = question.trim().slice(0, 500);
+    history = (history ?? []).slice(-4).map((item) => ({
+      ...item,
+      content: item.content.slice(0, 500),
+    }));
     if (!text) {
       return {
         answer:

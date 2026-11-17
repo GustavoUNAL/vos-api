@@ -40,12 +40,12 @@ export class PaymentLinkService {
             `1. Abre Nequi en tu celular`,
             `2. Envía ${formatted} al Nequi ${nequiPhone}`,
             `3. En el mensaje escribe la referencia: ${ref}`,
-            `4. Vuelve aquí y pulsa «Confirmar pago»`,
+            `4. El negocio confirma el cobro en caja. Esta pantalla no marca el pedido como pagado.`,
           ].join('\n')
         : [
             `Pedido ${ref} · Total ${formatted}`,
             `Configura SHOP_NEQUI_PHONE en el servidor con el Nequi del negocio.`,
-            `Luego confirma el pago en esta pantalla.`,
+            `El cobro se confirma en caja, no desde el navegador.`,
           ].join('\n');
 
       const deepLink = nequiPhone
@@ -61,15 +61,16 @@ export class PaymentLinkService {
       };
     }
 
-    const brebKey =
-      this.config.get<string>('SHOP_BREB_KEY')?.trim() ?? '@ARANDANOCAFE';
+    const brebKey = this.config.get<string>('SHOP_BREB_KEY')?.trim() || '';
     const wompiLink = this.tryWompiLink(ref, amount, method);
     const instructions = [
       `Pedido ${ref} · Total ${formatted}`,
       `1. Abre la app de tu banco (Bre-B habilitado)`,
       `2. Transfiere ${formatted} a la llave Bre-B: ${brebKey}`,
       `3. Referencia: ${ref}`,
-      `4. Vuelve aquí y pulsa «Confirmar pago»`,
+      brebKey
+        ? `4. El negocio confirma el cobro en caja.`
+        : `Configura SHOP_BREB_KEY. El cobro se confirma en caja.`,
     ].join('\n');
 
     return {

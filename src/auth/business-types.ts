@@ -30,9 +30,9 @@ export const BUSINESS_TYPE_MODULES: Record<BusinessTypeId, readonly string[]> = 
     'tasks',
     'finance',
   ],
-  barbershop: ['booking', 'sales', 'crm', 'finance'],
+  barbershop: ['booking', 'sales', 'finance'],
   retail: ['products', 'inventory', 'sales', 'purchases', 'finance'],
-  services: ['booking', 'projects', 'tasks', 'crm', 'finance'],
+  services: ['booking', 'projects', 'tasks', 'finance'],
   clinic: ['dental', 'inventory', 'finance'],
   other: ['products', 'sales', 'inventory', 'tasks', 'finance'],
 };

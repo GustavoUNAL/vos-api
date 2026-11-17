@@ -185,6 +185,7 @@ model Company {
   bookingWorkingHours BookingWorkingHour[]
   bookingBlocks     BookingAvailabilityBlock[]
   bookingPushDevices BookingPushDevice[]
+  authSessions      AuthSession[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -208,6 +209,7 @@ model User {
   memberships     CompanyMember[]
   aiConversations AiConversation[]
   auditLogs       AuditLog[]
+  authSessions    AuthSession[]
   salesRecorded   Sale[]           @relation("SaleRecordedBy")
   tasksCreated    CompanyTask[]    @relation("TaskCreatedBy")
   tasksAssigned   CompanyTask[]    @relation("TaskAssignedTo")
@@ -218,6 +220,26 @@ model User {
 
   @@index([active], map: "idx_users_active")
   @@map("users")
+}
+
+/// Sesión revocable. El access token solo referencia el id; el refresh vive hasheado.
+model AuthSession {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique @map("token_hash")
+  companyId    String?   @map("company_id")
+  company      Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  platformView Boolean   @default(false) @map("platform_view")
+  supportMode  String?   @map("support_mode")
+  supportUntil Int?      @map("support_until")
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId], map: "idx_auth_sessions_user_id")
+  @@index([companyId], map: "idx_auth_sessions_company_id")
+  @@map("auth_sessions")
 }
 
 /// Solicitud de acceso desde la landing (el admin crea la cuenta manualmente).
@@ -582,6 +604,9 @@ model ShopOrder {
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   paidAt              DateTime?         @map("paid_at") @db.Timestamptz(6)
   expiresAt           DateTime?         @map("expires_at") @db.Timestamptz(6)
+  /// SHA-256 del token opaco que ve el cliente. Nunca el token en claro.
+  accessTokenHash     String?           @unique @map("access_token_hash")
+  providerPaymentStatus String?         @map("provider_payment_status")
 
   @@unique([companyId, orderCode], map: "shop_orders_company_order_code_key")
   @@index([companyId], map: "idx_shop_orders_company_id")
@@ -1321,6 +1346,15 @@ model DentalTempHumidityLog {
 
   @@index([companyId, logDate], map: "idx_dental_temp_logs_company_date")
   @@map("dental_temp_humidity_logs")
+}
+
+/// Consumo diario del asistente público. Sirve para cortar gasto, no para guardar preguntas.
+model PublicAiUsageDay {
+  id       String   @id @default(cuid())
+  day      DateTime @unique @db.Date
+  requests Int      @default(0)
+
+  @@map("public_ai_usage_days")
 }
 
 // ---------------------------------------------------------------------------

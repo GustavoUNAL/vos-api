@@ -1,9 +1,6 @@
-import { CategoryType } from '@prisma/client';
-
 /** Convención de almacenamiento: `{CategoryType}::{slug legible}`. */
-const CATEGORY_STORAGE_PREFIX = new RegExp(
-  `^(?:${CategoryType.PRODUCT}|${CategoryType.INVENTORY}|${CategoryType.EXPENSE})::`,
-);
+const CATEGORY_STORAGE_PREFIX =
+  /^(?:PRODUCT|INVENTORY|EXPENSE)::/;
 
 export function categoryDisplayName(name: string): string {
   return name.replace(CATEGORY_STORAGE_PREFIX, '');

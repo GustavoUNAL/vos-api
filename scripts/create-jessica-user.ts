@@ -1,6 +1,6 @@
 /**
  * Jessica Cisneros (operadora): todos los módulos de Arándano Café Bar; solo sus turnos.
- * Cuenta: jl9766151@gmail.com — no resetea la contraseña salvo SEED_JESSICA_PASSWORD.
+ * El correo sale de SEED_JESSICA_EMAIL. La contraseña solo se define con SEED_JESSICA_PASSWORD.
  * Uso: npm run db:create-jessica-user
  */
 import 'dotenv/config';
@@ -9,6 +9,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { pgPoolConfig } from '../src/common/pg-pool-config';
+import { assertOperationalPassword } from '../src/common/security-policy';
 
 const COMPANY_ID = 'seed-arandano-cafe-bar';
 const CREW_SLUG = 'crew';
@@ -40,10 +41,14 @@ async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required');
 
-  const email = (process.env.SEED_JESSICA_EMAIL ?? 'jl9766151@gmail.com')
-    .trim()
-    .toLowerCase();
-  const passwordOverride = process.env.SEED_JESSICA_PASSWORD?.trim();
+  const email = (process.env.SEED_JESSICA_EMAIL ?? '').trim().toLowerCase();
+  if (!email) throw new Error('SEED_JESSICA_EMAIL es obligatorio.');
+  const passwordOverride = process.env.SEED_JESSICA_PASSWORD
+    ? assertOperationalPassword(
+        'SEED_JESSICA_PASSWORD',
+        process.env.SEED_JESSICA_PASSWORD,
+      )
+    : '';
   const name = process.env.SEED_JESSICA_NAME ?? 'Jessica Cisneros';
 
   const pool = new Pool(pgPoolConfig(url));

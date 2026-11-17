@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ShopCheckoutDto } from './dto/shop-checkout.dto';
 import { PublicShopService } from './public-shop.service';
@@ -24,14 +24,9 @@ export class PublicShopController {
   orderByCode(
     @Param('slug') slug: string,
     @Param('orderCode') orderCode: string,
+    @Query('token') token = '',
   ) {
-    return this.shop.getOrderByCode(slug, orderCode);
-  }
-
-  @Get('orders/:orderId')
-  @Throttle({ default: { limit: 40, ttl: 60_000 } })
-  order(@Param('orderId') orderId: string) {
-    return this.shop.getOrder(orderId);
+    return this.shop.getOrderByCode(slug, orderCode, token);
   }
 
   @Post('orders/:orderId/confirm')

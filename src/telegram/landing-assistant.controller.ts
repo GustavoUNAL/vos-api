@@ -9,7 +9,7 @@ import { LandingAssistantService } from './landing-assistant.service';
 export class LandingAssistantController {
   constructor(private readonly landing: LandingAssistantService) {}
 
-  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('ask')
   async ask(@Body() dto: AskAssistantDto) {
     return this.landing.answer(dto.question, dto.history);

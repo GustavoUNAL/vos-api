@@ -1,13 +1,26 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { JwtPayload } from '../auth/jwt.types';
 import { NavigationService } from './navigation.service';
 
 @Controller('navigation')
 export class NavigationController {
   constructor(private readonly nav: NavigationService) {}
 
-  /** Mapa de menú → endpoints para armar el front. */
+  /** Metadatos públicos, sin mapa de endpoints ni tablas. */
+  @Get('public')
+  publicMenu() {
+    return {
+      version: 1,
+      product: 'vos',
+      message: 'Solicitá acceso para operar tu negocio.',
+    };
+  }
+
   @Get()
-  menu() {
-    return this.nav.getMenu();
+  @UseGuards(JwtAuthGuard)
+  menu(@CurrentUser() user: JwtPayload) {
+    return this.nav.getMenu(user.companyId || undefined);
   }
 }

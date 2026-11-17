@@ -5,6 +5,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TrialQuotaInterceptor } from './billing/trial-quota.interceptor';
+import { AuditModule } from './audit/audit.module';
+import { rateLimitPerMinute, skipRateLimit } from './common/security-policy';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { AuthModule } from './auth/auth.module';
@@ -39,10 +41,11 @@ import { BillingModule } from './billing/billing.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
     ThrottlerModule.forRoot({
-      throttlers: [{ ttl: 60_000, limit: 120 }],
-      skipIf: () => process.env.NODE_ENV !== 'production',
+      throttlers: [{ ttl: 60_000, limit: rateLimitPerMinute() }],
+      skipIf: () => skipRateLimit(),
     }),
     PrismaModule,
+    AuditModule,
     BillingModule,
     TelegramModule,
     TenantModule,

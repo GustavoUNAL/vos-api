@@ -12,7 +12,14 @@ import { UsageService } from '../billing/usage.service';
 import { resolveCompanySystemSettings } from '../config/system-settings';
 import type { AuthUserResponse, CompanySummary, JwtPayload } from './jwt.types';
 import { slugifyCompanyLabel, uniqueShopSlug } from './company-slug';
-import { isPlatformAdminEmail } from './platform-admins';
+import { AuditService } from '../audit/audit.service';
+import { AuthSessionService } from './auth-session.service';
+import {
+  elevatedSupportPermissions,
+  isPublicCompanySignupEnabled,
+  readOnlyPermissions,
+  supportWriteStillValid,
+} from '../common/security-policy';
 import {
   googleAuthorizeUrl,
   googleCallbackErrorCode,
@@ -38,24 +45,34 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly usage: UsageService,
+    private readonly sessions: AuthSessionService,
+    private readonly audit: AuditService,
   ) {}
 
   private companySlugFromName(name: string, shopSlug: string | null): string {
     return shopSlug?.trim() || slugifyCompanyLabel(name);
   }
 
-  private async ensurePlatformAdminFlag(user: {
-    id: string;
-    email: string;
+  private ensurePlatformAdminFlag(user: {
     isPlatformAdmin?: boolean;
-  }): Promise<boolean> {
-    if (user.isPlatformAdmin) return true;
-    if (!isPlatformAdminEmail(user.email)) return false;
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { isPlatformAdmin: true },
+  }): boolean {
+    return Boolean(user.isPlatformAdmin);
+  }
+
+  private async signSession(
+    userId: string,
+    payload: JwtPayload,
+    replaceSid?: string | null,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    if (replaceSid) await this.sessions.revoke(replaceSid);
+    const session = await this.sessions.start(userId, {
+      companyId: payload.companyId,
+      platformView: payload.platformView,
+      supportMode: payload.supportMode,
+      supportUntil: payload.supportUntil,
     });
-    return true;
+    const accessToken = this.jwt.sign({ ...payload, sid: session.id });
+    return { accessToken, refreshToken: session.refreshToken };
   }
 
   private touchLastLogin(userId: string) {
@@ -217,31 +234,35 @@ export class AuthService {
     user: { id: string; email: string; name: string; isPlatformAdmin?: boolean },
     membership: Awaited<ReturnType<typeof this.loadMemberships>>[0],
     allMemberships: Awaited<ReturnType<typeof this.loadMemberships>>,
+    replaceSid?: string | null,
   ) {
     const payload = this.buildPayload(user, membership);
-    const accessToken = this.jwt.sign(payload);
+    const signed = await this.signSession(user.id, payload, replaceSid);
     const companies = allMemberships
       .filter((m) => m.company.status === 'ACTIVE')
       .map((m) => this.membershipToSummary(m));
     return {
-      accessToken,
+      accessToken: signed.accessToken,
+      refreshToken: signed.refreshToken,
       user: await this.withUsage(
         this.withSystemSettings({ ...payload, companies }),
       ),
     };
   }
 
-  private issuePlatformSession(
+  private async issuePlatformSession(
     user: { id: string; email: string; name: string },
     allMemberships: Awaited<ReturnType<typeof this.loadMemberships>>,
+    replaceSid?: string | null,
   ) {
     const payload = this.buildPlatformPayload(user);
-    const accessToken = this.jwt.sign(payload);
+    const signed = await this.signSession(user.id, payload, replaceSid);
     const companies = allMemberships
       .filter((m) => m.company.status === 'ACTIVE')
       .map((m) => this.membershipToSummary(m));
     return {
-      accessToken,
+      accessToken: signed.accessToken,
+      refreshToken: signed.refreshToken,
       user: this.withSystemSettings({ ...payload, companies }),
     };
   }
@@ -258,18 +279,18 @@ export class AuthService {
     if (!company) {
       throw new BadRequestException('Empresa no encontrada o inactiva');
     }
-    const permissions = await this.loadAllPermissions();
-    const payload = this.buildPlatformCompanyPayload(
-      user,
-      company,
-      permissions,
-    );
-    const accessToken = this.jwt.sign(payload);
+    const permissions = readOnlyPermissions(await this.loadAllPermissions());
+    const payload = {
+      ...this.buildPlatformCompanyPayload(user, company, permissions),
+      supportMode: 'read' as const,
+    };
+    const signed = await this.signSession(user.id, payload);
     const companies = allMemberships
       .filter((m) => m.company.status === 'ACTIVE')
       .map((m) => this.membershipToSummary(m));
     return {
-      accessToken,
+      accessToken: signed.accessToken,
+      refreshToken: signed.refreshToken,
       user: await this.withUsage(
         this.withSystemSettings({ ...payload, companies }),
       ),
@@ -419,6 +440,11 @@ export class AuthService {
     acceptTerms: boolean,
     acceptPrivacy: boolean,
   ) {
+    if (!isPublicCompanySignupEnabled()) {
+      throw new ForbiddenException(
+        'El registro público está cerrado. Solicitá acceso y esperá la aprobación.',
+      );
+    }
     if (!acceptTerms || !acceptPrivacy) {
       throw new BadRequestException(
         'Para crear la cuenta tenés que aceptar los términos y el tratamiento de datos.',
@@ -488,7 +514,7 @@ export class AuthService {
       return { kind: 'session' as const, ...session };
     }
 
-    if (opts?.allowSignup === false) {
+    if (!isPublicCompanySignupEnabled() || opts?.allowSignup === false) {
       throw new BadRequestException({
         code: 'GOOGLE_NO_ACCOUNT',
         message: 'No hay una cuenta VOS IA con este email. Solicitá acceso.',
@@ -557,6 +583,11 @@ export class AuthService {
         google: true,
       });
     }
+    if (!isPublicCompanySignupEnabled()) {
+      throw new ForbiddenException(
+        'El registro público está cerrado. Solicitá acceso y esperá la aprobación.',
+      );
+    }
 
     const now = new Date();
     const passwordHash = await bcrypt.hash(
@@ -596,7 +627,14 @@ export class AuthService {
     opts?: { google?: boolean },
   ) {
     this.touchLastLogin(user.id);
-    const isPlatformAdmin = await this.ensurePlatformAdminFlag(user);
+    await this.audit.write({
+      action: 'LOGIN',
+      tableName: 'users',
+      recordId: user.id,
+      userId: user.id,
+      newValues: { google: Boolean(opts?.google) },
+    });
+    const isPlatformAdmin = this.ensurePlatformAdminFlag(user);
     const sessionUser = { ...user, isPlatformAdmin };
 
     if (isPlatformAdmin) {
@@ -655,13 +693,13 @@ export class AuthService {
     code?: string;
     state?: string;
     error?: string;
-  }): Promise<string> {
+  }): Promise<{ url: string; refreshToken?: string }> {
     const cfg = googleConfig();
     let returnTo = parseGoogleReturnTo(undefined);
     let preferredCompanyId: string | undefined;
     let popup = false;
     const redirect = (
-      extra: { token?: string; signup?: string; error?: string } = {},
+      extra: { signup?: string; error?: string; session?: boolean } = {},
     ) =>
       googleFrontRedirect({
         frontUrl: cfg.frontUrl,
@@ -669,8 +707,9 @@ export class AuthService {
         popup,
         ...extra,
       });
+    const fail = (error: string) => ({ url: redirect({ error }) });
     if (!query.state?.trim()) {
-      return redirect({ error: 'invalid_state' });
+      return fail('invalid_state');
     }
     try {
       const payload = this.jwt.verify<GoogleOAuthState>(query.state);
@@ -679,21 +718,21 @@ export class AuthService {
         preferredCompanyId = sanitizeCompanyIdHint(payload.c);
         popup = payload.p === 1;
       } else {
-        return redirect({ error: 'invalid_state' });
+        return fail('invalid_state');
       }
     } catch {
-      return redirect({ error: 'invalid_state' });
+      return fail('invalid_state');
     }
     if (query.error) {
       const error =
         query.error === 'access_denied' ? 'access_denied' : 'oauth_failed';
-      return redirect({ error });
+      return fail(error);
     }
     if (!query.code?.trim()) {
-      return redirect({ error: 'oauth_failed' });
+      return fail('oauth_failed');
     }
     if (!googleOAuthConfigured(cfg)) {
-      return redirect({ error: 'not_configured' });
+      return fail('not_configured');
     }
     try {
       const idToken = await this.exchangeGoogleAuthCode(query.code.trim(), cfg);
@@ -701,14 +740,17 @@ export class AuthService {
         idToken,
         undefined,
         preferredCompanyId,
-        { allowSignup: returnTo === 'login' },
+        { allowSignup: isPublicCompanySignupEnabled() && returnTo === 'login' },
       );
       if (result.kind === 'signup') {
-        return redirect({ signup: result.signupToken });
+        return { url: redirect({ signup: result.signupToken }) };
       }
-      return redirect({ token: result.accessToken });
+      return {
+        url: redirect({ session: true }),
+        refreshToken: result.refreshToken,
+      };
     } catch (err) {
-      return redirect({ error: googleCallbackErrorCode(err) });
+      return fail(googleCallbackErrorCode(err));
     }
   }
 
@@ -742,11 +784,7 @@ export class AuthService {
       select: { id: true, email: true, isPlatformAdmin: true },
     });
     const isPlatformAdmin = dbUser
-      ? await this.ensurePlatformAdminFlag({
-          id: dbUser.id,
-          email: dbUser.email,
-          isPlatformAdmin: dbUser.isPlatformAdmin,
-        })
+      ? this.ensurePlatformAdminFlag(dbUser)
       : Boolean(jwt.isPlatformAdmin);
 
     const memberships = await this.loadMemberships(jwt.sub);
@@ -811,7 +849,11 @@ export class AuthService {
     return this.withUsage(this.withSystemSettings({ ...jwt, companies }));
   }
 
-  async switchCompany(userId: string, companyId: string) {
+  async switchCompany(
+    userId: string,
+    companyId: string,
+    replaceSid?: string | null,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -854,19 +896,195 @@ export class AuthService {
       );
     }
 
-    return this.issueSession(user, target, membership);
+    return this.issueSession(user, target, membership, replaceSid);
   }
 
-  async enterCompanyAsPlatformAdmin(userId: string, companyId: string) {
+  async enterCompanyAsPlatformAdmin(
+    userId: string,
+    companyId: string,
+    reason: string,
+    replaceSid?: string | null,
+  ) {
+    const clean = reason?.trim() ?? '';
+    if (clean.length < 8 || clean.length > 500) {
+      throw new BadRequestException(
+        'Indicá un motivo de acceso de entre 8 y 500 caracteres.',
+      );
+    }
     const user = await this.assertPlatformAdmin(userId);
     const memberships = await this.loadMemberships(userId);
-    return this.issuePlatformCompanySession(user, companyId, memberships);
+    await this.audit.write({
+      action: 'LOGIN',
+      tableName: 'support_access',
+      recordId: companyId,
+      companyId,
+      userId,
+      newValues: { reason: clean, mode: 'read' },
+    });
+    const session = await this.issuePlatformCompanySession(
+      user,
+      companyId,
+      memberships,
+    );
+    if (replaceSid) await this.sessions.revoke(replaceSid);
+    return session;
   }
 
-  async exitToPlatformAdmin(userId: string) {
+  async elevateSupport(
+    jwt: JwtPayload,
+    reason: string,
+    minutes = 30,
+  ) {
+    if (!jwt.isPlatformAdmin || jwt.platformView || !jwt.companyId) {
+      throw new ForbiddenException(
+        'La edición temporal solo aplica dentro de una empresa en modo soporte.',
+      );
+    }
+    const clean = reason?.trim() ?? '';
+    if (clean.length < 8 || clean.length > 500) {
+      throw new BadRequestException(
+        'Indicá un motivo de entre 8 y 500 caracteres.',
+      );
+    }
+    const span = Math.min(120, Math.max(5, Math.floor(minutes) || 30));
+    const company = await this.prisma.company.findFirst({
+      where: { id: jwt.companyId, status: 'ACTIVE' },
+      select: { id: true, name: true, shopSlug: true },
+    });
+    if (!company) throw new BadRequestException('Empresa no encontrada o inactiva');
+    const permissions = elevatedSupportPermissions(await this.loadAllPermissions());
+    const supportUntil = Math.floor(Date.now() / 1000) + span * 60;
+    const payload: JwtPayload = {
+      ...this.buildPlatformCompanyPayload(
+        { id: jwt.sub, email: jwt.email, name: jwt.name },
+        company,
+        permissions,
+      ),
+      supportMode: 'write',
+      supportUntil,
+    };
+    const signed = await this.signSession(jwt.sub, payload, jwt.sid);
+    await this.audit.write({
+      action: 'UPDATE',
+      tableName: 'support_elevation',
+      recordId: company.id,
+      companyId: company.id,
+      userId: jwt.sub,
+      newValues: { reason: clean, minutes: span, excludes: ['*.delete', 'dental.write'] },
+    });
+    const memberships = await this.loadMemberships(jwt.sub);
+    const companies = memberships
+      .filter((m) => m.company.status === 'ACTIVE')
+      .map((m) => this.membershipToSummary(m));
+    return {
+      accessToken: signed.accessToken,
+      refreshToken: signed.refreshToken,
+      user: await this.withUsage(
+        this.withSystemSettings({ ...payload, companies }),
+      ),
+    };
+  }
+
+  async refresh(refreshToken: string) {
+    const rotated = await this.sessions.rotate(refreshToken);
+    const user = await this.prisma.user.findUnique({
+      where: { id: rotated.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        active: true,
+        isPlatformAdmin: true,
+      },
+    });
+    if (!user?.active) throw new UnauthorizedException('Sesión inválida');
+    const memberships = await this.loadMemberships(user.id);
+    const companies = memberships
+      .filter((m) => m.company.status === 'ACTIVE')
+      .map((m) => this.membershipToSummary(m));
+    if (rotated.platformView || (user.isPlatformAdmin && !rotated.companyId)) {
+      const payload = this.buildPlatformPayload(user);
+      return {
+        accessToken: this.jwt.sign({ ...payload, sid: rotated.id }),
+        refreshToken: rotated.refreshToken,
+        user: this.withSystemSettings({ ...payload, companies }),
+      };
+    }
+    if (user.isPlatformAdmin && rotated.companyId && rotated.supportMode) {
+      const company = await this.prisma.company.findFirst({
+        where: { id: rotated.companyId, status: 'ACTIVE' },
+        select: { id: true, name: true, shopSlug: true },
+      });
+      if (company) {
+        const write = supportWriteStillValid({
+          supportMode: rotated.supportMode === 'write' ? 'write' : 'read',
+          supportUntil: rotated.supportUntil,
+        });
+        const permissions = write
+          ? elevatedSupportPermissions(await this.loadAllPermissions())
+          : readOnlyPermissions(await this.loadAllPermissions());
+        if (!write && rotated.supportMode === 'write') {
+          await this.prisma.authSession.update({
+            where: { id: rotated.id },
+            data: { supportMode: 'read', supportUntil: null },
+          });
+        }
+        const payload = {
+          ...this.buildPlatformCompanyPayload(user, company, permissions),
+          supportMode: (write ? 'write' : 'read') as 'read' | 'write',
+          ...(write && rotated.supportUntil
+            ? { supportUntil: rotated.supportUntil }
+            : {}),
+        };
+        return {
+          accessToken: this.jwt.sign({ ...payload, sid: rotated.id }),
+          refreshToken: rotated.refreshToken,
+          user: await this.withUsage(
+            this.withSystemSettings({ ...payload, companies }),
+          ),
+        };
+      }
+    }
+    const picked =
+      memberships.find((m) => m.company.id === rotated.companyId) ??
+      pickActiveMembership(memberships);
+    if (!picked) throw new UnauthorizedException('Usuario sin empresas activas');
+    if (picked.company.id !== rotated.companyId) {
+      await this.prisma.authSession.update({
+        where: { id: rotated.id },
+        data: {
+          companyId: picked.company.id,
+          platformView: false,
+          supportMode: null,
+          supportUntil: null,
+        },
+      });
+    }
+    const payload = this.buildPayload(user, picked);
+    return {
+      accessToken: this.jwt.sign({ ...payload, sid: rotated.id }),
+      refreshToken: rotated.refreshToken,
+      user: await this.withUsage(
+        this.withSystemSettings({ ...payload, companies }),
+      ),
+    };
+  }
+
+  async logoutByRefresh(refreshToken: string) {
+    const row = await this.sessions.revokeByToken(refreshToken);
+    if (!row) return;
+    await this.audit.write({
+      action: 'LOGOUT',
+      tableName: 'auth_sessions',
+      recordId: row.id,
+      userId: row.userId,
+    });
+  }
+
+  async exitToPlatformAdmin(userId: string, replaceSid?: string | null) {
     const user = await this.assertPlatformAdmin(userId);
     const memberships = await this.loadMemberships(userId);
-    return this.issuePlatformSession(user, memberships);
+    return this.issuePlatformSession(user, memberships, replaceSid);
   }
 
   private async applyBusinessTypeModules(
@@ -880,6 +1098,13 @@ export class AuthService {
     if (!catalog.length) {
       throw new BadRequestException(
         'La plataforma aún no está inicializada. Contactá soporte.',
+      );
+    }
+    const known = new Set(catalog.map((mod) => mod.slug));
+    const missing = [...wanted].filter((slug) => !known.has(slug));
+    if (missing.length) {
+      throw new BadRequestException(
+        `Faltan módulos en el catálogo: ${missing.join(', ')}. Ejecutá el seed de plataforma antes de configurar el negocio.`,
       );
     }
 

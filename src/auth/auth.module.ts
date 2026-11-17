@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PlatformAdminModule } from '../platform-admin/platform-admin.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AuthSessionService } from './auth-session.service';
 import { JwtStrategy } from './jwt.strategy';
 
 @Module({
@@ -22,15 +23,15 @@ import { JwtStrategy } from './jwt.strategy';
         return {
           secret,
           signOptions: {
-            expiresIn: (config.get<string>('JWT_EXPIRES_IN') ?? '7d') as any,
+            expiresIn: (config.get<string>('JWT_EXPIRES_IN') ?? '15m') as any,
           },
         };
       },
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService, JwtModule],
+  providers: [AuthService, AuthSessionService, JwtStrategy],
+  exports: [AuthService, AuthSessionService, JwtModule],
 })
 export class AuthModule {}
 

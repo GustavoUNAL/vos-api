@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { slugifyCompanyLabel } from '../auth/company-slug';
-import { isPlatformAdminEmail } from '../auth/platform-admins';
+import { AuditService } from '../audit/audit.service';
 import { isUnlimitedPlan, UsageService } from '../billing/usage.service';
 
 /** Los tres módulos que toda cuenta puede activar de entrada. */
@@ -22,6 +22,7 @@ export class PlatformAdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly usage: UsageService,
+    private readonly audit: AuditService,
   ) {}
 
   private slugFromCompany(name: string, shopSlug: string | null): string {
@@ -453,7 +454,7 @@ export class PlatformAdminService {
         email: u.email,
         name: u.name,
         active: u.active,
-        isPlatformAdmin: u.isPlatformAdmin || isPlatformAdminEmail(u.email),
+        isPlatformAdmin: u.isPlatformAdmin,
         createdAt: u.createdAt,
         lastLoginAt,
         lastActivityAt,
@@ -625,7 +626,7 @@ export class PlatformAdminService {
       email: user.email,
       name: user.name,
       active: user.active,
-      isPlatformAdmin: user.isPlatformAdmin || isPlatformAdminEmail(user.email),
+      isPlatformAdmin: user.isPlatformAdmin,
       createdAt: user.createdAt,
       lastLoginAt,
       lastActivityAt,
@@ -691,24 +692,24 @@ export class PlatformAdminService {
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true },
+      select: { id: true, email: true, isPlatformAdmin: true },
     });
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
     const data: { active?: boolean; name?: string; email?: string } = {};
     if (typeof input.active === 'boolean') {
-      if (!input.active && isPlatformAdminEmail(user.email)) {
+      if (!input.active && user.isPlatformAdmin) {
         throw new BadRequestException(
-          'No se puede desactivar una cuenta de administración de plataforma',
+          'Revoque el rol de administrador de plataforma antes de desactivar la cuenta',
         );
       }
       data.active = input.active;
     }
     if (input.name?.trim()) data.name = input.name.trim();
     if (input.email && input.email !== user.email) {
-      if (isPlatformAdminEmail(user.email)) {
+      if (user.isPlatformAdmin) {
         throw new BadRequestException(
-          'No se puede cambiar el correo de una cuenta de administración',
+          'No se puede cambiar el correo de una cuenta de administración desde aquí',
         );
       }
       const taken = await this.prisma.user.findUnique({
@@ -734,12 +735,12 @@ export class PlatformAdminService {
     }
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true },
+      select: { id: true, email: true, isPlatformAdmin: true },
     });
     if (!user) throw new NotFoundException('Usuario no encontrado');
-    if (isPlatformAdminEmail(user.email)) {
+    if (user.isPlatformAdmin) {
       throw new BadRequestException(
-        'No se puede eliminar una cuenta de administración de plataforma',
+        'Revoque el rol de administrador de plataforma antes de eliminar la cuenta',
       );
     }
     await this.prisma.user.delete({ where: { id: userId } });
@@ -797,10 +798,14 @@ export class PlatformAdminService {
     };
   }
 
-  async setCompanyPlan(companyId: string, plan: 'TRIAL' | 'PRO' | 'BUSINESS') {
+  async setCompanyPlan(
+    companyId: string,
+    plan: 'TRIAL' | 'PRO' | 'BUSINESS',
+    actorId?: string,
+  ) {
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
-      select: { id: true },
+      select: { id: true, plan: true },
     });
     if (!company) throw new NotFoundException('Empresa no encontrada');
     const updated = await this.prisma.company.update({
@@ -808,7 +813,49 @@ export class PlatformAdminService {
       data: { plan },
       select: { id: true, name: true, plan: true },
     });
+    await this.audit.write({
+      action: 'UPDATE',
+      tableName: 'companies',
+      recordId: companyId,
+      companyId,
+      userId: actorId,
+      oldValues: { plan: company.plan },
+      newValues: { plan },
+    });
     return updated;
+  }
+
+  async setPlatformAdmin(actorId: string, userId: string, enabled: boolean) {
+    if (actorId === userId && !enabled) {
+      const others = await this.prisma.user.count({
+        where: { isPlatformAdmin: true, id: { not: actorId }, active: true },
+      });
+      if (others < 1) {
+        throw new BadRequestException(
+          'No puede quitarse el último administrador de plataforma',
+        );
+      }
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, isPlatformAdmin: true, active: true },
+    });
+    if (!user?.active) throw new NotFoundException('Usuario no encontrado');
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { isPlatformAdmin: enabled },
+    });
+    await this.audit.write({
+      action: 'UPDATE',
+      tableName: 'users',
+      recordId: userId,
+      userId: actorId,
+      oldValues: { isPlatformAdmin: user.isPlatformAdmin },
+      newValues: { isPlatformAdmin: enabled },
+    });
+    const detail = await this.userDetail(userId);
+    if (!detail) throw new NotFoundException('Usuario no encontrado');
+    return detail;
   }
 
   async listAccessRequests(status?: string) {

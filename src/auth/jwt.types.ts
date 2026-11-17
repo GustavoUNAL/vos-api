@@ -2,6 +2,7 @@ export type JwtPayload = {
   sub: string;
   email: string;
   name: string;
+  sid?: string;
   isPlatformAdmin?: boolean;
   platformView?: boolean;
   companyId: string;
@@ -9,6 +10,9 @@ export type JwtPayload = {
   companySlug: string;
   role: string;
   permissions: string[];
+  supportMode?: 'read' | 'write';
+  /** Epoch en segundos. La escritura de soporte caduca. */
+  supportUntil?: number;
 };
 
 export type CompanySummary = {

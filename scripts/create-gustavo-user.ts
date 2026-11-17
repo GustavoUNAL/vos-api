@@ -11,7 +11,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { pgPoolConfig } from '../src/common/pg-pool-config';
-import { isPlatformAdminEmail } from '../src/auth/platform-admins';
+import { assertOperationalPassword } from '../src/common/security-policy';
 
 const ARANDANO_ID = 'seed-arandano-cafe-bar';
 const ELECTRICISTA_ID = 'seed-el-electricista';
@@ -130,10 +130,12 @@ async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required');
 
-  const email = (process.env.SEED_GUSTAVO_EMAIL ?? 'gustavoarteaga0508@gmail.com')
-    .trim()
-    .toLowerCase();
-  const password = process.env.SEED_GUSTAVO_PASSWORD ?? 'Gustavo2026!';
+  const email = (process.env.SEED_GUSTAVO_EMAIL ?? '').trim().toLowerCase();
+  if (!email) throw new Error('SEED_GUSTAVO_EMAIL es obligatorio.');
+  const password = assertOperationalPassword(
+    'SEED_GUSTAVO_PASSWORD',
+    process.env.SEED_GUSTAVO_PASSWORD,
+  );
   const name = process.env.SEED_GUSTAVO_NAME ?? 'Gustavo Arteaga';
 
   const pool = new Pool(pgPoolConfig(url));
@@ -165,8 +167,9 @@ async function main() {
       email: string;
       password: string;
       name: string;
+      platformAdmin?: boolean;
     }) {
-      const isAdmin = isPlatformAdminEmail(opts.email);
+      const isAdmin = Boolean(opts.platformAdmin);
       const hash = await bcrypt.hash(opts.password, 10);
       const user = await prisma.user.upsert({
         where: { email: opts.email },
@@ -191,21 +194,27 @@ async function main() {
       );
       return {
         email: opts.email,
-        password: opts.password,
         name: opts.name,
         companies: memberships.map((m) => m.companyId),
       };
     }
 
-    const gustavo = await ensureOwnerUser({ email, password, name });
+    const gustavo = await ensureOwnerUser({
+      email,
+      password,
+      name,
+      platformAdmin: process.env.SEED_GUSTAVO_PLATFORM_ADMIN === 'true',
+    });
 
     const arandanoOwnerEmail = (
       process.env.SEED_ARANDANO_EMAIL ?? 'owner@arandano.com'
     )
       .trim()
       .toLowerCase();
-    const arandanoOwnerPassword =
-      process.env.SEED_ARANDANO_PASSWORD ?? 'Arandano2026!';
+    const arandanoOwnerPassword = assertOperationalPassword(
+      'SEED_ARANDANO_PASSWORD',
+      process.env.SEED_ARANDANO_PASSWORD,
+    );
     const arandanoOwnerName =
       process.env.SEED_ARANDANO_NAME ?? 'Propietario Arándano';
 

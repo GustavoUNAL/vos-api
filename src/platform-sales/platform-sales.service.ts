@@ -26,6 +26,7 @@ import {
   bogotaMonthBounds,
 } from '../common/bogota-time';
 import { TelegramService } from '../telegram/telegram.service';
+import { AuditService } from '../audit/audit.service';
 
 type ListParams = {
   page: number;
@@ -63,6 +64,7 @@ export class PlatformSalesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
+    private readonly audit: AuditService,
   ) {}
 
   private async nextSaleCode(companyId: string): Promise<string> {
@@ -584,6 +586,14 @@ export class PlatformSalesService {
 
   async getInvoicePdf(tenant: TenantContext, id: string): Promise<Buffer> {
     const sale = await this.loadSaleForInvoice(tenant, id);
+    await this.audit.write({
+      action: 'EXPORT',
+      tableName: 'sales',
+      recordId: sale.id,
+      companyId: tenant.companyId,
+      userId: tenant.userId,
+      newValues: { kind: 'invoice-pdf', code: sale.code },
+    });
     return buildSaleInvoicePdf(sale);
   }
 
@@ -706,6 +716,14 @@ export class PlatformSalesService {
       select: { id: true, code: true },
     });
     if (!sale) throw new NotFoundException('Venta no encontrada');
+    await this.audit.write({
+      action: 'DELETE',
+      tableName: 'sales',
+      recordId: sale.id,
+      companyId: tenant.companyId,
+      userId: tenant.userId,
+      oldValues: { code: sale.code },
+    });
 
     await this.prisma.$transaction(async (tx) => {
       await reverseStockMoves(tx, {

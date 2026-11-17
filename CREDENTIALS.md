@@ -1,66 +1,23 @@
-# Credenciales VOS AI — copiá estos valores en local Y en el servidor
+# Credenciales
 
-Usá **exactamente los mismos** en `.env.local` (Mac) y en `.env` del VPS (producción) para que el login no cambie al desplegar.
+Este archivo ya no contiene contraseñas, tokens ni correos operativos.
 
-## 1. Administrador de plataforma (solo vos)
+## Qué pasó
 
-Panel en `#/platform` — gestionás empresas, usuarios y solicitudes.
+Versiones anteriores del repositorio incluyeron contraseñas de demostración y correos de acceso en la documentación, en los scripts de seed y en archivos de ejemplo. Borrarlas del árbol actual no las borra del historial de Git. Hay que tratarlas como comprometidas.
 
-| Variable | Valor por defecto |
-|----------|-------------------|
-| `SEED_ADMIN_EMAIL` | `admin@vos.ai` |
-| `SEED_ADMIN_PASSWORD` | `VosAi2026!` |
-| `SEED_ADMIN_NAME` | `Administrador VOS AI` |
+## Rotación obligatoria
 
-Front (pre-rellena login):
+1. Generar una contraseña nueva, única y de al menos 12 caracteres para cada cuenta que haya usado un valor publicado (administración de plataforma, propietarios de empresas de demostración y operadores creados por scripts).
+2. Cambiarla desde la aplicación o, si la sesión ya no es confiable, actualizar el hash directamente en la base con un script que lea la nueva contraseña solo desde el entorno.
+3. Rotar `JWT_SECRET`. Al cambiarlo, todas las sesiones de acceso vigentes dejan de ser válidas.
+4. Revocar las sesiones de refresco existentes. Después de aplicar la migración de `auth_sessions`, un `DELETE` controlado de esa tabla cierra los refresh tokens. No borra usuarios ni datos de negocio.
+5. Rotar secretos de proveedores que hayan estado en archivos versionados: `GOOGLE_CLIENT_SECRET`, `WOMPI_PRIVATE_KEY`, `WOMPI_EVENTS_SECRET`, `OPENAI_API_KEY`, tokens de Telegram, Twilio y Stripe.
+6. No reescribir el historial de Git compartido sin un acuerdo explícito. La limpieza de historia exige coordinación con quien ya clonó el repositorio y no se hace en este cambio.
 
-| Variable | Valor |
-|----------|-------|
-| `VITE_PRESET_LOGIN_EMAIL` | `admin@vos.ai` |
-| `VITE_PRESET_LOGIN_PASSWORD` | `VosAi2026!` |
+## Cómo quedan los entornos
 
-## 2. Arándano Café Bar (tenant operativo)
-
-Panel en `#/e/arandano/…` — productos, ventas, POS, tienda, etc.
-
-| Variable | Valor por defecto |
-|----------|-------------------|
-| `SEED_ARANDANO_EMAIL` | `owner@arandano.com` |
-| `SEED_ARANDANO_PASSWORD` | `Arandano2026!` |
-| `SEED_ARANDANO_NAME` | `Propietario Arándano` |
-| `SEED_DAVID_EMAIL` | `david@arandano.com` |
-| `SEED_DAVID_PASSWORD` | `David@Arandano2026!` |
-| `SEED_SONIA_EMAIL` | `sonia@arandano.com` |
-| `SEED_SONIA_PASSWORD` | `Sonia@Arandano2026!` |
-| `SEED_SONIA_NAME` | `Sonia Herrera` |
-| `SEED_JESSICA_EMAIL` | `jessica@arandano.com` |
-| `SEED_JESSICA_PASSWORD` | `Jessica@Arandano2026!` |
-| `SEED_JESSICA_NAME` | `Jessica` (piso: inventario y solo sus turnos) |
-
-Empresa: **Arándano Café Bar** · slug `arandano` · tienda `#/tienda/arandano`
-
-## JWT (obligatorio igual en servidor)
-
-| Variable | Ejemplo |
-|----------|---------|
-| `JWT_SECRET` | `local-docker-vos-ai-jwt-secret-min-32-chars` |
-
-## Notificaciones solicitudes
-
-| Variable | Valor |
-|----------|-------|
-| `ADMIN_NOTIFY_EMAIL` | tu email donde revisás solicitudes |
-
-## Después de desplegar
-
-```bash
-cd vos.ai-api
-npm run db:migrate
-npm run db:seed-platform
-```
-
-## Ver solicitudes pendientes
-
-```sql
-SELECT * FROM access_requests WHERE status = 'PENDING' ORDER BY created_at DESC;
-```
+- El seed y los scripts de alta fallan si falta la contraseña o si coincide con un valor de ejemplo.
+- `AUTH_PUBLIC_REGISTER` queda en `false` en los ejemplos de staging y producción. El alta pública de empresas no se abre sola en esos entornos.
+- `JWT_EXPIRES_IN` de ejemplo es `15m`. El refresh vive en cookie `httpOnly`.
+- Los archivos `.env`, `.env.local` y `.env.dev` siguen fuera de Git. Los `.example` solo muestran nombres de variables vacíos.
