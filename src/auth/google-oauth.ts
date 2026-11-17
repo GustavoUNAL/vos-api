@@ -13,6 +13,7 @@ export type GoogleSignupTicket = {
   t: 'gs';
   email: string;
   name: string;
+  picture?: string;
 };
 
 export function googleFrontRedirect(opts: {
@@ -107,6 +108,21 @@ export function googleConfig() {
 
 export function googleOAuthConfigured(cfg = googleConfig()): boolean {
   return Boolean(cfg.clientId && cfg.clientSecret && cfg.redirectUri);
+}
+
+/** Solo fotos servidas por Google. El resto se descarta. */
+export function googleProfilePicture(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const url = raw.trim();
+  if (!url || url.length > 600) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return null;
+    if (!parsed.hostname.endsWith('googleusercontent.com')) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function googleTokenExchangeBody(opts: {

@@ -60,6 +60,9 @@ export class PublicShopService {
 
   async getCatalog(slug: string) {
     const company = await this.resolveCompany(slug);
+    const isInternalCategory = (name: string | null | undefined) =>
+      (name ?? '').trim().toUpperCase().startsWith('INVENTORY::');
+
     const [categories, products] = await Promise.all([
       this.prisma.productCategory.findMany({
         where: { companyId: company.id, active: true },
@@ -73,6 +76,7 @@ export class PublicShopService {
           id: true,
           name: true,
           description: true,
+          sku: true,
           salePrice: true,
           primaryImageUrl: true,
           categoryId: true,
@@ -89,8 +93,11 @@ export class PublicShopService {
         phone: company.phone,
         address: company.address,
       },
-      categories,
-      products: products.map((p) => ({
+      categories: categories.filter((c) => !isInternalCategory(c.name)),
+      products: products
+        .filter((p) => !isInternalCategory(p.category?.name))
+        .filter((p) => p.sku !== 'POS-OPEN' && p.sku !== 'POS-EXTRA')
+        .map((p) => ({
         id: p.id,
         name: p.name,
         description: p.description,
@@ -127,15 +134,20 @@ export class PublicShopService {
         id: { in: productIds },
         status: ProductStatus.ACTIVE,
       },
-      select: { id: true, name: true, salePrice: true },
+      select: { id: true, name: true, salePrice: true, sku: true },
     });
     const priceById = new Map(
       dbProducts.map((p) => [p.id, Number(p.salePrice.toString())]),
     );
+    const hiddenSku = new Set(['POS-OPEN', 'POS-EXTRA']);
 
     const lines: ShopCartLine[] = [];
     let total = 0;
     for (const item of dto.items) {
+      const product = dbProducts.find((p) => p.id === item.productId);
+      if (!product || (product.sku && hiddenSku.has(product.sku))) {
+        throw new BadRequestException(`Producto no disponible: ${item.productId}`);
+      }
       const unitPrice = priceById.get(item.productId);
       if (unitPrice == null) {
         throw new BadRequestException(`Producto no disponible: ${item.productId}`);
