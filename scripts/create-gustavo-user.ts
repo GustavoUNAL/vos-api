@@ -17,12 +17,16 @@ const ARANDANO_ID = 'seed-arandano-cafe-bar';
 const ELECTRICISTA_ID = 'seed-el-electricista';
 const MAIN_ID = 'seed-main';
 
-const SERVICE_COMPANY_MODULES = [
+const PERSONAL_MODULES = ['booking', 'tasks', 'projects', 'finance'] as const;
+
+const ENERGY_MODULES = [
+  'projects',
+  'tasks',
+  'booking',
   'products',
   'inventory',
-  'sales',
   'purchases',
-  'tasks',
+  'sales',
   'staff',
   'finance',
 ] as const;
@@ -63,6 +67,8 @@ async function provisionServiceCompany(
     email?: string;
     phone?: string;
     address?: string;
+    businessType: 'personal' | 'energy';
+    modules: readonly string[];
   },
 ) {
   const company = await prisma.company.upsert({
@@ -74,6 +80,7 @@ async function provisionServiceCompany(
       phone: data.phone,
       address: data.address,
       status: 'ACTIVE',
+      businessType: data.businessType,
     },
     update: {
       name: data.name,
@@ -81,20 +88,20 @@ async function provisionServiceCompany(
       phone: data.phone,
       address: data.address,
       status: 'ACTIVE',
+      businessType: data.businessType,
     },
   });
 
-  const modules = await prisma.module.findMany({
-    where: { slug: { in: [...SERVICE_COMPANY_MODULES] } },
-  });
-
-  for (const mod of modules) {
+  const catalog = await prisma.module.findMany();
+  const wanted = new Set(data.modules);
+  for (const mod of catalog) {
+    const enabled = wanted.has(mod.slug);
     await prisma.companyModule.upsert({
       where: {
         companyId_moduleId: { companyId: company.id, moduleId: mod.id },
       },
-      create: { companyId: company.id, moduleId: mod.id, isEnabled: true },
-      update: { isEnabled: true },
+      create: { companyId: company.id, moduleId: mod.id, isEnabled: enabled },
+      update: { isEnabled: enabled },
     });
   }
 
@@ -112,7 +119,7 @@ async function provisionServiceCompany(
 
   const permissions = await prisma.permission.findMany({
     where: {
-      moduleSlug: { in: [...SERVICE_COMPANY_MODULES] },
+      moduleSlug: { in: [...data.modules] },
     },
   });
 
@@ -153,12 +160,16 @@ async function main() {
       id: ELECTRICISTA_ID,
       name: 'El electricista',
       email: 'gustavoarteaga0508@gmail.com',
+      businessType: 'energy',
+      modules: ENERGY_MODULES,
     });
 
     const main = await provisionServiceCompany(prisma, {
       id: MAIN_ID,
       name: 'Main',
       email: 'gustavoarteaga0508@gmail.com',
+      businessType: 'personal',
+      modules: PERSONAL_MODULES,
     });
 
     const companyIds = [arandano.id, electricista.id, main.id];

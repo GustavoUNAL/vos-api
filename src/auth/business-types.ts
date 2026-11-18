@@ -6,6 +6,8 @@ export const BUSINESS_TYPES = [
   'retail',
   'services',
   'clinic',
+  'personal',
+  'energy',
   'other',
 ] as const;
 
@@ -34,5 +36,19 @@ export const BUSINESS_TYPE_MODULES: Record<BusinessTypeId, readonly string[]> = 
   retail: ['products', 'inventory', 'sales', 'purchases', 'finance'],
   services: ['booking', 'projects', 'tasks', 'finance'],
   clinic: ['dental', 'inventory', 'finance'],
+  /** Vida personal: agenda, pendientes, proyectos y dinero. */
+  personal: ['booking', 'tasks', 'projects', 'finance'],
+  /** Consultoría de energía, remodelación e instalación. */
+  energy: [
+    'projects',
+    'tasks',
+    'booking',
+    'products',
+    'inventory',
+    'purchases',
+    'sales',
+    'staff',
+    'finance',
+  ],
   other: ['products', 'sales', 'inventory', 'tasks', 'finance'],
 };
