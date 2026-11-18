@@ -77,6 +77,12 @@ api = upsert(api, "AUTH_REFRESH_DAYS", "14")
 api = upsert(api, "CORS_ORIGIN", "https://vos-ia.com,https://www.vos-ia.com")
 api = upsert(api, "GOOGLE_REDIRECT_URI", "https://vos-ia.com/auth/google/callback")
 api = upsert(api, "GOOGLE_FRONT_URL", "https://vos-ia.com")
+PUBLIC_GOOGLE_CLIENT_ID = "9205255049-3gtmvp6m0k9hr8repro9gd0d9ad23qsi.apps.googleusercontent.com"
+gid = get(api, "GOOGLE_CLIENT_ID")
+# bash expande $9 dentro de 9205255049-… si el valor quedó sin comillas.
+if not gid.endswith(".apps.googleusercontent.com") or PUBLIC_GOOGLE_CLIENT_ID.endswith(gid):
+    gid = PUBLIC_GOOGLE_CLIENT_ID
+    api = upsert(api, "GOOGLE_CLIENT_ID", gid)
 api_path.write_text(api)
 
 front = front_path.read_text()
@@ -84,10 +90,7 @@ front = upsert(front, "VITE_API_URL", "https://vos-ia.com/backend")
 front = upsert(front, "VITE_APP_URL", "https://vos-ia.com")
 front = upsert(front, "VITE_LANDING_URL", "https://vos-ia.com/#/")
 front = upsert(front, "VITE_SHOP_FRONT_URL", "https://vos-ia.com")
-if not get(front, "VITE_GOOGLE_CLIENT_ID"):
-    gid = get(api, "GOOGLE_CLIENT_ID")
-    if gid:
-        front = upsert(front, "VITE_GOOGLE_CLIENT_ID", gid)
+front = upsert(front, "VITE_GOOGLE_CLIENT_ID", gid)
 front_path.write_text(front)
 print(f"Runtime ok. db_host={host} PORT=3001 NODE_ENV=production")
 PY
