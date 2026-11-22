@@ -22,6 +22,7 @@ import { PlatformPurchasesModule } from './platform-purchases/platform-purchases
 import { PlatformStaffModule } from './platform-staff/platform-staff.module';
 import { PlatformTasksModule } from './platform-tasks/platform-tasks.module';
 import { PlatformJournalModule } from './platform-journal/platform-journal.module';
+import { PlatformPersonalModule } from './platform-personal/platform-personal.module';
 import { PlatformAnalyticsModule } from './platform-analytics/platform-analytics.module';
 import { PlatformCashCloseModule } from './platform-cash-close/platform-cash-close.module';
 import { PlatformOperationsModule } from './platform-operations/platform-operations.module';
@@ -63,6 +64,7 @@ import { BillingModule } from './billing/billing.module';
     PlatformStaffModule,
     PlatformTasksModule,
     PlatformJournalModule,
+    PlatformPersonalModule,
     PlatformAnalyticsModule,
     PlatformCashCloseModule,
     PlatformOperationsModule,

@@ -187,6 +187,8 @@ model Company {
   bookingPushDevices BookingPushDevice[]
   authSessions      AuthSession[]
   journalEntries    CompanyJournalEntry[]
+  personalMoneyEntries PersonalMoneyEntry[]
+  personalCalendarEvents PersonalCalendarEvent[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -219,7 +221,9 @@ model User {
   staffProfiles    StaffMember[]
   stockMoves       StockMove[]
   bookingPushDevices BookingPushDevice[]
-  journalEntries     CompanyJournalEntry[]
+  journalEntries         CompanyJournalEntry[]
+  personalMoneyEntries   PersonalMoneyEntry[]
+  personalCalendarEvents PersonalCalendarEvent[]
 
   @@index([active], map: "idx_users_active")
   @@map("users")
@@ -261,7 +265,7 @@ model AccessRequest {
   @@map("access_requests")
 }
 
-/// Diario de la empresa. Vive en la ruta de esa empresa, no en el menú de la plataforma.
+/// Diario de la empresa. Vive en Neon; `migrate deploy` no borra filas.
 model CompanyJournalEntry {
   id        String   @id @default(cuid())
   companyId String   @map("company_id")
@@ -275,6 +279,51 @@ model CompanyJournalEntry {
 
   @@index([companyId, updatedAt], map: "idx_journal_company_updated")
   @@map("company_journal_entries")
+}
+
+enum PersonalMoneyKind {
+  INCOME
+  EXPENSE
+}
+
+/// Finanzas personales (empresa Main / businessType=personal). Persistente en Neon.
+model PersonalMoneyEntry {
+  id          String            @id @default(cuid())
+  companyId   String            @map("company_id")
+  authorId    String            @map("author_id")
+  kind        PersonalMoneyKind
+  amountCOP   Decimal           @map("amount_cop") @db.Decimal(14, 2)
+  category    String            @default("general")
+  note        String?
+  occurredOn  DateTime          @map("occurred_on") @db.Date
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, occurredOn], map: "idx_personal_money_company_day")
+  @@map("personal_money_entries")
+}
+
+/// Eventos de calendario personal. Persistente en Neon; se pueden exportar al Calendar de iOS.
+model PersonalCalendarEvent {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  authorId    String   @map("author_id")
+  title       String
+  notes       String?
+  startsAt    DateTime @map("starts_at") @db.Timestamptz(6)
+  endsAt      DateTime @map("ends_at") @db.Timestamptz(6)
+  allDay      Boolean  @default(false) @map("all_day")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, startsAt], map: "idx_personal_calendar_company_start")
+  @@map("personal_calendar_events")
 }
 
 /// Membership: user ↔ company (many-to-many).

@@ -45,6 +45,7 @@
     "db:create-jessica-user": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-jessica-user.ts",
     "db:create-jl-arandano-user": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-jl-arandano-user.ts",
     "db:create-gustavo-user": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-gustavo-user.ts",
+    "db:ensure-main-personal": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/ensure-main-personal.ts",
     "db:ensure-dental": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/ensure-dental-module.ts",
     "db:seed-dental-demo": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/seed-dental-demo.ts",
     "db:create-lexandra-user": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-lexandra-user.ts",

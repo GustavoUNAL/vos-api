@@ -36,7 +36,7 @@ export const BUSINESS_TYPE_MODULES: Record<BusinessTypeId, readonly string[]> = 
   retail: ['products', 'inventory', 'sales', 'purchases', 'finance'],
   services: ['booking', 'projects', 'tasks', 'finance'],
   clinic: ['dental', 'inventory', 'finance'],
-  /** Vida personal: agenda, pendientes, proyectos y dinero. */
+  /** Vida personal: agenda, pendientes, proyectos y dinero (más diario/calendario/finanzas personales en /personal y /journal). */
   personal: ['booking', 'tasks', 'projects', 'finance'],
   /** Consultoría de energía, remodelación e instalación. */
   energy: [
