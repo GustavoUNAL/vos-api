@@ -90,6 +90,7 @@ export class AuthController {
     @Query('returnTo') returnTo: string | undefined,
     @Query('companyId') companyId: string | undefined,
     @Query('popup') popup: string | undefined,
+    @Query('mobile') mobile: string | undefined,
     @Res() res: Response,
   ) {
     res.redirect(
@@ -98,6 +99,7 @@ export class AuthController {
         returnTo,
         companyId,
         popup === '1' || popup === 'true',
+        mobile === '1' || mobile === 'true',
       ),
     );
   }

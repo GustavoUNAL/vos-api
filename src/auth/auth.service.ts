@@ -25,6 +25,7 @@ import {
   googleCallbackErrorCode,
   googleConfig,
   googleFrontRedirect,
+  googleMobileRedirect,
   googleOAuthConfigured,
   googleProfilePicture,
   googleTokenExchangeBody,
@@ -385,9 +386,13 @@ export class AuthService {
 
   private async verifyGoogleIdToken(idToken: string) {
     const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+    const iosClientId = process.env.GOOGLE_IOS_CLIENT_ID?.trim();
     if (!clientId) {
       throw new UnauthorizedException('Inicio con Google no configurado en el servidor');
     }
+    const acceptedAudiences = new Set(
+      [clientId, iosClientId].filter((v): v is string => Boolean(v)),
+    );
     const res = await fetch(
       `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
     );
@@ -401,7 +406,7 @@ export class AuthService {
       picture?: string;
       email_verified?: string | boolean;
     };
-    if (data.aud !== clientId || !data.email?.trim()) {
+    if (!data.aud || !acceptedAudiences.has(data.aud) || !data.email?.trim()) {
       throw new UnauthorizedException('Token de Google inválido');
     }
     const verified =
@@ -694,10 +699,14 @@ export class AuthService {
     returnToRaw?: string,
     companyIdRaw?: string,
     popup = false,
+    mobile = false,
   ): string {
     const cfg = googleConfig();
     const returnTo = parseGoogleReturnTo(returnToRaw);
     if (!googleOAuthConfigured(cfg)) {
+      if (mobile) {
+        return googleMobileRedirect({ error: 'not_configured' });
+      }
       return googleFrontRedirect({
         frontUrl: cfg.frontUrl,
         returnTo,
@@ -712,6 +721,7 @@ export class AuthService {
         r: returnTo,
         ...(companyId ? { c: companyId } : {}),
         ...(popup ? { p: 1 as const } : {}),
+        ...(mobile ? { m: 1 as const } : {}),
       } satisfies GoogleOAuthState,
       { expiresIn: '10m' },
     );
@@ -732,15 +742,31 @@ export class AuthService {
     let returnTo = parseGoogleReturnTo(undefined);
     let preferredCompanyId: string | undefined;
     let popup = false;
+    let mobile = false;
     const redirect = (
-      extra: { signup?: string; error?: string; session?: boolean } = {},
-    ) =>
-      googleFrontRedirect({
+      extra: {
+        signup?: string;
+        error?: string;
+        session?: boolean;
+        accessToken?: string;
+      } = {},
+    ) => {
+      if (mobile) {
+        return googleMobileRedirect({
+          accessToken: extra.accessToken,
+          signup: extra.signup,
+          error: extra.error,
+        });
+      }
+      return googleFrontRedirect({
         frontUrl: cfg.frontUrl,
         returnTo,
         popup,
-        ...extra,
+        session: extra.session,
+        signup: extra.signup,
+        error: extra.error,
       });
+    };
     const fail = (error: string) => ({ url: redirect({ error }) });
     if (!query.state?.trim()) {
       return fail('invalid_state');
@@ -751,6 +777,7 @@ export class AuthService {
         returnTo = parseGoogleReturnTo(payload.r);
         preferredCompanyId = sanitizeCompanyIdHint(payload.c);
         popup = payload.p === 1;
+        mobile = payload.m === 1;
       } else {
         return fail('invalid_state');
       }
@@ -780,7 +807,10 @@ export class AuthService {
         return { url: redirect({ signup: result.signupToken }) };
       }
       return {
-        url: redirect({ session: true }),
+        url: redirect({
+          session: true,
+          accessToken: mobile ? result.accessToken : undefined,
+        }),
         refreshToken: result.refreshToken,
       };
     } catch (err) {

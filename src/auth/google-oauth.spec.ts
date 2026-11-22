@@ -4,6 +4,7 @@ import {
   googleCallbackErrorCode,
   googleConfig,
   googleFrontRedirect,
+  googleMobileRedirect,
   googleOAuthConfigured,
   parseGoogleReturnTo,
   pickActiveMembership,
@@ -114,6 +115,15 @@ describe('google-oauth', () => {
       'http://localhost:5173/#/auth/google/popup?google_session=1',
     );
     expect(url).not.toContain('jwt-1');
+  });
+
+  it('redirige la app iOS con access_token en el deep link', () => {
+    expect(
+      googleMobileRedirect({ accessToken: 'jwt-mobile' }),
+    ).toBe('vosia://google-auth?access_token=jwt-mobile');
+    expect(googleMobileRedirect({ error: 'no_account' })).toBe(
+      'vosia://google-auth?google_error=no_account',
+    );
   });
 
   it('acepta returnTo health y el resto cae a login', () => {

@@ -7,6 +7,8 @@ export type GoogleOAuthState = {
   r: GoogleOAuthReturnTo;
   c?: string;
   p?: 1;
+  /** App iOS nativa (ASWebAuthenticationSession → vosia://). */
+  m?: 1;
 };
 
 export type GoogleSignupTicket = {
@@ -39,6 +41,23 @@ export function googleFrontRedirect(opts: {
   if (opts.error) q.set('google_error', opts.error);
   const qs = q.toString();
   return `${base}${path}${qs ? `?${qs}` : ''}`;
+}
+
+/** Deep link de la app nativa tras OAuth (client WEB + redirect https del backend). */
+export const GOOGLE_MOBILE_REDIRECT_SCHEME = 'vosia';
+export const GOOGLE_MOBILE_REDIRECT_HOST = 'google-auth';
+
+export function googleMobileRedirect(opts: {
+  accessToken?: string;
+  signup?: string;
+  error?: string;
+}): string {
+  const q = new URLSearchParams();
+  if (opts.accessToken) q.set('access_token', opts.accessToken);
+  if (opts.signup) q.set('google_signup', opts.signup);
+  if (opts.error) q.set('google_error', opts.error);
+  const qs = q.toString();
+  return `${GOOGLE_MOBILE_REDIRECT_SCHEME}://${GOOGLE_MOBILE_REDIRECT_HOST}${qs ? `?${qs}` : ''}`;
 }
 
 export function parseGoogleReturnTo(raw?: string | null): GoogleOAuthReturnTo {
