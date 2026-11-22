@@ -64,7 +64,7 @@ async function main() {
             '/personal/money',
             '/personal/ideas',
             '/personal/wellness',
-            '/personal/vicente',
+            '/personal/aura',
             '/journal',
             '/tasks',
             '/personal/calendar',

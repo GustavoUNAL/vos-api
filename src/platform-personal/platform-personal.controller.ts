@@ -17,7 +17,7 @@ import { CurrentTenant } from '../tenant/tenant.decorator';
 import { TenantGuard } from '../tenant/tenant.guard';
 import type { TenantContext } from '../tenant/tenant.types';
 import {
-  AskVicenteDto,
+  AskAuraDto,
   UpsertMoneyBudgetDto,
   UpsertPersonalCalendarDto,
   UpsertPersonalIdeaDto,
@@ -25,10 +25,10 @@ import {
   UpsertWellnessDto,
 } from './dto/personal.dto';
 import { PlatformPersonalService } from './platform-personal.service';
-import { VicenteService } from './vicente.service';
+import { AuraService } from './aura.service';
 
 /**
- * Vida personal (Main): finanzas, notas/ideas, bienestar, Vicente.
+ * Vida personal (Main): finanzas, notas/ideas, bienestar, Aura.
  * Persistente en Neon; migrate deploy no borra datos.
  */
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -36,7 +36,7 @@ import { VicenteService } from './vicente.service';
 export class PlatformPersonalController {
   constructor(
     private readonly personal: PlatformPersonalService,
-    private readonly vicente: VicenteService,
+    private readonly aura: AuraService,
   ) {}
 
   @Get('overview')
@@ -165,22 +165,42 @@ export class PlatformPersonalController {
     return this.personal.upsertWellness(tenant, dto);
   }
 
+  @Get('aura/history')
+  auraHistory(@CurrentTenant() tenant: TenantContext) {
+    return this.aura.history(tenant);
+  }
+
+  @Post('aura/ask')
+  auraAsk(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: AskAuraDto,
+  ) {
+    return this.aura.ask(tenant, dto.question, user.name);
+  }
+
+  @Delete('aura/history')
+  clearAura(@CurrentTenant() tenant: TenantContext) {
+    return this.aura.clear(tenant);
+  }
+
+  /** Alias legacy Vicente → Aura */
   @Get('vicente/history')
   vicenteHistory(@CurrentTenant() tenant: TenantContext) {
-    return this.vicente.history(tenant);
+    return this.aura.history(tenant);
   }
 
   @Post('vicente/ask')
   vicenteAsk(
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: JwtPayload,
-    @Body() dto: AskVicenteDto,
+    @Body() dto: AskAuraDto,
   ) {
-    return this.vicente.ask(tenant, dto.question, user.name);
+    return this.aura.ask(tenant, dto.question, user.name);
   }
 
   @Delete('vicente/history')
   clearVicente(@CurrentTenant() tenant: TenantContext) {
-    return this.vicente.clear(tenant);
+    return this.aura.clear(tenant);
   }
 }

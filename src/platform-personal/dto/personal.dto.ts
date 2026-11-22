@@ -136,9 +136,13 @@ export class UpsertMoneyBudgetDto {
   limitCOP!: number;
 }
 
-export class AskVicenteDto {
+export class AskAuraDto {
   @IsString()
   @MinLength(1)
   @MaxLength(4000)
   question!: string;
 }
+
+/** @deprecated Usar AskAuraDto */
+export class AskVicenteDto extends AskAuraDto {}
+

@@ -377,7 +377,7 @@ model PersonalWellnessCheckIn {
   @@map("personal_wellness_checkins")
 }
 
-/// Memoria conversacional de Vicente (asistente personal de Main).
+/// Memoria conversacional de Aura (asistente personal de Main).
 model PersonalAssistantMessage {
   id        String   @id @default(cuid())
   companyId String   @map("company_id")
