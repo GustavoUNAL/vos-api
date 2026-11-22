@@ -966,15 +966,10 @@ export class AuthService {
   async enterCompanyAsPlatformAdmin(
     userId: string,
     companyId: string,
-    reason: string,
+    reason?: string | null,
     replaceSid?: string | null,
   ) {
-    const clean = reason?.trim() ?? '';
-    if (clean.length < 8 || clean.length > 500) {
-      throw new BadRequestException(
-        'Indicá un motivo de acceso de entre 8 y 500 caracteres.',
-      );
-    }
+    const clean = (reason?.trim() || 'platform_admin_enter').slice(0, 500);
     const user = await this.assertPlatformAdmin(userId);
     const memberships = await this.loadMemberships(userId);
     await this.audit.write({

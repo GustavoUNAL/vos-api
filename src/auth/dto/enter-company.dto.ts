@@ -5,10 +5,11 @@ export class EnterCompanyDto {
   @IsNotEmpty()
   companyId!: string;
 
+  /** Opcional: el panel ya no pide motivo para entrar a una empresa. */
+  @IsOptional()
   @IsString()
-  @MinLength(8)
   @MaxLength(500)
-  reason!: string;
+  reason?: string;
 }
 
 export class ElevateSupportDto {
