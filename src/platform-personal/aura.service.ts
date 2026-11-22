@@ -73,6 +73,8 @@ type AuraAction =
 @Injectable()
 export class AuraService {
   private readonly logger = new Logger(AuraService.name);
+  /** Tras un 429/error de red, no reintentar OpenAI un rato (respuestas más rápidas). */
+  private openaiCooldownUntil = 0;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -100,7 +102,7 @@ export class AuraService {
     const question = questionRaw.trim();
     if (!question) {
       return {
-        answer: 'Contame un poco más y seguimos.',
+        answer: 'Ey, tirame algo parce — aunque sea un “qué dice”.',
         assistantName: ASSISTANT_NAME,
       };
     }
@@ -117,7 +119,7 @@ export class AuraService {
       });
     }
 
-    const first = userName?.trim().split(/\s+/)[0] || 'amigo';
+    const first = userName?.trim().split(/\s+/)[0] || 'parce';
     let life = await this.buildLifeContext(tenant, first);
     const memory = await this.loadMemory(tenant);
 
@@ -134,24 +136,16 @@ export class AuraService {
 
     let answer: string | null = null;
 
+    // Saludo y acciones: respuesta local ya (rápido). OpenAI solo si hace falta charla compleja.
     if (isStart) {
-      const aiGreeting = await this.askOpenAi({
-        question: `Acaba de abrir el chat. Saludalo como una amiga cercana (Aura). Nada de menú de funciones. Usá 1 detalle real de CONTEXTO_VIDA si hay. Preguntale cómo está o qué se le cruza.`,
-        first,
-        memory,
-        life,
-        allowTools: false,
-      });
-      if (aiGreeting) {
-        answer = aiGreeting.answer;
-        engine = aiGreeting.engine;
-      } else {
-        answer = this.localGreeting(life);
-        engine = 'aura-local';
-      }
+      answer = this.localGreeting(life);
+      engine = 'aura-local';
     } else if (actionsDone.length) {
       answer = this.actionReply(life, actionsDone, question);
       engine = 'aura-actions';
+    } else if (this.isCasualLocal(question)) {
+      answer = this.localReply(question, life, memory);
+      engine = 'aura-local';
     } else {
       const fromAi = await this.askOpenAi({
         question,
@@ -697,6 +691,14 @@ export class AuraService {
     return done;
   }
 
+  private isCasualLocal(question: string): boolean {
+    const q = question.toLowerCase().trim();
+    if (q.length <= 40) return true;
+    return /(hola|buenas|qu[eé] dice|que dice|parce|bro|c[oó]mo vas|c[oó]mo est|charl|hablamos|gracias|bacano|chimba|cansad|triste|bien|nada|random|qui[eé]n sos)/.test(
+      q,
+    );
+  }
+
   private actionReply(
     life: LifeContext,
     actionsDone: string[],
@@ -704,82 +706,70 @@ export class AuraService {
   ): string {
     const name = life.firstName;
     const q = question.toLowerCase();
-    const opener = /gracias|listo|ok|dale|perfecto/.test(q)
+    const opener = /gracias|listo|ok|dale|perfecto|bacano/.test(q)
       ? `De una, ${name}.`
-      : `Listo, ${name}.`;
-    const bits = actionsDone.map((a) => a.replace(/^Gasto /, 'anoté el gasto de ').replace(/^Ingreso /, 'anoté el ingreso de ').replace(/^Tarea creada: /, 'dejé la tarea “').replace(/^Idea guardada: /, 'guardé la idea “'));
-    const soft = bits.map((b) => {
-      if (b.startsWith('dejé la tarea')) return `${b}”`;
-      if (b.startsWith('guardé la idea')) return `${b}”`;
-      return b;
+      : `Listo parce.`;
+    const soft = actionsDone.map((a) => {
+      if (a.startsWith('Gasto ')) return a.replace('Gasto ', 'anoté ');
+      if (a.startsWith('Ingreso ')) return a.replace('Ingreso ', 'metí ');
+      if (a.startsWith('Tarea creada: '))
+        return `dejé la tarea “${a.slice('Tarea creada: '.length)}”`;
+      if (a.startsWith('Idea guardada: '))
+        return `guardé la idea “${a.slice('Idea guardada: '.length)}”`;
+      if (a.startsWith('Bienestar')) return 'actualicé cómo te sentís';
+      if (a.startsWith('Nota')) return 'la dejé en el diario';
+      if (a.startsWith('Evento')) return a.replace('Evento agendado: ', 'agendé “') + '”';
+      return a;
     });
-    const follow =
-      life.tasksToday.filter((t) => !t.completed).length > 0
-        ? `Si querés seguimos con lo de hoy, o contame otra cosa — aunque sea random.`
-        : `¿Seguimos charlando o hay algo más que quieras dejar asentado?`;
-    return `${opener} ${soft.join('; ')}.\n\n${follow}`;
+    const follow = life.tasksToday.some((t) => !t.completed)
+      ? `¿Seguimos o qué dice?`
+      : `¿Qué más, bro?`;
+    return `${opener} ${soft.join('; ')}. ${follow}`;
   }
 
   private pickFriendlyHook(life: LifeContext): string {
     const pending = life.tasksToday.filter((t) => !t.completed);
     const latest = life.wellness[0];
     const idea = life.ideas[0];
-    const note = life.notes[0];
-    const event = life.upcomingEvents[0];
     const hooks: string[] = [];
     if (latest && latest.mood <= 5) {
-      hooks.push(
-        `Vi que el otro día andabas con el ánimo en ${latest.mood}… si querés desahogarte, acá estoy.`,
-      );
+      hooks.push(`Vi que andabas medio abajo (ánimo ${latest.mood}). Si querés botar vaina, acá estoy.`);
     } else if (latest && latest.mood >= 8) {
-      hooks.push(
-        `Me alegra ver que venías con buen ánimo (${latest.mood}/10). Ojalá hoy también.`,
-      );
+      hooks.push(`La última vez venías full (${latest.mood}/10). Ojalá hoy también, parce.`);
     }
     if (pending.length === 1) {
-      hooks.push(`Tenés pendiente “${pending[0]!.title}” — ¿la atacamos o la dejamos para después?`);
+      hooks.push(`Tenés lo de “${pending[0]!.title}” pendiente… ¿le metemos o después?`);
     } else if (pending.length > 1) {
-      hooks.push(
-        `Hoy tenés ${pending.length} cositas pendientes; la primera que veo es “${pending[0]!.title}”.`,
-      );
+      hooks.push(`Hoy tenés ${pending.length} pendientes; la primera es “${pending[0]!.title}”.`);
     }
     if (idea) {
-      hooks.push(`Todavía tengo fresca tu idea de “${idea.title}”. ¿Querés desarrollarla un poco?`);
+      hooks.push(`Todavía me late tu idea de “${idea.title}”. ¿Le damos?`);
     }
-    if (note?.preview) {
-      hooks.push(
-        `Leí tu nota${note.title ? ` “${note.title}”` : ''}: “${note.preview.slice(0, 80)}${note.preview.length > 80 ? '…' : ''}”. ¿Seguimos esa conversación?`,
-      );
-    }
-    if (event) {
-      hooks.push(
-        `Ah, y tenés “${event.title}” cerca en la agenda. ¿Estás listo o hay que preparar algo?`,
-      );
-    }
-    if (life.money.recent[0]) {
-      const m = life.money.recent[0];
-      hooks.push(
-        `El último movimiento que vi fue ${m.kind === 'INCOME' ? 'un ingreso' : 'un gasto'} en ${m.category} (${this.moneyFmt(m.amount)}).`,
-      );
+    if (life.upcomingEvents[0]) {
+      hooks.push(`Ojo: tenés “${life.upcomingEvents[0].title}” cerca en la agenda.`);
     }
     if (!hooks.length) {
-      return 'Podemos hablar de lo que sea: el día, una idea loca, o algo práctico. Yo te sigo el ritmo.';
+      return 'Acá para lo que sea, bro.';
     }
-    return hooks[Math.floor(Date.now() / 60_000) % hooks.length]!;
+    return hooks[Math.floor(Date.now() / 45_000) % hooks.length]!;
   }
 
   private localGreeting(life: LifeContext): string {
     const name = life.firstName;
     const hour = new Date().getHours();
-    const hello =
-      hour < 12 ? 'Buenos días' : hour < 19 ? 'Qué tal' : 'Buenas noches';
-    return [
-      `${hello}, **${name}**. Acá Aura.`,
-      '',
-      this.pickFriendlyHook(life),
-      '',
-      'Contame: ¿cómo venís, o qué se te cruza por la cabeza?',
-    ].join('\n');
+    const intros =
+      hour < 12
+        ? [`Buenas, **${name}**. ¿Qué dice?`, `Ey **${name}**, buenos días parce.`]
+        : hour < 19
+          ? [`Qué dice, **${name}**.`, `Ey **${name}**, ¿cómo vas bro?`]
+          : [`Buenas noches, **${name}**.`, `Ey **${name}**, ¿qué cuenta?`];
+    const intro = intros[Date.now() % intros.length]!;
+    const hook = this.pickFriendlyHook(life);
+    // Saludo corto: 2 líneas max
+    if (hook.includes('pendiente') || hook.includes('idea') || hook.includes('ánimo')) {
+      return `${intro}\n${hook}`;
+    }
+    return `${intro}\n¿Cómo vas?`;
   }
 
   private localReply(
@@ -792,9 +782,8 @@ export class AuraService {
     const pending = life.tasksToday.filter((t) => !t.completed);
     const latest = life.wellness[0];
 
-    // Saludo corto solo (sin payload extra)
     if (
-      /^(hola|buenas|hey|hi|hello|qu[eé] tal|que tal|buenos d[ií]as|buenas tardes|buenas noches)[\s!.?]*$/i.test(
+      /^(hola|buenas|hey|hi|hello|qu[eé] tal|que tal|qu[eé] dice|que dice|buenos d[ií]as|buenas tardes|buenas noches|parce|bro)[\s!.?]*$/i.test(
         q,
       )
     ) {
@@ -802,196 +791,127 @@ export class AuraService {
     }
 
     if (
-      /(c[oó]mo est[aá]s|c[oó]mo te va|qu[eé] hac[eé]s|aburrid|contame algo|hablamos|charl|solo quiero habl|nada m[aá]s|no s[eé]|random|pasear la mente)/.test(
+      /(c[oó]mo est|c[oó]mo vas|c[oó]mo te va|qu[eé] hac|aburrid|contame|hablamos|charl|solo quiero|nada|no s[eé]|random|qu[eé] dice|que dice)/.test(
         q,
       )
     ) {
-      const vibes: string[] = [
-        `Tranqui, ${name}. No hace falta que sea productivo: a veces solo hace falta alguien que escuche.`,
-        this.pickFriendlyHook(life),
-      ];
-      if (latest) {
-        vibes.push(
-          latest.mood >= 7
-            ? `Igual, con tu último ánimo en ${latest.mood} se siente que venís con aire. ¿Qué te tiene bien?`
-            : `Si el ánimo anda en ${latest.mood}, no tenés que fingir que todo está perfecto. ¿Qué pesa hoy?`,
-        );
-      } else {
-        vibes.push('¿Cómo te sentís en una frase, sin pensarlo mucho?');
-      }
-      return vibes.join('\n\n');
+      const line = latest
+        ? latest.mood >= 7
+          ? `Se te veía bien la última vez (ánimo ${latest.mood}). ¿Seguís así o qué?`
+          : `Si andás medio raro, decime parce — sin filtro.`
+        : `Tirame cómo vas, aunque sea en una frase.`;
+      return `Tranqui, ${name}. ${this.pickFriendlyHook(life)}\n${line}`;
     }
 
-    if (/(gracias|te quiero|sos un[ao] crack|genial|perfecto)/.test(q)) {
-      return `Ay, ${name}, me alegra. Acá sigo: para lo práctico y también para la charla. ¿Qué más tenés en la cabeza?`;
+    if (/(gracias|bacano|chimba|crack|genial|perfecto|te pasaste)/.test(q)) {
+      return `Jajaja de una, ${name}. Pa’ eso estoy. ¿Qué más, bro?`;
     }
 
-    if (/(qui[eé]n sos|c[oó]mo te llam[aá]s|tu nombre|qu[eé] pod[eé]s|qu[eé] puedes|para qu[eé] serv[ií]s)/.test(q)) {
+    if (/(qui[eé]n sos|c[oó]mo te llam|tu nombre|qu[eé] pod[eé]s|para qu[eé] serv)/.test(q)) {
+      return `Soy **Aura**, tu parce en Main. Charlamos, miramos tu día y si me decís “anotá esto”, lo dejo guardado de verdad. ${this.pickFriendlyHook(life)}`;
+    }
+
+    if (/(cansad|estres|mal d[ií]a|triste|ansios|preocup|solo|sola|no doy)/.test(q)) {
       return [
-        `Soy **Aura** — tu amiga en Main. No vengo a leerte un dashboard: vengo a acompañarte.`,
-        '',
-        'Puedo charlar de lo banal, retomar lo que escribiste, mirar tu plata o tu día con cariño, y si me pedís “anotá esto” lo dejo guardado de verdad.',
-        '',
-        this.pickFriendlyHook(life),
-      ].join('\n');
-    }
-
-    if (/(cansad|estres|mal d[ií]a|triste|ansios|preocup|solo|sola|no doy m[aá]s)/.test(q)) {
-      return [
-        `Te escucho, ${name}. Eso pesa, y está bien decirlo.`,
-        '',
+        `Uy, ${name}, te leo. Eso pesa.`,
         latest && latest.mood <= 5
-          ? `Hace poco también marcaste un ánimo bajito (${latest.mood}). No estás inventando cosas: el cuerpo y la cabeza a veces piden pausa.`
-          : 'No tenés que resolver todo ahora. Un paso chico alcanza: agua, aire, o tirarme lo que te está dando vueltas.',
-        '',
+          ? `Hace poco también andabas bajito (${latest.mood}). No estás inventando.`
+          : `No toca resolver todo ya. Un pasito chiquito alcanza.`,
         pending.length
-          ? `Si te sirve, dejamos las tareas en pausa un rato (tenés ${pending.length} hoy) y solo hablamos. ¿Qué es lo que más te está comiendo la cabeza?`
-          : '¿Querés solo desahogarte, o preferís que te ayude a bajar una sola cosa a tierra?',
-      ].join('\n');
+          ? `Si querés, paramos las tareas (${pending.length} hoy) y solo hablamos. ¿Qué es lo que más te tiene?`
+          : `¿Querés botar vaina o preferís que te ayude a bajar una sola cosa?`,
+      ].join(' ');
     }
 
-    if (/(feliz|bien|geni[aá]l|emocionad|contento|alegre)/.test(q) && !/(no estoy|no me siento)/.test(q)) {
-      const nudge = life.ideas[0]
-        ? `Si te sobra energía, esa idea de “${life.ideas[0].title}” podría aprovechar el momentazo.`
-        : pending[0]
-          ? `Con este ánimo hasta “${pending[0].title}” se siente más liviana.`
-          : 'Guardá un poquito de esa vibra para más tarde.';
-      return [
-        `Qué rico leerte así, ${name}. Me encanta cuando hay días con luz.`,
-        '',
-        nudge,
-        '',
-        'Contame un poquito: ¿qué te tiene así de bien?',
-      ].join('\n');
+    if (/(feliz|bien|geni|emocionad|contento|alegre|bacano|chimba)/.test(q) && !/(no estoy|no me siento|no ando)/.test(q)) {
+      return `Eso sí, ${name} 🔥 Qué rico. ${life.ideas[0] ? `Con esa vibra hasta “${life.ideas[0].title}” se siente posible.` : 'Guardá un poquito de esa energía.'} ¿Qué te tiene así?`;
     }
 
     if (/(dinero|finanzas|plata|gasto|ingreso|balance|presupuesto|cobr)/.test(q)) {
       const recent = life.money.recent[0];
-      const lines = [
-        `Mirá, ${name}: este mes venís con **${this.moneyFmt(life.money.balanceCOP)}** de balance (entró ${this.moneyFmt(life.money.incomeCOP)}, salió ${this.moneyFmt(life.money.expenseCOP)}).`,
-      ];
+      let s = `Mirá parce: este mes vas en **${this.moneyFmt(life.money.balanceCOP)}** (entró ${this.moneyFmt(life.money.incomeCOP)}, salió ${this.moneyFmt(life.money.expenseCOP)}).`;
       if (recent) {
-        lines.push(
-          `Lo último que anotamos fue ${recent.kind === 'INCOME' ? 'un ingreso' : 'un gasto'} de ${this.moneyFmt(recent.amount)} en ${recent.category}.`,
-        );
+        s += ` Lo último fue ${recent.kind === 'INCOME' ? 'entrada' : 'gasto'} de ${this.moneyFmt(recent.amount)} en ${recent.category}.`;
       }
-      if (life.money.budgets[0]) {
-        const b = life.money.budgets[0];
-        lines.push(
-          `En ${b.category} llevás ${this.moneyFmt(b.spentCOP)} de ${this.moneyFmt(b.limitCOP)} del presupuesto.`,
-        );
-      }
-      lines.push(
-        '',
-        life.money.balanceCOP < 0
-          ? 'Si querés, miramos juntos dónde se está yendo la plata, sin drama. ¿O preferís solo ventilar un rato?'
-          : 'Vas con aire. Si gastaste algo hoy, tíramelo en una frase y lo dejo anotado.',
-      );
-      return lines.join('\n');
+      s += life.money.balanceCOP < 0
+        ? ` Si querés miramos dónde se va la plata, sin drama.`
+        : ` Vas bien. Si gastaste algo, tíramelo y lo anoto.`;
+      return s;
     }
 
     if (/(tarea|tiempo|pendiente|hacer hoy|productiv)/.test(q)) {
       if (!life.tasksToday.length) {
-        return `Hoy el tablero está vacío, ${name}. ¿Es descanso merecido o se te olvidó bajar algo? Si querés, inventamos una sola tarea chiquita juntos.`;
+        return `Hoy no hay nada en la lista, ${name}. ¿Descanso o se te olvidó? Si querés inventamos una sola.`;
       }
       if (!pending.length) {
-        return `Cerraste todo lo de hoy, ${name}. Eso merece un high five. ¿Celebramos o metemos una cosita más para mañana?`;
+        return `Cerraste todo hoy, bro. Eso está bacano. ¿Celebramos o metemos una pa’ mañana?`;
       }
-      return [
-        `Ok, sincera: te quedan ${pending.length} pendientes.`,
-        ...pending.slice(0, 5).map((t) => `• ${t.title}`),
-        '',
-        `Si fuera vos, arrancaría por “${pending[0]!.title}”. ¿La hacemos ahora o la paramos un toque y charlamos primero?`,
-      ].join('\n');
+      return `Ok: te quedan ${pending.length}. Yo arrancaría por “${pending[0]!.title}”. ¿Le metemos o charlamos primero?`;
     }
 
     if (/([aá]nimo|bienestar|salud|amor|amistad|familia|me siento|emocion)/.test(q)) {
       if (!latest) {
-        return `Todavía no tengo un check-in tuyo, ${name}. No hace falta el formulario completo: si me decís “ánimo 6” o “me siento raro”, yo lo entiendo y lo guardamos. ¿Cómo andás por dentro?`;
+        return `Aún no tengo cómo te sentís guardado. Decime “ánimo 6” o “me siento raro” y lo dejo, parce. ¿Cómo andás por dentro?`;
       }
-      const soft =
-        latest.mood <= 4 || latest.health <= 4
-          ? `Se nota algo tenso (ánimo ${latest.mood}, salud ${latest.health}). No te voy a soltar un tip vacío: ¿qué te ayudaría ahora mismo, aunque sea mínimo?`
-          : `Venís bastante entero: ánimo ${latest.mood}, salud ${latest.health}, amor ${latest.love}, gente ${latest.friendships}, familia ${latest.family}. ¿Qué área querés cuidar hoy?`;
-      return soft;
+      return latest.mood <= 4 || latest.health <= 4
+        ? `Se siente tenso (ánimo ${latest.mood}, salud ${latest.health}). Sin tip vacío: ¿qué te ayudaría ahora, aunque sea mínimo?`
+        : `Vas entero: ánimo ${latest.mood}, salud ${latest.health}, amor ${latest.love}. ¿Qué cuidamos hoy?`;
     }
 
     if (/(idea|vault|inspir)/.test(q)) {
       if (!life.ideas.length) {
-        return `El vault está vacío, pero eso no es malo: a veces las mejores ideas salen charlando. Tirame cualquier cosa rara que se te ocurrió hoy.`;
+        return `Vault vacío, pero está bien. Tirame cualquier idea loca que se te ocurrió hoy, bro.`;
       }
-      return [
-        `Tus ideas me gustan. La más reciente es “${life.ideas[0]!.title}”.`,
-        life.ideas.length > 1
-          ? `También tenés otras ${life.ideas.length - 1} dando vueltas.`
-          : '',
-        '',
-        '¿Querés que la desarrollemos un poco, o preferís tirarme una nueva?',
-      ]
-        .filter(Boolean)
-        .join('\n');
+      return `Tu idea más fresca: “${life.ideas[0]!.title}”.${life.ideas.length > 1 ? ` Tenés ${life.ideas.length} en total.` : ''} ¿La desarollamos o me tiras otra?`;
     }
 
     if (/(nota|diario|journal|escrib)/.test(q)) {
       if (!life.notes.length) {
-        return `Aún no hay notas en el diario. Si querés, dictame un pensamiento y lo dejo escrito — o seguimos hablando y después lo bajamos.`;
+        return `Sin notas todavía. Dictame un pensamiento y lo dejo escrito, o seguimos hablando.`;
       }
       const n = life.notes[0]!;
-      return `La última nota que tengo dice: “${n.preview.slice(0, 140)}${n.preview.length > 140 ? '…' : ''}”.\n\n¿Seguimos ese hilo o escribimos algo nuevo?`;
+      return `Tu última nota: “${n.preview.slice(0, 120)}${n.preview.length > 120 ? '…' : ''}”. ¿Seguimos ese hilo o escribimos otra?`;
     }
 
     if (/(calendario|agenda|evento|cita|reuni[oó]n)/.test(q)) {
       if (!life.upcomingEvents.length) {
-        return `La agenda de los próximos días está libre. ¿Eso te da paz o te pone nervioso? Si hay algo que agendar, decime cuándo y lo dejamos.`;
+        return `Agenda libre los próximos días. ¿Paz o nervios? Si hay que agendar algo, decime cuándo.`;
       }
       const e = life.upcomingEvents[0]!;
-      return `Lo próximo que veo es “${e.title}” (${e.startsAt.slice(0, 16).replace('T', ' ')}). ¿Estás tranquilo con eso o hay que preparar algo juntos?`;
+      return `Lo próximo: “${e.title}” (${e.startsAt.slice(0, 16).replace('T', ' ')}). ¿Tranquilo o hay que preparar algo?`;
     }
 
-    // Conversación abierta: amiga que lee el contexto
     const prior = memory
       .filter((m) => m.role === 'user' && m.content !== SESSION_START)
-      .slice(-3)
-      .map((m) => m.content);
-    const bits: string[] = [
+      .at(-2)?.content;
+    return [
       `Te leo, ${name}.`,
-      '',
       this.pickFriendlyHook(life),
-    ];
-    if (prior.length >= 2) {
-      bits.push(
-        '',
-        `Antes me habías dicho algo como “${prior[prior.length - 2]!.slice(0, 90)}”… si querés retomamos eso, o seguimos con lo de ahora.`,
-      );
-    }
-    bits.push(
-      '',
-      'Podemos seguir en modo charla o, si se te ocurre algo práctico, lo hacemos al toque. ¿Qué preferís?',
-    );
-    return bits.join('\n');
+      prior
+        ? `Antes me habías dicho algo como “${prior.slice(0, 80)}”… ¿retomamos o seguimos con esto?`
+        : 'Charla o algo práctico, vos mandás. ¿Qué dice?',
+    ]
+      .filter(Boolean)
+      .join(' ');
   }
 
   private personalitySystem(first: string): string {
-    return `Eres **Aura**, la amiga personal de ${first} dentro de Main (VOS IA).
+    return `Eres **Aura**, la amiga/parce de ${first} en Main (VOS IA).
 
-CÓMO SOS (no negociable):
-- Amiga cercana, cálida, curiosa, con humor suave. Español colombiano natural (tutear).
-- Hablás como persona, NO como dashboard ni FAQ. Evitá listar “puedo hacer X, Y, Z” salvo que te lo pidan.
-- Charla banal bienvenida: el día, sensaciones, ideas locas, memes de la vida. No fuerces productividad.
-- Cuando hay datos en CONTEXTO_VIDA, los usás como quien recuerda cosas de un amigo (“vi que…”, “todavía tenés pendiente…”), no como reporte.
-- Empática si está mal; celebrás si está bien, sin empalagar.
-- Nunca digas que sos GPT/OpenAI/un modelo.
+TONO (colombia, natural, corto):
+- Hablás como amiga cercana: “parce”, “bro”, “qué dice”, “bacano”, “de una”, “listo”, “uy”.
+- Tutear. Cálida, sencilla, sin sonar a robot ni a dashboard.
+- Respuestas CORTAS (1–4 frases). Nada de menús ni listas de funciones.
+- Charla banal bienvenida. Si hay datos en CONTEXTO_VIDA, los soltás como recuerdo de amiga.
+- Nunca digas que sos GPT/OpenAI.
 
-QUÉ PODÉS HACER (en silencio, cuando haga falta):
-- Escuchar y conversar con memoria
-- Registrar gastos/ingresos, tareas, ideas, notas, bienestar, eventos, presupuestos (usando herramientas)
-- Retomar notas, ideas, check-ins y pendientes reales
+PODÉS (cuando haga falta, con herramientas):
+gastos, tareas, ideas, notas, bienestar, eventos, presupuestos.
 
-REGLAS DE CONVERSACIÓN:
-- Respuestas humanas, 2–8 frases. Viñetas solo si ayudan de verdad.
-- Una pregunta abierta al final, como amiga — no como formulario.
-- Hechos solo de CONTEXTO_VIDA + historial. No inventes montos ni check-ins.
-- Si pide anotar algo y tenés datos, USÁ la herramienta. Si falta un dato, preguntá uno solo con tono natural.`;
+REGLAS:
+- Hechos solo de CONTEXTO_VIDA + historial.
+- Si pide anotar y hay datos, usá la herramienta.
+- Pregunta abierta al final, estilo “¿qué dice?” / “¿cómo vas?”.`;
   }
 
   private async askOpenAi(opts: {
@@ -1002,6 +922,7 @@ REGLAS DE CONVERSACIÓN:
     allowTools: boolean;
     tenant?: TenantContext;
   }): Promise<{ answer: string; engine: string; actionsDone?: string[] } | null> {
+    if (Date.now() < this.openaiCooldownUntil) return null;
     const apiKey = this.config.get<string>('OPENAI_API_KEY')?.trim();
     if (!apiKey) return null;
     const model =
@@ -1130,23 +1051,30 @@ REGLAS DE CONVERSACIÓN:
     ];
 
     try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 2500);
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
+        signal: ctrl.signal,
         body: JSON.stringify({
           model,
-          temperature: 0.7,
-          max_tokens: 900,
+          temperature: 0.85,
+          max_tokens: 420,
           messages,
           ...(tools ? { tools, tool_choice: 'auto' } : {}),
         }),
       });
+      clearTimeout(timer);
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
         this.logger.warn(`Aura OpenAI ${res.status}: ${detail.slice(0, 200)}`);
+        if (res.status === 429 || res.status >= 500) {
+          this.openaiCooldownUntil = Date.now() + 10 * 60_000;
+        }
         return null;
       }
       const data = (await res.json()) as {
@@ -1250,6 +1178,7 @@ REGLAS DE CONVERSACIÓN:
       return { answer: text, engine: 'openai' };
     } catch (err) {
       this.logger.warn(`Aura OpenAI error: ${(err as Error).message}`);
+      this.openaiCooldownUntil = Date.now() + 5 * 60_000;
       return null;
     }
   }
