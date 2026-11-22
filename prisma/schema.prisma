@@ -186,6 +186,7 @@ model Company {
   bookingBlocks     BookingAvailabilityBlock[]
   bookingPushDevices BookingPushDevice[]
   authSessions      AuthSession[]
+  journalEntries    CompanyJournalEntry[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -218,6 +219,7 @@ model User {
   staffProfiles    StaffMember[]
   stockMoves       StockMove[]
   bookingPushDevices BookingPushDevice[]
+  journalEntries     CompanyJournalEntry[]
 
   @@index([active], map: "idx_users_active")
   @@map("users")
@@ -257,6 +259,22 @@ model AccessRequest {
   @@index([status], map: "idx_access_requests_status")
   @@index([email], map: "idx_access_requests_email")
   @@map("access_requests")
+}
+
+/// Diario de la empresa. Vive en la ruta de esa empresa, no en el menú de la plataforma.
+model CompanyJournalEntry {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  authorId  String   @map("author_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, updatedAt], map: "idx_journal_company_updated")
+  @@map("company_journal_entries")
 }
 
 /// Membership: user ↔ company (many-to-many).

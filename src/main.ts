@@ -10,16 +10,29 @@ import { JsonSerializeInterceptor } from './common/json-serialize.interceptor';
 
 const isProd = process.env.NODE_ENV === 'production';
 
+/** Orígenes del contenedor nativo (Capacitor). El navegador no puede falsificarlos. */
+const NATIVE_APP_ORIGINS = [
+  'capacitor://localhost',
+  'ionic://localhost',
+  'https://localhost',
+  'http://localhost',
+];
+
 function corsOriginOption():
   | boolean
   | string[]
   | ((origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => void) {
   const raw = process.env.CORS_ORIGIN?.trim();
   if (raw) {
-    return raw
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    return [
+      ...new Set([
+        ...raw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        ...NATIVE_APP_ORIGINS,
+      ]),
+    ];
   }
   if (isProd) {
     throw new Error(
@@ -39,7 +52,7 @@ function corsOriginOption():
       cb(null, true);
       return;
     }
-    if (devDefaults.includes(origin)) {
+    if (devDefaults.includes(origin) || NATIVE_APP_ORIGINS.includes(origin)) {
       cb(null, true);
       return;
     }

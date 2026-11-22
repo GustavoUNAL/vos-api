@@ -74,7 +74,12 @@ api = upsert(api, "NODE_ENV", "production")
 api = upsert(api, "JWT_EXPIRES_IN", "15m")
 api = upsert(api, "AUTH_PUBLIC_REGISTER", "false")
 api = upsert(api, "AUTH_REFRESH_DAYS", "14")
-api = upsert(api, "CORS_ORIGIN", "https://vos-ia.com,https://www.vos-ia.com")
+# Orígenes web + contenedores nativos (Capacitor). main.ts también los fusiona.
+api = upsert(
+    api,
+    "CORS_ORIGIN",
+    "https://vos-ia.com,https://www.vos-ia.com,capacitor://localhost,ionic://localhost,https://localhost,http://localhost",
+)
 api = upsert(api, "GOOGLE_REDIRECT_URI", "https://vos-ia.com/auth/google/callback")
 api = upsert(api, "GOOGLE_FRONT_URL", "https://vos-ia.com")
 PUBLIC_GOOGLE_CLIENT_ID = "9205255049-3gtmvp6m0k9hr8repro9gd0d9ad23qsi.apps.googleusercontent.com"
