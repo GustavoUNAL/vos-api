@@ -189,6 +189,10 @@ model Company {
   journalEntries    CompanyJournalEntry[]
   personalMoneyEntries PersonalMoneyEntry[]
   personalCalendarEvents PersonalCalendarEvent[]
+  personalIdeas         PersonalIdea[]
+  personalWellnessCheckIns PersonalWellnessCheckIn[]
+  personalAssistantMessages PersonalAssistantMessage[]
+  personalMoneyBudgets  PersonalMoneyBudget[]
 
   @@index([status], map: "idx_companies_status")
   @@index([name], map: "idx_companies_name")
@@ -224,6 +228,10 @@ model User {
   journalEntries         CompanyJournalEntry[]
   personalMoneyEntries   PersonalMoneyEntry[]
   personalCalendarEvents PersonalCalendarEvent[]
+  personalIdeas          PersonalIdea[]
+  personalWellnessCheckIns PersonalWellnessCheckIn[]
+  personalAssistantMessages PersonalAssistantMessage[]
+  personalMoneyBudgets   PersonalMoneyBudget[]
 
   @@index([active], map: "idx_users_active")
   @@map("users")
@@ -270,6 +278,8 @@ model CompanyJournalEntry {
   id        String   @id @default(cuid())
   companyId String   @map("company_id")
   authorId  String   @map("author_id")
+  title     String?
+  tags      String[] @default([])
   body      String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -324,6 +334,81 @@ model PersonalCalendarEvent {
 
   @@index([companyId, startsAt], map: "idx_personal_calendar_company_start")
   @@map("personal_calendar_events")
+}
+
+/// Vault de ideas personales.
+model PersonalIdea {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  authorId  String   @map("author_id")
+  title     String
+  body      String
+  tags      String[] @default([])
+  starred   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, updatedAt], map: "idx_personal_ideas_company_updated")
+  @@map("personal_ideas")
+}
+
+/// Check-in de bienestar: ánimo, salud, amor, amistades, familia (1–10).
+model PersonalWellnessCheckIn {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  authorId    String   @map("author_id")
+  mood        Int
+  health      Int
+  love        Int
+  friendships Int
+  family      Int
+  note        String?
+  checkedOn   DateTime @map("checked_on") @db.Date
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, authorId, checkedOn], map: "personal_wellness_company_author_day_key")
+  @@index([companyId, checkedOn], map: "idx_personal_wellness_company_day")
+  @@map("personal_wellness_checkins")
+}
+
+/// Memoria conversacional de Vicente (asistente personal de Main).
+model PersonalAssistantMessage {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  userId    String   @map("user_id")
+  role      String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, userId, createdAt], map: "idx_personal_assistant_thread")
+  @@map("personal_assistant_messages")
+}
+
+/// Presupuesto mensual por categoría (finanzas personales).
+model PersonalMoneyBudget {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  authorId    String   @map("author_id")
+  category    String
+  month       DateTime @db.Date
+  limitCOP    Decimal  @map("limit_cop") @db.Decimal(14, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, category, month], map: "personal_money_budgets_company_cat_month_key")
+  @@map("personal_money_budgets")
 }
 
 /// Membership: user ↔ company (many-to-many).

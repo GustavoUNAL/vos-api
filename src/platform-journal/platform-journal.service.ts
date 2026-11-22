@@ -10,6 +10,8 @@ import { UpsertJournalDto } from './dto/journal.dto';
 
 function formatEntry(row: {
   id: string;
+  title: string | null;
+  tags: string[];
   body: string;
   createdAt: Date;
   updatedAt: Date;
@@ -17,6 +19,8 @@ function formatEntry(row: {
 }) {
   return {
     id: row.id,
+    title: row.title,
+    tags: row.tags ?? [],
     body: row.body,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -46,6 +50,8 @@ export class PlatformJournalService {
         companyId: tenant.companyId,
         authorId: tenant.userId,
         body,
+        title: this.cleanTitle(dto.title),
+        tags: this.cleanTags(dto.tags),
       },
       include: { author: { select: { id: true, name: true } } },
     });
@@ -56,7 +62,11 @@ export class PlatformJournalService {
     const existing = await this.findOwned(tenant, id);
     const row = await this.prisma.companyJournalEntry.update({
       where: { id: existing.id },
-      data: { body: this.cleanBody(dto.body) },
+      data: {
+        body: this.cleanBody(dto.body),
+        title: this.cleanTitle(dto.title),
+        tags: this.cleanTags(dto.tags),
+      },
       include: { author: { select: { id: true, name: true } } },
     });
     return formatEntry(row);
@@ -72,6 +82,23 @@ export class PlatformJournalService {
     const body = value.trim();
     if (!body) throw new BadRequestException('Escriba la nota');
     return body;
+  }
+
+  private cleanTitle(value?: string) {
+    const title = value?.trim();
+    return title ? title.slice(0, 160) : null;
+  }
+
+  private cleanTags(tags?: string[]) {
+    if (!tags?.length) return [];
+    return [
+      ...new Set(
+        tags
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 12),
+      ),
+    ];
   }
 
   private async findOwned(tenant: TenantContext, id: string) {
