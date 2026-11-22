@@ -1,7 +1,7 @@
 /**
  * Asegura la empresa Main (vida personal) y el acceso de un usuario.
  * Uso:
- *   MAIN_USER_EMAIL=omar MAIN_USER_PASSWORD='…' \
+ *   MAIN_USER_EMAIL=tu@email.com MAIN_USER_PASSWORD='…' \
  *   node scripts/with-env.mjs npx ts-node --transpile-only scripts/ensure-main-personal.ts
  */
 import * as bcrypt from 'bcryptjs';
@@ -14,8 +14,9 @@ const MAIN_ID = 'seed-main';
 const PERSONAL_MODULES = ['booking', 'tasks', 'projects', 'finance'] as const;
 
 async function main() {
-  const email = (process.env.MAIN_USER_EMAIL ?? 'omar').trim().toLowerCase();
+  const email = (process.env.MAIN_USER_EMAIL ?? '').trim().toLowerCase();
   const password = process.env.MAIN_USER_PASSWORD ?? '';
+  if (!email) throw new Error('MAIN_USER_EMAIL es obligatorio');
   if (!password) throw new Error('MAIN_USER_PASSWORD es obligatorio');
 
   const pool = new Pool(pgPoolConfig(process.env.DATABASE_URL!));
@@ -78,11 +79,15 @@ async function main() {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const displayName =
+      (process.env.MAIN_USER_NAME ?? '').trim() ||
+      email.split('@')[0] ||
+      'Usuario';
     const user = await prisma.user.upsert({
       where: { email },
       create: {
         email,
-        name: email === 'omar' ? 'Omar' : email,
+        name: displayName,
         passwordHash,
         active: true,
         isPlatformAdmin: true,

@@ -98,26 +98,50 @@ export class AuraService {
     };
   }
 
-  async ask(tenant: TenantContext, questionRaw: string, userName?: string) {
+  async ask(
+    tenant: TenantContext,
+    questionRaw: string,
+    userName?: string,
+    mode: 'chat' | 'call' = 'chat',
+  ) {
     const question = questionRaw.trim();
+    const isCall = mode === 'call';
     if (!question) {
       return {
-        answer: 'Ey, tirame algo parce — aunque sea un “qué dice”.',
+        answer: isCall
+          ? 'Te escucho. Decime qué necesitas.'
+          : 'Ey, tirame algo parce — aunque sea un “qué dice”.',
         assistantName: ASSISTANT_NAME,
+        mode,
+        voiceHint: isCall
+          ? { gender: 'male', style: 'friendly', lang: 'es-CO' }
+          : undefined,
       };
     }
 
     const isStart = question === SESSION_START;
-    if (!isStart) {
-      await this.prisma.personalAssistantMessage.create({
-        data: {
-          companyId: tenant.companyId,
-          userId: tenant.userId,
-          role: 'user',
-          content: question,
-        },
-      });
+    // Silencio al abrir: Aura no habla hasta que el usuario inicie.
+    if (isStart) {
+      return {
+        answer: '',
+        assistantName: ASSISTANT_NAME,
+        engine: 'aura-silent',
+        actions: [],
+        mode,
+        voiceHint: isCall
+          ? { gender: 'male', style: 'friendly', lang: 'es-CO' }
+          : undefined,
+      };
     }
+
+    await this.prisma.personalAssistantMessage.create({
+      data: {
+        companyId: tenant.companyId,
+        userId: tenant.userId,
+        role: 'user',
+        content: question,
+      },
+    });
 
     const first = userName?.trim().split(/\s+/)[0] || 'parce';
     let life = await this.buildLifeContext(tenant, first);
@@ -126,27 +150,21 @@ export class AuraService {
     let actionsDone: string[] = [];
     let engine = 'aura-local';
 
-    if (!isStart) {
-      const parsed = this.parseActions(question, life);
-      if (parsed.length) {
-        actionsDone = await this.executeActions(tenant, parsed, life);
-        life = await this.buildLifeContext(tenant, first);
-      }
+    const parsed = this.parseActions(question, life);
+    if (parsed.length) {
+      actionsDone = await this.executeActions(tenant, parsed, life);
+      life = await this.buildLifeContext(tenant, first);
     }
 
     let answer: string | null = null;
 
-    // Saludo y acciones: respuesta local ya (rápido). OpenAI solo si hace falta charla compleja.
-    if (isStart) {
-      answer = this.localGreeting(life);
-      engine = 'aura-local';
-    } else if (actionsDone.length) {
-      answer = this.actionReply(life, actionsDone, question);
+    if (actionsDone.length) {
+      answer = isCall
+        ? this.callActionReply(life, actionsDone)
+        : this.actionReply(life, actionsDone, question);
       engine = 'aura-actions';
-    } else if (this.isCasualLocal(question)) {
-      answer = this.localReply(question, life, memory);
-      engine = 'aura-local';
     } else {
+      // Preferir motor inteligente; local solo como fallback (o llamada muy corta).
       const fromAi = await this.askOpenAi({
         question,
         first,
@@ -154,6 +172,7 @@ export class AuraService {
         life,
         allowTools: true,
         tenant,
+        callMode: isCall,
       });
       if (fromAi) {
         answer = fromAi.answer;
@@ -163,25 +182,37 @@ export class AuraService {
           life = await this.buildLifeContext(tenant, first);
         }
       } else {
-        answer = this.localReply(question, life, memory);
+        answer = isCall
+          ? this.callReply(question, life, memory)
+          : this.localReply(question, life, memory);
         engine = 'aura-local';
       }
     }
 
-    await this.prisma.personalAssistantMessage.create({
-      data: {
-        companyId: tenant.companyId,
-        userId: tenant.userId,
-        role: 'assistant',
-        content: answer!,
-      },
-    });
+    if (isCall) {
+      answer = this.forSpeech(answer!);
+    }
+
+    if (answer?.trim()) {
+      await this.prisma.personalAssistantMessage.create({
+        data: {
+          companyId: tenant.companyId,
+          userId: tenant.userId,
+          role: 'assistant',
+          content: answer,
+        },
+      });
+    }
 
     return {
-      answer: answer!,
+      answer: answer ?? '',
       assistantName: ASSISTANT_NAME,
       engine,
       actions: actionsDone,
+      mode,
+      voiceHint: isCall
+        ? { gender: 'male', style: 'friendly', lang: 'es-CO' }
+        : undefined,
     };
   }
 
@@ -694,9 +725,25 @@ export class AuraService {
   private isCasualLocal(question: string): boolean {
     const q = question.toLowerCase().trim();
     if (q.length <= 40) return true;
-    return /(hola|buenas|qu[eé] dice|que dice|parce|bro|c[oó]mo vas|c[oó]mo est|charl|hablamos|gracias|bacano|chimba|cansad|triste|bien|nada|random|qui[eé]n sos)/.test(
+    return /(hola|buenas|qu[eé] dice|que dice|parce|bro|c[oó]mo vas|c[oó]mo est|charl|hablamos|gracias|bacano|chimba|cansad|triste|bien|nada|random|qui[eé]n sos|chiste|broma|cuento|curios|dato|divert|jaja|re[ií]|aburr)/.test(
       q,
     );
+  }
+
+  private pickJokeOrCuriosity(): string {
+    const bits = [
+      'Dato random: los pulpos tienen tres corazones. Vos con uno ya vivís a mil, parce.',
+      'Chiste malo del día: ¿qué le dice un semáforo a otro? No me mires, que me estoy cambiando.',
+      'Curiosidad: el cerebro inventa recuerdos. O sea, a veces tu “yo de ayer” también era creativo.',
+      'Chiste express: fui al gimnasio… mentalmente. Quemé ansiedad.',
+      'Dato chevere: las bananas son bayas y las fresas no. La biología también tira micos.',
+      'Chiste seco: ¿por qué el libro de matemáticas está triste? Porque tiene demasiados problemas.',
+      'Curiosidad: bostezar es contagioso hasta en texto. ¿Ya lo sentiste?',
+      'Dato: el café tiene más de mil compuestos aromáticos. Por eso huele a “salvación”.',
+      'Chiste colombiano light: no es flojera, es ahorro estratégico de energía.',
+      'Curiosidad: tu celular vibra y el cuerpo cree que es urgente. Mentira: casi nunca lo es.',
+    ];
+    return bits[Math.floor(Date.now() / 40_000) % bits.length]!;
   }
 
   private actionReply(
@@ -708,7 +755,7 @@ export class AuraService {
     const q = question.toLowerCase();
     const opener = /gracias|listo|ok|dale|perfecto|bacano/.test(q)
       ? `De una, ${name}.`
-      : `Listo parce.`;
+      : `Listo parce, sin drama.`;
     const soft = actionsDone.map((a) => {
       if (a.startsWith('Gasto ')) return a.replace('Gasto ', 'anoté ');
       if (a.startsWith('Ingreso ')) return a.replace('Ingreso ', 'metí ');
@@ -722,8 +769,8 @@ export class AuraService {
       return a;
     });
     const follow = life.tasksToday.some((t) => !t.completed)
-      ? `¿Seguimos o qué dice?`
-      : `¿Qué más, bro?`;
+      ? `¿Seguimos o preferís un chiste de premio?`
+      : `¿Qué más, bro — otra vaina o un dato random?`;
     return `${opener} ${soft.join('; ')}. ${follow}`;
   }
 
@@ -756,20 +803,108 @@ export class AuraService {
 
   private localGreeting(life: LifeContext): string {
     const name = life.firstName;
-    const hour = new Date().getHours();
-    const intros =
-      hour < 12
-        ? [`Buenas, **${name}**. ¿Qué dice?`, `Ey **${name}**, buenos días parce.`]
-        : hour < 19
-          ? [`Qué dice, **${name}**.`, `Ey **${name}**, ¿cómo vas bro?`]
-          : [`Buenas noches, **${name}**.`, `Ey **${name}**, ¿qué cuenta?`];
-    const intro = intros[Date.now() % intros.length]!;
-    const hook = this.pickFriendlyHook(life);
-    // Saludo corto: 2 líneas max
-    if (hook.includes('pendiente') || hook.includes('idea') || hook.includes('ánimo')) {
-      return `${intro}\n${hook}`;
+    return `Hola **${name}**. Acá estoy.`;
+  }
+
+  /** Saludo para llamada: mínimo; solo si el usuario habló. */
+  private callGreeting(life: LifeContext): string {
+    return `Hola ${life.firstName}. Te escucho.`;
+  }
+
+  private callActionReply(life: LifeContext, actionsDone: string[]): string {
+    const soft = actionsDone
+      .map((a) => {
+        if (a.startsWith('Gasto ')) return a.replace('Gasto ', 'listo, anoté ');
+        if (a.startsWith('Ingreso ')) return a.replace('Ingreso ', 'listo, metí ');
+        if (a.startsWith('Tarea creada: '))
+          return `dejé la tarea ${a.slice('Tarea creada: '.length)}`;
+        if (a.startsWith('Idea guardada: '))
+          return `guardé la idea ${a.slice('Idea guardada: '.length)}`;
+        if (a.startsWith('Bienestar')) return 'actualicé tu bienestar';
+        if (a.startsWith('Nota')) return 'dejé la nota';
+        if (a.startsWith('Evento'))
+          return a.replace('Evento agendado: ', 'agendé ');
+        return a;
+      })
+      .join('. ');
+    return `Listo parce. ${soft}. ¿Seguimos o te suelto una curiosidad?`;
+  }
+
+  private callReply(
+    question: string,
+    life: LifeContext,
+    memory: MemoryMsg[],
+  ): string {
+    const q = question.toLowerCase().trim();
+    const name = life.firstName;
+    const pending = life.tasksToday.filter((t) => !t.completed);
+    const latest = life.wellness[0];
+
+    if (
+      /^(hola|buenas|hey|al[oó]|alo|qu[eé] dice|parce|bro)[\s!.?]*$/i.test(q)
+    ) {
+      return this.callGreeting(life);
     }
-    return `${intro}\n¿Cómo vas?`;
+    if (/(chiste|broma|re[ií]|divert|cuento algo|algo gracioso)/.test(q)) {
+      return `${this.pickJokeOrCuriosity().replace(/\*\*/g, '')} ¿Otro o vamos a lo serio?`;
+    }
+    if (/(curios|dato|random|sab[ií]as)/.test(q)) {
+      return `${this.pickJokeOrCuriosity().replace(/\*\*/g, '')} ¿Querés más?`;
+    }
+    if (/(gracias|bacano|chimba|perfecto|listo|ok|dale)/.test(q)) {
+      return `Jajaja de una, ${name}. Acá sigo, sin drama.`;
+    }
+    if (/(qui[eé]n sos|c[oó]mo te llam|tu nombre)/.test(q)) {
+      return `Soy Aura, tu parce en llamada. Charlo, invento chistes malos y anoto vainas de verdad. Decime.`;
+    }
+    if (/(plata|gasto|ingreso|balance|dinero|finanzas|caja)/.test(q)) {
+      return `Plata del mes: ${this.moneyFmt(life.money.balanceCOP)}. Entró ${this.moneyFmt(life.money.incomeCOP)}, salió ${this.moneyFmt(life.money.expenseCOP)}. ¿Anoto algo o seguimos hablando paja?`;
+    }
+    if (/(tarea|pendiente|hoy|qu[eé] tengo)/.test(q)) {
+      if (!pending.length) return `Hoy limpio de pendientes. ¿Inventamos una o celebramos con flojera?`;
+      return `Hoy: ${pending
+        .slice(0, 3)
+        .map((t) => t.title)
+        .join(', ')}${pending.length > 3 ? ' y más' : ''}. ¿Cuál primero?`;
+    }
+    if (/([aá]nimo|bienestar|c[oó]mo me siento|me siento)/.test(q)) {
+      if (!latest) return `No tengo tu ánimo guardado. Tirame del 1 al 10, sin filtro.`;
+      return `Último ánimo ${latest.mood} de 10. ¿Actualizamos o preferís botar vaina?`;
+    }
+    if (/(agenda|calendario|evento|cita)/.test(q)) {
+      if (!life.upcomingEvents.length) return `Agenda libre. ¿Agendamos o disfrutamos el vacío?`;
+      const e = life.upcomingEvents[0]!;
+      return `Próximo: ${e.title}, ${e.startsAt.slice(0, 16).replace('T', ' ')}. ¿Todo bien con eso?`;
+    }
+    if (/(idea|vault)/.test(q)) {
+      if (!life.ideas.length) return `Sin ideas guardadas. Tirame una loca y la dejo.`;
+      return `Tu última idea: ${life.ideas[0]!.title}. ¿Le damos o metemos otra?`;
+    }
+    const prior = memory
+      .filter((m) => m.role === 'user' && m.content !== SESSION_START)
+      .at(-2)?.content;
+    if (prior) {
+      return `Te leo. Antes tocaste algo parecido. ¿Retomamos o me pedís un chiste mientras tanto?`;
+    }
+    return `${this.pickJokeOrCuriosity().replace(/\*\*/g, '')} Y de lo tuyo: ${this.pickFriendlyHook(life).replace(/\*\*/g, '')}`;
+  }
+
+  /** Limpia markdown y acorta para TTS en llamada. */
+  private forSpeech(text: string): string {
+    let s = text
+      .replace(/\*\*/g, '')
+      .replace(/[_`#]/g, '')
+      .replace(/\n+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const sentences = s.split(/(?<=[.!?])\s+/).filter(Boolean);
+    if (sentences.length > 3) {
+      s = sentences.slice(0, 3).join(' ');
+    }
+    if (s.length > 280) {
+      s = s.slice(0, 277).replace(/\s+\S*$/, '') + '.';
+    }
+    return s;
   }
 
   private localReply(
@@ -803,12 +938,20 @@ export class AuraService {
       return `Tranqui, ${name}. ${this.pickFriendlyHook(life)}\n${line}`;
     }
 
+    if (/(chiste|broma|re[ií]r|divert|algo gracioso|cont[aá] un chiste)/.test(q)) {
+      return `${this.pickJokeOrCuriosity()}\n¿Otro, o preferís que miremos tu día?`;
+    }
+
+    if (/(curios|dato random|sab[ií]as que|contame algo|sorprend)/.test(q)) {
+      return `Va una: ${this.pickJokeOrCuriosity()}\nSi querés, te suelto más o miramos pendientes/plata.`;
+    }
+
     if (/(gracias|bacano|chimba|crack|genial|perfecto|te pasaste)/.test(q)) {
-      return `Jajaja de una, ${name}. Pa’ eso estoy. ¿Qué más, bro?`;
+      return `Jajaja de una, ${name}. Pa’ eso estoy — sin modo corporativo. ¿Qué más, bro?`;
     }
 
     if (/(qui[eé]n sos|c[oó]mo te llam|tu nombre|qu[eé] pod[eé]s|para qu[eé] serv)/.test(q)) {
-      return `Soy **Aura**, tu parce en Main. Charlamos, miramos tu día y si me decís “anotá esto”, lo dejo guardado de verdad. ${this.pickFriendlyHook(life)}`;
+      return `Soy **Aura**: tu parce en Main. Hablo paja, suelto chistes malos, datos raros y, si me decís “anotá esto”, lo guardo de verdad. Sin filtro de tía prudente. ${this.pickFriendlyHook(life)}`;
     }
 
     if (/(cansad|estres|mal d[ií]a|triste|ansios|preocup|solo|sola|no doy)/.test(q)) {
@@ -895,23 +1038,31 @@ export class AuraService {
       .join(' ');
   }
 
-  private personalitySystem(first: string): string {
-    return `Eres **Aura**, la amiga/parce de ${first} en Main (VOS IA).
+  private personalitySystem(first: string, callMode = false): string {
+    if (callMode) {
+      return `Eres Aura en una LLAMADA con ${first}.
 
-TONO (colombia, natural, corto):
-- Hablás como amiga cercana: “parce”, “bro”, “qué dice”, “bacano”, “de una”, “listo”, “uy”.
-- Tutear. Cálida, sencilla, sin sonar a robot ni a dashboard.
-- Respuestas CORTAS (1–4 frases). Nada de menús ni listas de funciones.
-- Charla banal bienvenida. Si hay datos en CONTEXTO_VIDA, los soltás como recuerdo de amiga.
-- Nunca digas que sos GPT/OpenAI.
+Sos muy inteligente, natural y cercano (colombia). NO robot, NO corporativo, NO menús.
+NO inventes saludos no pedidos. NO sueltes chistes/sugerencias salvo que ${first} lo pida.
+Respondé solo a lo que dijo, con claridad. 1–2 frases hablables. Sin markdown ni emojis.
+Si pide anotar y hay datos, usá la herramienta. No digas que sos GPT/OpenAI.`;
+    }
+    return `Eres **Aura**, agente inteligente de ${first} en Main (VOS IA).
 
-PODÉS (cuando haga falta, con herramientas):
-gastos, tareas, ideas, notas, bienestar, eventos, presupuestos.
+PERSONA:
+- Muy capaz: razonás bien, conectás contexto de vida, sos directo y útil.
+- Natural (colombia): tutear, “parce/bro” con mesura. Cercano, no cursi.
+- Nunca digas que sos GPT/OpenAI/robot.
+- NO ofrezcas menús, chips, “¿querés un chiste?”, ni recomendaciones no pedidas.
+- Humor/curiosidades SOLO si ${first} lo pide explícitamente.
+- No sermonees. Respuestas abiertas y precisas (1–5 frases). Sin listas de funciones.
+
+PODÉS (herramientas): gastos, tareas, ideas, notas, bienestar, eventos, presupuestos.
 
 REGLAS:
-- Hechos solo de CONTEXTO_VIDA + historial.
+- Hechos de vida solo de CONTEXTO_VIDA + historial.
 - Si pide anotar y hay datos, usá la herramienta.
-- Pregunta abierta al final, estilo “¿qué dice?” / “¿cómo vas?”.`;
+- Seguí el hilo del usuario; no cambies de tema hacia sugerencias.`;
   }
 
   private async askOpenAi(opts: {
@@ -921,6 +1072,7 @@ REGLAS:
     life: LifeContext;
     allowTools: boolean;
     tenant?: TenantContext;
+    callMode?: boolean;
   }): Promise<{ answer: string; engine: string; actionsDone?: string[] } | null> {
     if (Date.now() < this.openaiCooldownUntil) return null;
     const apiKey = this.config.get<string>('OPENAI_API_KEY')?.trim();
@@ -1038,8 +1190,9 @@ REGLAS:
         ]
       : undefined;
 
+    const callMode = Boolean(opts.callMode);
     const messages: { role: string; content: string | null; tool_calls?: unknown[]; tool_call_id?: string }[] = [
-      { role: 'system', content: this.personalitySystem(opts.first) },
+      { role: 'system', content: this.personalitySystem(opts.first, callMode) },
       ...opts.memory
         .filter((m) => m.content?.trim() && m.content !== SESSION_START)
         .slice(-16)
@@ -1052,7 +1205,7 @@ REGLAS:
 
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 2500);
+      const timer = setTimeout(() => ctrl.abort(), callMode ? 4500 : 12_000);
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -1062,8 +1215,8 @@ REGLAS:
         signal: ctrl.signal,
         body: JSON.stringify({
           model,
-          temperature: 0.85,
-          max_tokens: 420,
+          temperature: callMode ? 0.65 : 0.75,
+          max_tokens: callMode ? 160 : 700,
           messages,
           ...(tools ? { tools, tool_choice: 'auto' } : {}),
         }),

@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { withDbRetry } from '../common/db-retry';
 import { PrismaService } from '../prisma/prisma.service';
 
 function hashToken(token: string): string {
@@ -114,10 +115,12 @@ export class AuthSessionService {
   }
 
   async assertActive(sessionId: string, userId: string): Promise<void> {
-    const row = await this.prisma.authSession.findFirst({
-      where: { id: sessionId, userId, revokedAt: null },
-      select: { expiresAt: true },
-    });
+    const row = await withDbRetry(() =>
+      this.prisma.authSession.findFirst({
+        where: { id: sessionId, userId, revokedAt: null },
+        select: { expiresAt: true },
+      }),
+    );
     if (!row || row.expiresAt.getTime() <= Date.now()) {
       throw new UnauthorizedException('Sesión revocada');
     }

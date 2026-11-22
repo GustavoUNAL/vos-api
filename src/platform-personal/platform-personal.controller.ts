@@ -176,7 +176,7 @@ export class PlatformPersonalController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: AskAuraDto,
   ) {
-    return this.aura.ask(tenant, dto.question, user.name);
+    return this.aura.ask(tenant, dto.question, user.name, dto.mode ?? 'chat');
   }
 
   @Delete('aura/history')
@@ -196,7 +196,7 @@ export class PlatformPersonalController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: AskAuraDto,
   ) {
-    return this.aura.ask(tenant, dto.question, user.name);
+    return this.aura.ask(tenant, dto.question, user.name, dto.mode ?? 'chat');
   }
 
   @Delete('vicente/history')

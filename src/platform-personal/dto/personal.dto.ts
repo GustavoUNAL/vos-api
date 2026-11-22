@@ -3,6 +3,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -141,6 +142,11 @@ export class AskAuraDto {
   @MinLength(1)
   @MaxLength(4000)
   question!: string;
+
+  /** chat = texto normal; call = respuestas cortas para llamada de voz */
+  @IsOptional()
+  @IsIn(['chat', 'call'])
+  mode?: 'chat' | 'call';
 }
 
 /** @deprecated Usar AskAuraDto */
