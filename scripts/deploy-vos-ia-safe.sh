@@ -152,7 +152,18 @@ if [[ -x "$API_DIR/scripts/ensure-vapid-keys.sh" ]]; then
 fi
 npx prisma generate
 NODE_ENV=production npm run build
-NODE_ENV=production npx prisma migrate deploy
+# Neon pooler no soporta bien advisory locks de Prisma. Migrar por host directo y sin lock.
+# DATABASE_URL del .env (pooler) se deja intacto para el runtime de PM2.
+(
+  set -a
+  # shellcheck disable=SC1091
+  source "$API_DIR/.env"
+  set +a
+  MIGRATE_URL="${DIRECT_DATABASE_URL:-${DATABASE_URL/-pooler./.}}"
+  log "Prisma migrate deploy (direct URL, advisory lock off)"
+  DATABASE_URL="$MIGRATE_URL" PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1 \
+    NODE_ENV=production npx prisma migrate deploy
+)
 
 log "Front: install + build"
 cd "$FRONT_DIR"
