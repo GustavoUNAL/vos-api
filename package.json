@@ -49,6 +49,7 @@
     "db:ensure-dental": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/ensure-dental-module.ts",
     "db:seed-dental-demo": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/seed-dental-demo.ts",
     "db:create-lexandra-user": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-lexandra-user.ts",
+    "db:create-narino-bonito": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/create-narino-bonito.ts",
     "db:upsert-cigarrillos": "node scripts/with-env.mjs npx ts-node --transpile-only scripts/upsert-cigarrillos.ts",
     "db:backfill-product-costs": "ts-node --transpile-only scripts/backfill-product-production-costs.ts",
     "db:railway-sync": "prisma migrate deploy",
